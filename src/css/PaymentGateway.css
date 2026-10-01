@@ -1,0 +1,204 @@
+/* 3D PAYMENT GATEWAY ULTRA-LUXURY STYLING */
+.payment-gateway-wrapper {
+    min-height: 85vh;
+    background: radial-gradient(circle at top left, #f8fafc, #e2e8f0);
+    perspective: 1600px;
+    transition: background 0.4s ease;
+    padding: 40px 0;
+}
+
+.payment-card-3d {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    width: 100%;
+    max-width: 540px;
+    border-radius: 28px;
+    border: 1px solid rgba(255, 255, 255, 0.8);
+    box-shadow: 0 30px 60px rgba(15, 23, 42, 0.1);
+    transform-style: preserve-3d;
+    animation: floatInGateway 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes floatInGateway {
+    0% { opacity: 0; transform: translateY(35px) translateZ(-40px); }
+    100% { opacity: 1; transform: translateY(0) translateZ(0); }
+}
+
+.badge-ssl {
+    background: rgba(37, 99, 235, 0.1);
+    color: #2563eb;
+    padding: 7px 16px;
+    border-radius: 50px;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.btn-back-custom {
+    background: transparent;
+    border: 1.5px solid #cbd5e1;
+    padding: 7px 16px;
+    border-radius: 50px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #64748b;
+    cursor: pointer;
+    transition: all 0.25s ease;
+}
+
+.btn-back-custom:hover {
+    background: #f1f5f9;
+    color: #0f172a;
+    transform: translateX(-3px);
+}
+
+.amount-display-box {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 20px;
+    padding: 24px;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
+}
+
+.payment-mode-option {
+    padding: 16px 18px;
+    border-radius: 16px;
+    border: 1.5px solid #cbd5e1;
+    background: #f8fafc;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    cursor: pointer;
+    transition: all 0.35s cubic-bezier(0.165, 0.84, 0.44, 1);
+    transform-style: preserve-3d;
+}
+
+.payment-mode-option:hover {
+    transform: translateY(-3px) translateZ(10px);
+    border-color: #3b82f6;
+    box-shadow: 0 12px 30px rgba(37, 99, 235, 0.1);
+}
+
+.payment-mode-option.active-mode {
+    border-color: #2563eb;
+    background: rgba(37, 99, 235, 0.08);
+    box-shadow: 0 10px 25px rgba(37, 99, 235, 0.15);
+    transform: translateZ(8px);
+}
+
+.form-control-3d {
+    width: 100%;
+    height: 54px;
+    border-radius: 14px;
+    border: 1.5px solid #cbd5e1;
+    background: #f8fafc;
+    padding: 0 18px;
+    font-size: 15px;
+    transition: all 0.3s ease;
+}
+
+.form-control-3d:focus {
+    background: #ffffff;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 5px rgba(37, 99, 235, 0.12);
+    outline: none;
+}
+
+.card-number-input {
+    font-family: monospace, sans-serif;
+    letter-spacing: 3px;
+    font-size: 18px !important;
+    font-weight: 700;
+    color: #1e293b;
+}
+
+.btn-pay-3d {
+    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+    color: #ffffff;
+    border: none;
+    transition: all 0.35s ease;
+    box-shadow: 0 10px 25px rgba(37, 99, 235, 0.3);
+}
+
+.btn-pay-3d:hover {
+    transform: translateY(-3px) translateZ(10px);
+    box-shadow: 0 15px 35px rgba(37, 99, 235, 0.45);
+}
+
+.success-receipt-box {
+    background: #f8fafc !important;
+    border-color: #e2e8f0 !important;
+}
+
+/* ULTRA-LUXURY DARK MODE OVERRIDES */
+body.dark .payment-gateway-wrapper {
+    background: radial-gradient(circle at top left, #050811, #090e1f) !important;
+}
+
+body.dark .payment-card-3d {
+    background: rgba(17, 24, 39, 0.85) !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
+    box-shadow: 0 35px 70px rgba(0, 0, 0, 0.85) !important;
+}
+
+body.dark .badge-ssl {
+    background: rgba(59, 130, 246, 0.15);
+    color: #60a5fa;
+}
+
+body.dark .btn-back-custom {
+    border-color: rgba(255, 255, 255, 0.15);
+    color: #94a3b8;
+}
+
+body.dark .btn-back-custom:hover {
+    background: #1e293b;
+    color: #fff;
+}
+
+body.dark .amount-display-box {
+    background: #1e293b !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+body.dark .payment-mode-option {
+    background: #1e293b !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+body.dark .payment-mode-option.active-mode {
+    border-color: #3b82f6;
+    background: rgba(59, 130, 246, 0.15) !important;
+}
+
+body.dark .payment-mode-option h6,
+body.dark .payment-card-3d h3,
+body.dark .payment-card-3d h4 {
+    color: #f8fafc !important;
+}
+
+body.dark .form-control-3d {
+    background: #1e293b !important;
+    border-color: rgba(255, 255, 255, 0.12) !important;
+    color: #fff !important;
+}
+
+body.dark .form-control-3d:focus {
+    background: #111827 !important;
+    border-color: #3b82f6 !important;
+    box-shadow: 0 0 0 5px rgba(59, 130, 246, 0.25) !important;
+}
+
+body.dark .card-number-input {
+    color: #38bdf8 !important;
+}
+
+body.dark .success-receipt-box {
+    background: #1e293b !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+body.dark .success-receipt-box strong,
+body.dark .success-receipt-box span {
+    color: #f8fafc !important;
+}

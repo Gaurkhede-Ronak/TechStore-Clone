@@ -1,0 +1,124 @@
+/* RESET */
+
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+}
+
+html{
+    scroll-behavior:smooth;
+}
+
+body{
+    font-family:'Poppins',sans-serif;
+    transition:background .3s,color .3s;
+}
+
+/* LIGHT MODE */
+
+body.light{
+    background:#f8f9fa;
+    color:#212529;
+}
+
+/* Navbar */
+
+body.light .custom-navbar{
+    background:#2d3345 !important;
+}
+
+/* Footer */
+
+body.light .footer{
+    background:#2d3345 !important;
+}
+
+/* Cards */
+
+body.light .card,
+body.light .product-card,
+body.light .about-card,
+body.light .contact-card,
+body.light .contact-form-card{
+    background:#fff;
+    color:#212529;
+}
+
+/* Inputs */
+
+body.light input,
+body.light textarea,
+body.light select{
+    background:#fff;
+    color:#212529;
+}
+
+/* DARK MODE */
+
+body.dark{
+    background:#121212;
+    color:#fff;
+}
+
+/* Navbar */
+
+body.dark .custom-navbar{
+    background:#121212 !important;
+}
+
+/* Footer */
+
+body.dark .footer{
+    background:#121212 !important;
+}
+
+/* Cards */
+
+body.dark .card,
+body.dark .product-card,
+body.dark .about-card,
+body.dark .contact-card,
+body.dark .contact-form-card{
+    background:#1f2937;
+    color:#fff;
+}
+
+/* Inputs */
+
+body.dark input,
+body.dark textarea,
+body.dark select{
+    background:#222;
+    color:#fff;
+    border:1px solid #555;
+}
+
+/* Buttons */
+
+body.dark .btn-outline-dark{
+    color:#fff;
+    border-color:#fff;
+}
+
+body.dark .btn-outline-dark:hover{
+    background:#fff;
+    color:#000;
+}
+
+/* Skeleton */
+
+body.dark .skeleton-card{
+    background:#1f1f1f;
+}
+
+body.dark .skeleton{
+    background:linear-gradient(
+        90deg,
+        #2b2b2b 25%,
+        #3a3a3a 50%,
+        #2b2b2b 75%
+    );
+    background-size:200% 100%;
+}
+

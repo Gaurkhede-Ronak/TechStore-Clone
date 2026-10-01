@@ -1,0 +1,392 @@
+/* LUXURY PRODUCT CARD BASE */
+.product-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  border-radius: 20px;
+  overflow: hidden;
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  transition: all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
+  cursor: pointer;
+  height: 100%;
+  box-shadow: 0 10px 30px -10px rgba(15, 23, 42, 0.05);
+  transform-style: preserve-3d;
+  perspective: 1000px;
+}
+
+.product-card:hover {
+  transform: translateY(-8px) scale3d(1.015, 1.015, 1.015);
+  border-color: rgba(37, 99, 235, 0.35);
+  box-shadow: 0 20px 45px -12px rgba(37, 99, 235, 0.18);
+}
+
+/* IMAGE BOX (Clean & Minimalist) */
+.image-box {
+  height: 220px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 25px;
+  background-color: #ffffff !important;
+  position: relative;
+  overflow: hidden;
+}
+
+.image-box::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 10%;
+  width: 80%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #f1f5f9, transparent);
+}
+
+.product-image {
+  width: 100%;
+  max-width: 170px;
+  max-height: 150px;
+  object-fit: contain;
+  transition: transform 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.product-card:hover .product-image {
+  transform: scale(1.08);
+}
+
+/* LUXURY DISCOUNT BADGE */
+.discount {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  background: rgba(239, 68, 68, 0.92);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: #ffffff;
+  padding: 5px 12px;
+  border-radius: 30px;
+  font-size: 11px;
+  font-weight: 800;
+  z-index: 10;
+  letter-spacing: 0.8px;
+  box-shadow: 0 4px 15px rgba(239, 68, 68, 0.25);
+}
+
+/* WISHLIST BUTTON (Smooth & Interactive) */
+.wishlist-btn {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 38px;
+  height: 38px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  color: #cbd5e1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.06);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 10;
+}
+
+.wishlist-btn:hover {
+  background: #ffffff;
+  color: #ef4444;
+  transform: scale(1.1);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+}
+
+.wishlist-btn.active {
+  background: #ef4444 !important;
+  color: #ffffff !important;
+  box-shadow: 0 6px 20px rgba(239, 68, 68, 0.4) !important;
+}
+
+.wishlist-btn.active svg {
+  animation: heartPulse 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes heartPulse {
+  0% { transform: scale(0.6); }
+  50% { transform: scale(1.35); }
+  100% { transform: scale(1); }
+}
+
+.wishlist-btn.active:hover {
+  transform: scale(1.15) rotate(-6deg);
+}
+
+/* PRODUCT BODY & TYPOGRAPHY */
+.product-body {
+  padding: 18px 22px 22px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  background-color: #ffffff;
+  transition: background-color 0.35s ease;
+}
+
+.product-title {
+  font-size: 14.5px;
+  font-weight: 700;
+  color: #1e293b;
+  line-height: 1.45;
+  margin: 0 0 10px;
+  min-height: 42px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  transition: color 0.3s ease;
+}
+
+.product-card:hover .product-title {
+  color: #2563eb;
+}
+
+/* RATING */
+.rating {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: #f59e0b;
+  font-size: 12.5px;
+  margin-bottom: 14px;
+}
+
+.rating span {
+  color: #64748b;
+  font-weight: 600;
+  font-size: 12.5px;
+  margin-left: 4px;
+}
+
+/* PRICE SECTION */
+.price {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 20px;
+  margin-top: auto;
+}
+
+.new-price {
+  font-size: 21px;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.3px;
+}
+
+.old-price {
+  font-size: 13.5px;
+  color: #94a3b8;
+  text-decoration: line-through;
+  font-weight: 500;
+}
+
+/* LUXURY ACTION BUTTONS */
+.cart-btn {
+  width: 100%;
+  height: 48px;
+  border: none;
+  border-radius: 14px;
+  background: #0f172a;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 15px rgba(15, 23, 42, 0.15);
+}
+
+.cart-btn:hover {
+  background: #2563eb;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(37, 99, 235, 0.35);
+}
+
+.cart-btn:active {
+  transform: scale(0.97);
+}
+
+.remove-wishlist-btn {
+  width: 100%;
+  height: 48px;
+  margin-top: 10px;
+  border: 1.5px solid #ef4444;
+  border-radius: 14px;
+  background: transparent;
+  color: #ef4444;
+  font-size: 14px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.remove-wishlist-btn:hover {
+  background: #ef4444;
+  color: #ffffff;
+  box-shadow: 0 6px 20px rgba(239, 68, 68, 0.25);
+}
+
+/* ULTRA-LUXURY DARK THEME (FIXED) */
+body.dark .product-card {
+  background: #111827; 
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+body.dark .product-card:hover {
+  border-color: rgba(59, 130, 246, 0.4);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.7), 0 0 20px rgba(37, 99, 235, 0.15);
+}
+
+body.dark .image-box {
+  background-color: #1e293b !important;
+}
+
+body.dark .product-body {
+  background-color: #111827 !important;
+  color: #f8fafc !important;
+}
+
+body.dark .image-box::after {
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.05), transparent);
+}
+
+body.dark .product-title {
+  color: #f8fafc !important; 
+}
+
+body.dark .product-card:hover .product-title {
+  color: #60a5fa !important;
+}
+
+body.dark .rating span {
+  color: #94a3b8 !important;
+}
+
+body.dark .new-price {
+  color: #60a5fa !important;
+}
+
+body.dark .old-price {
+  color: #94a3b8 !important;
+}
+
+body.dark .wishlist-btn {
+  background: rgba(30, 41, 59, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #cbd5e1;
+}
+
+body.dark .wishlist-btn:hover {
+  background: #ef4444;
+  color: #ffffff;
+  border-color: #ef4444;
+}
+
+body.dark .wishlist-btn.active {
+  background: #ef4444 !important;
+  color: #ffffff !important;
+  border-color: #ef4444 !important;
+}
+
+body.dark .cart-btn {
+  background: #2563eb;
+  box-shadow: 0 4px 15px rgba(37, 99, 235, 0.3);
+}
+
+body.dark .cart-btn:hover {
+  background: #1d4ed8;
+  box-shadow: 0 8px 25px rgba(37, 99, 235, 0.5);
+}
+
+/* RESPONSIVE DESIGN */
+@media(max-width:992px) {
+  .image-box { height: 200px; }
+  .product-image { max-height: 150px; }
+  .new-price { font-size: 19px; }
+}
+
+@media(max-width:768px) {
+  .product-card { border-radius: 16px; }
+  .image-box { height: 170px; padding: 15px; }
+  .product-image { max-height: 130px; }
+  .product-body { padding: 14px 16px 16px; }
+  .product-title { font-size: 13.5px; min-height: 38px; }
+  .new-price { font-size: 17px; }
+  .cart-btn { height: 44px; font-size: 13.5px; }
+}
+
+@media(max-width:576px) {
+  .product-card { border-radius: 16px; }
+  .image-box { height: 150px; padding: 12px; }
+  .product-image { max-width: 115px; max-height: 115px; }
+  .product-body { padding: 12px 10px; }
+  .product-title { font-size: 12.5px; min-height: 34px; margin-bottom: 6px; line-height: 1.35; }
+  .rating { margin-bottom: 6px; font-size: 11.5px; gap: 3px; }
+  .price { margin-bottom: 12px; gap: 6px; }
+  .new-price { font-size: 15px; }
+  .old-price { font-size: 11px; }
+  .cart-btn { height: 38px; font-size: 12px; border-radius: 10px; gap: 6px; }
+  .discount { padding: 3px 8px; font-size: 9.5px; top: 8px; left: 8px; }
+  .wishlist-btn { width: 32px; height: 32px; top: 8px; right: 8px; font-size: 13px; }
+}
+/* PRODUCT IMAGE AREA — LIGHT + DARK = WHITE */
+
+.image-box {
+  height: 220px;
+
+  display: flex;
+  justify-content: center;
+  align-items: center;
+
+  padding: 25px;
+
+  background-color: #ffffff !important;
+
+  position: relative;
+  overflow: hidden;
+}
+
+/* Dark mode me bhi image background WHITE */
+body.dark .image-box {
+  background-color: #ffffff !important;
+}
+
+/* White background ke andar image */
+.product-image {
+  width: 100%;
+  max-width: 170px;
+  max-height: 150px;
+
+  object-fit: contain;
+
+  transition:
+    transform 0.5s
+    cubic-bezier(
+      0.25,
+      0.46,
+      0.45,
+      0.94
+    );
+}
+
+.product-card:hover .product-image {
+  transform: scale(1.08);
+}

@@ -1,0 +1,351 @@
+/* TECHSTORE - GLOBAL MOBILE-FIRST STYLES */
+
+:root {
+  --primary: #2563eb;
+  --primary-hover: #1d4ed8;
+  --accent: #3b82f6;
+  --success: #10b981;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --font-main: "Plus Jakarta Sans", "Poppins", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html {
+  font-size: 16px;
+  scroll-behavior: smooth;
+  width: 100%;
+  overflow-x: clip;
+}
+
+body {
+  font-family: var(--font-main);
+  width: 100%;
+  min-height: 100vh;
+  overflow-x: clip;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.35s cubic-bezier(0.16, 1, 0.3, 1), color 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+body.light {
+  --bg-main: #f8fafc;
+  --bg-surface: #ffffff;
+  --bg-card: #ffffff;
+  --bg-card-elevated: #ffffff;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
+  --border-main: rgba(226, 232, 240, 0.9);
+  --border-glow: rgba(37, 99, 235, 0.15);
+  --glass-bg: rgba(255, 255, 255, 0.82);
+  --glass-border: rgba(226, 232, 240, 0.6);
+  --shadow-card: 0 10px 30px -5px rgba(0, 0, 0, 0.05), 0 4px 10px -2px rgba(0, 0, 0, 0.02);
+  --shadow-3d: 0 20px 40px -15px rgba(15, 23, 42, 0.12), 0 0 15px rgba(37, 99, 235, 0.08);
+  background-color: var(--bg-main);
+  color: var(--text-primary);
+}
+
+body.dark {
+  --bg-main: #060913;
+  --bg-surface: #0c1222;
+  --bg-card: #111a2e;
+  --bg-card-elevated: #16223b;
+  --text-primary: #f8fafc;
+  --text-secondary: #cbd5e1;
+  --text-muted: #94a3b8;
+  --border-main: rgba(255, 255, 255, 0.08);
+  --border-glow: rgba(56, 189, 248, 0.25);
+  --glass-bg: rgba(12, 18, 34, 0.82);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --shadow-card: 0 15px 35px -5px rgba(0, 0, 0, 0.6), 0 0 20px rgba(37, 99, 235, 0.08);
+  --shadow-3d: 0 25px 50px -12px rgba(0, 0, 0, 0.85), 0 0 25px rgba(56, 189, 248, 0.18);
+  background-color: var(--bg-main);
+  color: var(--text-primary);
+}
+
+/* Image responsive standard */
+img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* Touch Friendly Buttons & Interactive elements */
+button,
+a,
+input,
+select,
+textarea {
+  touch-action: manipulation;
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+/* Standard scrollbar for webkit */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.4);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(59, 130, 246, 0.6);
+}
+
+/* 3D UTILITIES & MICRO-INTERACTION ANIMATIONS */
+.perspective-1000 {
+  perspective: 1000px;
+}
+
+.preserve-3d {
+  transform-style: preserve-3d;
+}
+
+.card-3d {
+  transform-style: preserve-3d;
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform;
+}
+
+.card-3d:hover {
+  transform: translateY(-6px) scale3d(1.01, 1.01, 1.01);
+}
+
+/* Glowing Neon borders & Backdrops */
+.glow-accent {
+  box-shadow: 0 0 25px rgba(37, 99, 235, 0.35);
+}
+
+.glow-cyan {
+  box-shadow: 0 0 25px rgba(56, 189, 248, 0.35);
+}
+
+/* Animated Gradient Text */
+.gradient-text-3d {
+  background: linear-gradient(135deg, #2563eb 0%, #38bdf8 50%, #8b5cf6 100%);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: gradientShift 6s ease infinite;
+}
+
+body.dark .gradient-text-3d {
+  background: linear-gradient(135deg, #60a5fa 0%, #38bdf8 50%, #c084fc 100%);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: gradientShift 6s ease infinite;
+}
+
+@keyframes gradientShift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* Floating Slow Animation for badges and floating widgets */
+@keyframes floatSlow {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-6px) rotate(0.5deg);
+  }
+}
+
+.float-slow {
+  animation: floatSlow 4s ease-in-out infinite;
+}
+
+/* Shimmer Specular Light Sweep */
+@keyframes shimmerLight {
+  0% {
+    transform: translateX(-100%) rotate(25deg);
+  }
+  100% {
+    transform: translateX(250%) rotate(25deg);
+  }
+}
+
+.shimmer-overlay {
+  position: relative;
+  overflow: hidden;
+}
+
+.shimmer-overlay::before {
+  content: "";
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 100%;
+  height: 200%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.15) 50%,
+    transparent 100%
+  );
+  transform: rotate(25deg);
+  animation: shimmerLight 5s infinite;
+  pointer-events: none;
+}
+
+/* Mobile Safe Container */
+@media (max-width: 576px) {
+  .container {
+    padding-left: 14px !important;
+    padding-right: 14px !important;
+  }
+}
+
+/* TECHSTORE RESPONSIVE CUSTOMER PANEL ENHANCEMENTS — Mobile-First Responsive Rules for Mobile, Tablet & Laptop */
+
+@media (max-width: 991.98px) {
+  .home-products,
+  .categories-section,
+  .features-section {
+    padding: 48px 0 !important;
+  }
+
+  .section-heading {
+    margin-bottom: 24px !important;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .section-heading h2 {
+    font-size: 26px !important;
+  }
+
+  .wishlist-page-wrapper {
+    padding-top: 24px !important;
+    padding-bottom: 32px !important;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .container,
+  .container-fluid {
+    padding-left: 14px !important;
+    padding-right: 14px !important;
+  }
+
+  .section-heading h2 {
+    font-size: 22px !important;
+  }
+
+  .category-card {
+    height: 175px !important;
+    padding: 20px 14px !important;
+    border-radius: 16px !important;
+  }
+
+  .category-icon {
+    width: 56px !important;
+    height: 56px !important;
+    margin-bottom: 12px !important;
+  }
+
+  .category-card h5 {
+    font-size: 16px !important;
+  }
+
+  .feature-card {
+    padding: 22px 16px !important;
+    border-radius: 16px !important;
+  }
+
+  /* Order History & Order Details mobile refinements */
+  .ajio-order-card {
+    padding: 14px 14px !important;
+    border-radius: 16px !important;
+  }
+
+  .ajio-thumb-container {
+    width: 60px !important;
+    height: 60px !important;
+  }
+
+  .ajio-card-title {
+    font-size: 14.5px !important;
+  }
+}
+
+@media (max-width: 575.98px) {
+  html {
+    font-size: 15px;
+  }
+
+  .home-products,
+  .categories-section,
+  .features-section {
+    padding: 34px 0 !important;
+  }
+
+  .section-heading h2 {
+    font-size: 20px !important;
+  }
+
+  .view-all {
+    font-size: 13.5px !important;
+  }
+
+  /* Pagination buttons on Products, Wishlist, OrderHistory */
+  .pagination,
+  .d-flex.justify-content-center.align-items-center.gap-2 {
+    flex-wrap: wrap !important;
+  }
+}
+
+/* TechStore Smooth Panel Animations */
+@keyframes tsFadeSlideUp {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in,
+.page-wrapper,
+.home-wrapper,
+.products-page,
+.about-wrapper,
+.contact-wrapper,
+.wishlist-wrapper,
+.notifications-page,
+.profile-page-wrapper {
+  animation: tsFadeSlideUp 0.38s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.hover-lift {
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.hover-lift:hover {
+  transform: translateY(-2px);
+}
