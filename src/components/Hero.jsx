@@ -21,6 +21,7 @@ const slides = [
     description:
       "Get up to 40% Instant Discount on high-performance gaming laptops, Intel Core i9 processors, and RTX GPUs.",
     tag: "FLAT 40% OFF",
+    categoryLink: "/products?category=Laptop",
   },
   {
     image:
@@ -30,6 +31,7 @@ const slides = [
     description:
       "Ultra-slim designs, M-series processing power, and all-day battery life for creators & professionals.",
     tag: "NO COST EMI",
+    categoryLink: "/products?category=Tablet",
   },
   {
     image:
@@ -39,6 +41,7 @@ const slides = [
     description:
       "Upgrade to top-tier smartphones with best-in-class exchange offers and instant bank discounts.",
     tag: "BEST EXCHANGE VALUE",
+    categoryLink: "/products?category=Mobile",
   },
   {
     image:
@@ -48,6 +51,7 @@ const slides = [
     description:
       "Experience spatial audio, deep bass, and crystal-clear wireless calls with top brand earwear.",
     tag: "UP TO 60% OFF",
+    categoryLink: "/products?category=Headphones",
   },
 ];
 
@@ -146,12 +150,18 @@ function Hero() {
 
                   {/* Buttons */}
                   <div className="hero-btn-group">
-                    <Link to="/products" className="btn-primary-ecom">
+                    <Link
+                      to={slides[currentSlide].categoryLink || "/products"}
+                      className="btn-primary-ecom"
+                    >
                       <span>Shop Now</span>
                       <FaArrowRight />
                     </Link>
 
-                    <Link to="/products" className="btn-secondary-ecom">
+                    <Link
+                      to={slides[currentSlide].categoryLink || "/products"}
+                      className="btn-secondary-ecom"
+                    >
                       View Deals
                     </Link>
                   </div>

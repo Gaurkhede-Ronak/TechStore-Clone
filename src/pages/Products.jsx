@@ -121,6 +121,7 @@ function Products() {
       "All",
       "Laptop",
       "Mobile",
+      "Tablet",
       "Smart Watches",
       "Headphones",
     ];
@@ -144,7 +145,7 @@ function Products() {
   const getCategoryLabel = (cat) => {
     if (cat === "All") return "All Categories";
     if (cat === "Laptop") return "Laptops";
-    if (cat === "Mobile") return "Mobiles & Tablets";
+    if (cat === "Mobile") return "Mobiles";
     if (cat === "Smart Watches") return "Smart Watches";
     if (cat === "Headphones") return "Headphones & Audio";
     if (cat === "Tablet") return "Tablets";
@@ -329,7 +330,7 @@ function Products() {
 
         /* TABLETS ONLY */
 
-        if (target === "tablet" || target === "tablets") {
+        if (target === "tablet" || target === "tablets" || target.includes("tablet")) {
           return (
             catLower.includes("tablet") ||
             titleLower.includes("tablet") ||
@@ -339,23 +340,25 @@ function Products() {
           );
         }
 
-        /* MOBILE & TABLETS */
+        /* MOBILES ONLY */
 
         if (
           target.includes("mobile") ||
           target.includes("phone") ||
-          target.includes("smartphone") ||
-          target.includes("ipad")
+          target.includes("smartphone")
         ) {
-          const isMobileOrTablet =
-            isMobileCategory ||
+          const isTabletItem =
             catLower.includes("tablet") ||
-            titleLower.includes("iphone") ||
-            titleLower.includes("smartphone") ||
-            titleLower.includes("mobile") ||
             titleLower.includes("tablet") ||
             titleLower.includes("ipad") ||
             titleLower.includes("tab ") ||
+            titleLower.includes("pad ");
+
+          const isMobilePhone =
+            isMobileCategory ||
+            titleLower.includes("iphone") ||
+            titleLower.includes("smartphone") ||
+            titleLower.includes("mobile") ||
             brandLower.includes("realme") ||
             brandLower.includes("vivo") ||
             brandLower.includes("oppo") ||
@@ -380,7 +383,8 @@ function Products() {
             titleLower.includes("macbook");
 
           return (
-            isMobileOrTablet &&
+            isMobilePhone &&
+            !isTabletItem &&
             !isWatch &&
             !isAudio &&
             !isLaptop
