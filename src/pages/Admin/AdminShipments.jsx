@@ -582,13 +582,26 @@ function AdminShipments() {
                 shipment.$id
             );
 
+            const relatedOrder =
+                shipment.orderId && ordersMap[String(shipment.orderId)]
+                    ? ordersMap[String(shipment.orderId)]
+                    : null;
+
             const result =
                 await shipmentHelper.updateShipmentStatus(
                     shipment.$id,
                     nextStatus,
                     {
                         orderId:
-                            shipment.orderId,
+                            String(shipment.orderId || ""),
+                        userId:
+                            String(
+                                shipment.userId ||
+                                    relatedOrder?.userId ||
+                                    ""
+                            ),
+                        trackingId:
+                            String(shipment.trackingId || ""),
                     }
                 );
 

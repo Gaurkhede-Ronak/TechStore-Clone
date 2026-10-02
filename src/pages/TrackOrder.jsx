@@ -786,7 +786,6 @@ function TrackOrder() {
   );
 
   useEffect(() => {
-    setShowDetails(false);
     if (urlTrackingId || urlOrderId) {
       fetchTracking(urlTrackingId || urlOrderId, urlOrderId, urlReturnId);
     }
@@ -1164,7 +1163,7 @@ function TrackOrder() {
     setShowDetails(true);
     fetchTracking(
       trackingInput || displayAwb || urlTrackingId || urlOrderId,
-      shipment?.orderId || order?.orderId || order?.$id || urlOrderId,
+      shipment?.orderId || urlOrderId,
       urlReturnId
     );
   };
@@ -1731,7 +1730,7 @@ function TrackOrder() {
                 onClick={() =>
                   fetchTracking(
                     trackingInput || urlTrackingId || urlOrderId,
-                    shipment?.orderId || order?.orderId || order?.$id || urlOrderId,
+                    shipment?.orderId || urlOrderId,
                     urlReturnId
                   )
                 }
@@ -1820,7 +1819,7 @@ function TrackOrder() {
           </section>
 
           {/* ERROR MESSAGE */}
-          {showDetails && error && (
+          {error && (
             <div className="cp-empty-card">
               <h4 className="fw-bold mb-2 text-danger">Unable to Find Parcel</h4>
               <p className="mb-0 text-muted">{error}</p>

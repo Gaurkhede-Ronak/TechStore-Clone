@@ -1113,79 +1113,15 @@ class ShipmentHelper {
                                 ),
                         });
 
-
                     if (!otpResult?.success) {
-
                         console.error(
                             "Delivery OTP generation failed:",
                             otpResult?.error
                         );
-
-                    } else if (
-                        previousStatus !== "OUT_FOR_DELIVERY" ||
-                        !otpResult.alreadyExists
-                    ) {
-
+                    } else {
                         console.log(
-                            "Delivery OTP generated successfully:",
+                            "Delivery OTP and customer notification ensured:",
                             otpResult.otp
-                        );
-
-
-  // CUSTOMER NOTIFICATION
-
-                        const notification =
-                            await notificationService.createNotification({
-
-                                userId:
-                                    resolvedUserId,
-
-                                type:
-                                    "DELIVERY_OTP",
-
-                                title:
-                                    "Delivery OTP 🔐",
-
-                                message:
-                                    `Your delivery OTP is ${otpResult.otp}. ` +
-                                    "Please share this OTP with the delivery partner when your parcel arrives.",
-
-                                orderId:
-                                    String(
-                                        updatedShipment.orderId ||
-                                        ""
-                                    ),
-
-                                shipmentId:
-                                    String(
-                                        updatedShipment.$id ||
-                                        ""
-                                    ),
-
-                                trackingId:
-                                    String(
-                                        updatedShipment.trackingId ||
-                                        ""
-                                    ),
-
-                                otp:
-                                    String(
-                                        otpResult.otp ||
-                                        otpResult.otpCode ||
-                                        ""
-                                    ),
-
-                                isRead:
-                                    false,
-
-                                createdAt:
-                                    new Date().toISOString(),
-                            });
-
-
-                        console.log(
-                            "Delivery OTP notification created:",
-                            notification
                         );
                     }
 
@@ -1212,28 +1148,36 @@ class ShipmentHelper {
                     String(updatedShipment.orderId || "")
                 );
 
-                if (updatedShipment?.userId) {
-                    try {
-                        await notificationService.createNotification({
-                            userId: String(updatedShipment.userId),
-                            recipientRole: "user",
-                            type: "ORDER_DELIVERED",
-                            title: "Order Delivered ✅",
-                            message:
-                                `Your order ${updatedShipment.orderId || ""} (Tracking ID: ${updatedShipment.trackingId || "N/A"}) has been delivered successfully! Thank you for shopping with TechStore. You can now rate and review your product.`,
-                            orderId: String(updatedShipment.orderId || ""),
-                            shipmentId: String(updatedShipment.$id || shipmentId || ""),
-                            trackingId: String(updatedShipment.trackingId || ""),
-                            otp: "",
-                            isRead: false,
-                            createdAt: new Date().toISOString(),
-                        });
-                    } catch (customerDeliveredNotifErr) {
-                        console.error(
-                            "Customer delivered notification error:",
-                            customerDeliveredNotifErr
-                        );
-                    }
+                const resolvedContext =
+                    await deliveryOtpService.resolveShipmentContext(
+                        String(updatedShipment.$id || shipmentId || ""),
+                        {
+                            orderId: String(
+                                eventData.orderId ||
+                                    updatedShipment.orderId ||
+                                    ""
+                            ),
+                            userId: String(
+                                eventData.userId ||
+                                    updatedShipment.userId ||
+                                    currentShipment.userId ||
+                                    ""
+                            ),
+                            trackingId: String(
+                                updatedShipment.trackingId || ""
+                            ),
+                        }
+                    );
+
+                if (resolvedContext.userId) {
+                    await deliveryOtpService.ensureOrderDeliveredNotification({
+                        userId: resolvedContext.userId,
+                        orderId: resolvedContext.orderId,
+                        shipmentId: String(
+                            updatedShipment.$id || shipmentId || ""
+                        ),
+                        trackingId: resolvedContext.trackingId,
+                    });
                 }
             }
 

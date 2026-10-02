@@ -21,6 +21,7 @@ import toast from "react-hot-toast";
 
 import authService from "../appwrite/authService";
 import notificationService from "../appwrite/notificationService";
+import deliveryOtpService from "../appwrite/deliveryOtpService";
 
 
 const Notifications = () => {
@@ -60,6 +61,9 @@ const Notifications = () => {
                 return;
             }
 
+            await deliveryOtpService.syncUserShipmentNotifications(
+                currentUser.$id
+            );
 
             const response =
                 await notificationService.getUserNotifications(

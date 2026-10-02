@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import authService from "../appwrite/authService";
 import notificationService from "../appwrite/notificationService";
+import deliveryOtpService from "../appwrite/deliveryOtpService";
 
 import {
     Link,
@@ -193,6 +194,9 @@ function Navbar() {
                     return;
                 }
 
+                await deliveryOtpService.syncUserShipmentNotifications(
+                    userId
+                );
 
                 const response =
                     await notificationService
@@ -908,11 +912,13 @@ function Navbar() {
                                         <button
                                             className="mobile-icon"
                                             title="Notifications"
-                                            onClick={() =>
-                                                setNotificationOpen(
-                                                    !notificationOpen
-                                                )
-                                            }
+                                            onClick={() => {
+                                                const nextOpen = !notificationOpen;
+                                                setNotificationOpen(nextOpen);
+                                                if (nextOpen) {
+                                                    loadNotifications();
+                                                }
+                                            }}
                                         >
 
                                             <FaBell />
@@ -1222,11 +1228,13 @@ function Navbar() {
                                     <button
                                         className="action-icon"
                                         title="Notifications"
-                                        onClick={() =>
-                                            setNotificationOpen(
-                                                !notificationOpen
-                                            )
-                                        }
+                                        onClick={() => {
+                                            const nextOpen = !notificationOpen;
+                                            setNotificationOpen(nextOpen);
+                                            if (nextOpen) {
+                                                loadNotifications();
+                                            }
+                                        }}
                                     >
 
                                         <FaBell />
@@ -1884,6 +1892,39 @@ function NotificationDropdown({
                                     <p className="notif-item-msg">
                                         {notification.message}
                                     </p>
+
+                                    {String(notification.type || "").toUpperCase() === "DELIVERY_OTP" &&
+                                        (() => {
+                                            const m = String(notification.message || "").match(/\b(\d{6})\b/);
+                                            const otpVal = notification.otp || (m ? m[1] : "");
+                                            const isAlreadyDelivered = notifications.some(
+                                                (n) =>
+                                                    String(n.type || "").toUpperCase().includes("DELIVERED") &&
+                                                    ((notification.orderId && n.orderId === notification.orderId) ||
+                                                        (notification.shipmentId && n.shipmentId === notification.shipmentId))
+                                            );
+                                            if (!otpVal || isAlreadyDelivered) return null;
+                                            return (
+                                                <div
+                                                    style={{
+                                                        display: "inline-flex",
+                                                        alignItems: "center",
+                                                        gap: "6px",
+                                                        padding: "3px 9px",
+                                                        borderRadius: "7px",
+                                                        background: "rgba(37, 99, 235, 0.12)",
+                                                        border: "1px dashed #3b82f6",
+                                                        color: "#2563eb",
+                                                        fontWeight: 800,
+                                                        fontSize: "12px",
+                                                        letterSpacing: "1.5px",
+                                                        marginBottom: "4px",
+                                                    }}
+                                                >
+                                                    🔐 OTP: {otpVal}
+                                                </div>
+                                            );
+                                        })()}
 
                                     <small className="notif-item-time">
                                         {formatTime(

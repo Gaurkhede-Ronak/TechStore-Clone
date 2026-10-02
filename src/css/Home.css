@@ -335,30 +335,27 @@ body.dark .feature-card p {
 }
 
 @media (max-width: 576px) {
-  .home-products {
-    padding: 14px 0 28px;
-  }
-
+  .home-products,
   .categories-section,
   .features-section {
-    padding: 28px 0;
+    padding: 36px 0;
   }
 
   .section-heading {
-    margin-bottom: 10px;
+    margin-bottom: 20px;
   }
 
   .section-heading h2 {
-    font-size: 18px;
+    font-size: 20px;
   }
 
   .view-all {
-    font-size: 12.5px;
+    font-size: 13px;
   }
 
   .home-page-wrapper .row.g-4 {
-    --bs-gutter-x: 10px;
-    --bs-gutter-y: 10px;
+    --bs-gutter-x: 12px;
+    --bs-gutter-y: 14px;
   }
 
   .category-card {
