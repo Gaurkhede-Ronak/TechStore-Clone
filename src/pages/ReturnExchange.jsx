@@ -1,6 +1,6 @@
 import { scrollToPageTop } from "../components/ScrollToTop";
 import { useEffect, useMemo, useState, useCallback } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   FaArrowLeft,
   FaBoxOpen,
@@ -20,6 +20,17 @@ import returnExchangeService from "../appwrite/returnExchangeService";
 import shipmentService from "../appwrite/shipmentService";
 import orderService from "../appwrite/orderService";
 import authService from "../appwrite/authService";
+import {
+  parseOrderItems,
+  isOrderItemCancelled,
+  getOrderItemSellingPrice,
+  getOrderItemName,
+  getOrderItemImage,
+  getOrderItemId,
+  formatReasonWithItem,
+  extractCleanReason,
+  doesRequestMatchItem,
+} from "../utils/orderItemHelper";
 
   // REASONS
 
@@ -127,6 +138,7 @@ const getRefundStatusLabel = (status) => {
 
 function ReturnExchange() {
   const navigate = useNavigate();
+  const location = useLocation();
   useEffect(() => {
     scrollToPageTop();
   }, []);
@@ -136,6 +148,7 @@ function ReturnExchange() {
   const [order, setOrder] = useState(null);
   const [shipment, setShipment] = useState(null);
   const [existingRequests, setExistingRequests] = useState([]);
+  const [selectedItemIndex, setSelectedItemIndex] = useState(-1);
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -226,24 +239,116 @@ function ReturnExchange() {
   // they cannot submit another Return or Exchange for it.
   // =====================================================
 
-  const activeRequest = useMemo(() => {
-    return existingRequests.find(
-      (item) => String(item?.status || "").toUpperCase() !== "CANCELLED"
+  const rawOrderItems = useMemo(() => parseOrderItems(order), [order]);
+
+  // Deliverable (non-cancelled) items with their original index in rawOrderItems
+  const deliverableEntries = useMemo(() => {
+    return rawOrderItems
+      .map((item, idx) => ({ item, idx }))
+      .filter(({ item }) => !isOrderItemCancelled(item));
+  }, [rawOrderItems]);
+
+  // Initialize selectedItemIndex from URL query params / location.state / first non-cancelled item
+  useEffect(() => {
+    if (rawOrderItems.length === 0) return;
+
+    const params = new URLSearchParams(location.search);
+    const paramIdx = params.get("itemIdx");
+    const paramItemId = params.get("itemId");
+    const stateIdx = location.state?.itemIndex;
+    const stateSingle = location.state?.singleProduct;
+
+    if (paramIdx !== null && paramIdx !== "") {
+      const parsed = Number(paramIdx);
+      if (
+        Number.isInteger(parsed) &&
+        parsed >= 0 &&
+        parsed < rawOrderItems.length &&
+        !isOrderItemCancelled(rawOrderItems[parsed])
+      ) {
+        setSelectedItemIndex(parsed);
+        return;
+      }
+    }
+
+    if (
+      stateIdx !== undefined &&
+      stateIdx !== null &&
+      Number.isInteger(Number(stateIdx)) &&
+      Number(stateIdx) >= 0 &&
+      Number(stateIdx) < rawOrderItems.length &&
+      !isOrderItemCancelled(rawOrderItems[Number(stateIdx)])
+    ) {
+      setSelectedItemIndex(Number(stateIdx));
+      return;
+    }
+
+    const targetId = String(
+      paramItemId || getOrderItemId(stateSingle) || ""
+    ).trim();
+    if (targetId) {
+      const foundIdx = rawOrderItems.findIndex(
+        (it) =>
+          !isOrderItemCancelled(it) && getOrderItemId(it) === targetId
+      );
+      if (foundIdx >= 0) {
+        setSelectedItemIndex(foundIdx);
+        return;
+      }
+    }
+
+    const firstActive = rawOrderItems.findIndex(
+      (it) => !isOrderItemCancelled(it)
     );
-  }, [existingRequests]);
+    setSelectedItemIndex(firstActive >= 0 ? firstActive : 0);
+  }, [rawOrderItems, location.search, location.state]);
+
+  const effectiveItemIndex =
+    selectedItemIndex >= 0 && selectedItemIndex < rawOrderItems.length
+      ? selectedItemIndex
+      : deliverableEntries[0]?.idx ?? 0;
+
+  const selectedItem = rawOrderItems[effectiveItemIndex] || null;
+
+  const activeRequest = useMemo(() => {
+    if (!selectedItem && rawOrderItems.length === 0) {
+      return existingRequests.find(
+        (item) => String(item?.status || "").toUpperCase() !== "CANCELLED"
+      );
+    }
+    return existingRequests.find(
+      (req) =>
+        String(req?.status || "").toUpperCase() !== "CANCELLED" &&
+        doesRequestMatchItem(req, selectedItem, effectiveItemIndex, order)
+    );
+  }, [existingRequests, selectedItem, effectiveItemIndex, order, rawOrderItems.length]);
 
   const cancelledRequests = useMemo(() => {
     return existingRequests.filter(
-      (item) => String(item?.status || "").toUpperCase() === "CANCELLED"
+      (req) =>
+        String(req?.status || "").toUpperCase() === "CANCELLED" &&
+        (!selectedItem ||
+          doesRequestMatchItem(req, selectedItem, effectiveItemIndex, order))
     );
-  }, [existingRequests]);
+  }, [existingRequests, selectedItem, effectiveItemIndex, order]);
 
   const reasons = type === "RETURN" ? RETURN_REASONS : EXCHANGE_REASONS;
   const finalReason = reason === "Other" ? customReason.trim() : reason;
 
-  const orderAmount = Number(
+  const fullOrderAmount = Number(
     order?.totalAmount ?? order?.total ?? order?.grandTotal ?? 0
   );
+
+  const selectedItemAmount = useMemo(() => {
+    if (!selectedItem) return fullOrderAmount;
+    const unitPrice = getOrderItemSellingPrice(selectedItem);
+    const qty = Number(selectedItem?.quantity ?? selectedItem?.qty ?? 1) || 1;
+    const itemTotal = unitPrice * qty;
+    return itemTotal > 0 ? itemTotal : fullOrderAmount;
+  }, [selectedItem, fullOrderAmount]);
+
+  const orderAmount =
+    rawOrderItems.length > 1 ? selectedItemAmount : fullOrderAmount || selectedItemAmount;
 
   const paymentMethod = String(
     order?.paymentMethod || order?.payment || order?.paymentMode || "Online Payment"
@@ -257,10 +362,21 @@ function ReturnExchange() {
   const goToOrder = () => {
     const params = new URLSearchParams();
     params.set("orderId", order?.orderId || orderId);
+    params.set("itemIdx", String(effectiveItemIndex));
+    if (selectedItem && getOrderItemId(selectedItem)) {
+      params.set("itemId", getOrderItemId(selectedItem));
+    }
     if (activeRequest?.referenceId) {
       params.set("returnId", activeRequest.referenceId);
     }
-    navigate(`/order-details?${params.toString()}`);
+    navigate(`/order-details?${params.toString()}`, {
+      state: {
+        order,
+        singleProduct: selectedItem,
+        itemIndex: effectiveItemIndex,
+        returnRequest: activeRequest || null,
+      },
+    });
   };
 
   // SUBMIT
@@ -280,6 +396,11 @@ function ReturnExchange() {
 
     if (!shipment?.$id) {
       toast.error("Shipment information is not available for this order.");
+      return;
+    }
+
+    if (selectedItem && isOrderItemCancelled(selectedItem)) {
+      toast.error("Cancelled products cannot be returned or exchanged.");
       return;
     }
 
@@ -304,16 +425,46 @@ function ReturnExchange() {
       setSubmitting(true);
 
       const originalOrderId = order.orderId || orderId;
+      const reasonWithItemMeta = selectedItem
+        ? formatReasonWithItem(finalReason, selectedItem, effectiveItemIndex)
+        : finalReason;
 
       const created = await returnExchangeService.createRequest({
         originalOrderId,
         shipmentId: shipment.$id,
         userId: user.$id,
         type,
-        reason: finalReason,
+        reason: reasonWithItemMeta,
         paymentMethod,
         refundAmount: type === "RETURN" ? orderAmount : 0,
       });
+
+      // Also persist returnReferenceId & returnRequestId on the target item inside order.items
+      if (order?.$id && rawOrderItems.length > 0 && selectedItem) {
+        try {
+          const updatedOrderItems = rawOrderItems.map((it, idx) => {
+            if (idx === effectiveItemIndex) {
+              return {
+                ...it,
+                returnRequestId: created?.$id || "",
+                returnReferenceId: created?.referenceId || "",
+                returnType: type,
+                returnStatus: "REQUESTED",
+                returnReason: finalReason,
+              };
+            }
+            return it;
+          });
+          await orderService.updateOrder(order.$id, {
+            items: JSON.stringify(updatedOrderItems),
+          });
+          setOrder((prev) =>
+            prev ? { ...prev, items: updatedOrderItems } : prev
+          );
+        } catch (orderItemSyncErr) {
+          console.warn("Order item return sync warning:", orderItemSyncErr);
+        }
+      }
 
       setExistingRequests((prev) => [created, ...prev]);
 
@@ -501,7 +652,7 @@ function ReturnExchange() {
                 {activeRequest.reason && (
                   <div className="rx-info-box mt-3">
                     <span className="rx-label">Reason</span>
-                    <div className="rx-value">{activeRequest.reason}</div>
+                    <div className="rx-value">{extractCleanReason(activeRequest.reason)}</div>
                   </div>
                 )}
               </div>
@@ -557,6 +708,92 @@ function ReturnExchange() {
                 <small className="rx-subtitle">
                   This order was placed using Cash on Delivery. Refund handling is managed upon pickup verification.
                 </small>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* SELECTED PRODUCT FOR RETURN / EXCHANGE */}
+        {selectedItem && (
+          <div className="rx-card mb-4">
+            <div className="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+              <div>
+                <h5 className="rx-section-title mb-1">
+                  Product for Return / Exchange
+                </h5>
+                <p className="rx-subtitle mb-0">
+                  {deliverableEntries.length > 1
+                    ? "Select which delivered product from your order you want to return or exchange"
+                    : "Selected delivered product from your order"}
+                </p>
+              </div>
+              <span className="rx-badge primary">
+                Item {effectiveItemIndex + 1} of {rawOrderItems.length}
+              </span>
+            </div>
+
+            <div className="d-flex align-items-center gap-3 p-3 rounded-3 border bg-light flex-wrap">
+              {getOrderItemImage(selectedItem) && (
+                <img
+                  src={getOrderItemImage(selectedItem)}
+                  alt={getOrderItemName(selectedItem)}
+                  style={{
+                    width: 64,
+                    height: 64,
+                    objectFit: "cover",
+                    borderRadius: 12,
+                  }}
+                  className="border bg-white"
+                />
+              )}
+              <div className="flex-grow-1">
+                <div className="fw-bold text-dark fs-6">
+                  {getOrderItemName(selectedItem)}
+                </div>
+                <div className="rx-subtitle">
+                  Quantity: <strong>x{Number(selectedItem?.quantity ?? selectedItem?.qty ?? 1) || 1}</strong>{" "}
+                  • Item Total:{" "}
+                  <strong className="text-dark">
+                    ₹{selectedItemAmount.toFixed(2)}
+                  </strong>
+                </div>
+              </div>
+            </div>
+
+            {deliverableEntries.length > 1 && (
+              <div className="mt-3">
+                <span className="rx-label d-block mb-2">
+                  Delivered Products in this Order ({deliverableEntries.length})
+                </span>
+                <div className="d-flex gap-2 flex-wrap">
+                  {deliverableEntries.map(({ item: delivItem, idx }) => {
+                    const isSelected = idx === effectiveItemIndex;
+                    const itemHasReq = existingRequests.some(
+                      (req) =>
+                        String(req?.status || "").toUpperCase() !== "CANCELLED" &&
+                        doesRequestMatchItem(req, delivItem, idx, order)
+                    );
+                    return (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => setSelectedItemIndex(idx)}
+                        className={`btn btn-sm rounded-pill px-3 py-2 d-inline-flex align-items-center gap-2 ${
+                          isSelected
+                            ? "btn-dark fw-bold"
+                            : "btn-outline-secondary"
+                        }`}
+                      >
+                        <span>{getOrderItemName(delivItem)}</span>
+                        {itemHasReq && (
+                          <span className="badge bg-warning text-dark">
+                            Requested
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </div>

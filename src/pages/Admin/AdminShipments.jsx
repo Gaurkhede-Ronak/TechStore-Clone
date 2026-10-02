@@ -25,6 +25,13 @@ import shipmentService from "../../appwrite/shipmentService";
 import shipmentEventService from "../../appwrite/shipmentEventService";
 import shipmentHelper from "../../appwrite/shipmentHelper";
 import returnExchangeService from "../../appwrite/returnExchangeService";
+import orderService from "../../appwrite/orderService";
+import {
+    getActiveDeliveryItems,
+    getCancelledOrderItems,
+    resolveReturnRequestItem,
+    extractCleanReason,
+} from "../../utils/orderItemHelper";
 import { databases } from "../../appwrite/config";
 import { Query } from "appwrite";
 
@@ -187,6 +194,7 @@ const parseAppwriteAssignmentEvents = (eventsDocs = []) => {
 
 function AdminShipments() {
     const [shipments, setShipments] = useState([]);
+    const [ordersMap, setOrdersMap] = useState({});
     const [loading, setLoading] = useState(true);
 
     const [search, setSearch] = useState("");
@@ -288,6 +296,23 @@ function AdminShipments() {
                     : response?.documents || [];
 
             setRequests(list);
+
+            try {
+                const allOrdersRes = await orderService.getAllOrders();
+                const allOrdersDocs = Array.isArray(allOrdersRes?.documents)
+                    ? allOrdersRes.documents
+                    : Array.isArray(allOrdersRes)
+                    ? allOrdersRes
+                    : [];
+                const map = {};
+                allOrdersDocs.forEach((ord) => {
+                    if (ord?.orderId) map[String(ord.orderId)] = ord;
+                    if (ord?.$id) map[String(ord.$id)] = ord;
+                });
+                setOrdersMap(map);
+            } catch (ordMapErr) {
+                console.warn("Orders map load warning:", ordMapErr);
+            }
         } catch (error) {
             console.error(
                 "Load return/exchange requests error:",
@@ -2478,17 +2503,44 @@ function AdminShipments() {
                                                     </td>
 
                                                     <td>
-                                                        <div
-                                                            style={{
-                                                                maxWidth:
-                                                                    "220px",
-                                                            }}
-                                                        >
-                                                            {
-                                                                request.reason ||
-                                                                "—"
-                                                            }
-                                                        </div>
+                                                        {(() => {
+                                                            const ord =
+                                                                ordersMap[
+                                                                    String(
+                                                                        request.originalOrderId ||
+                                                                            ""
+                                                                    )
+                                                                ] || null;
+                                                            const rxItem =
+                                                                resolveReturnRequestItem(
+                                                                    request,
+                                                                    ord
+                                                                );
+                                                            return (
+                                                                <div
+                                                                    style={{
+                                                                        maxWidth:
+                                                                            "240px",
+                                                                    }}
+                                                                >
+                                                                    {rxItem?.itemName && (
+                                                                        <div className="fw-bold text-dark mb-1">
+                                                                            {rxItem.itemName}{" "}
+                                                                            <span className="text-muted">
+                                                                                (x{rxItem.itemQty || 1})
+                                                                            </span>
+                                                                        </div>
+                                                                    )}
+                                                                    <div className="ship-small">
+                                                                        {rxItem?.cleanReason ||
+                                                                            extractCleanReason(
+                                                                                request.reason
+                                                                            ) ||
+                                                                            "—"}
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })()}
                                                     </td>
 
                                                     <td>
@@ -2925,6 +2977,83 @@ function AdminShipments() {
 
                                 </div>
 
+                                {(() => {
+                                    const ord =
+                                        ordersMap[
+                                            String(
+                                                selectedShipment.orderId || ""
+                                            )
+                                        ] || null;
+                                    if (!ord) return null;
+                                    const activeItems =
+                                        getActiveDeliveryItems(ord);
+                                    const cancelledItems =
+                                        getCancelledOrderItems(ord);
+                                    if (
+                                        activeItems.length === 0 &&
+                                        cancelledItems.length === 0
+                                    ) {
+                                        return null;
+                                    }
+                                    return (
+                                        <div className="ship-info-box mt-3">
+                                            <h6 className="fw-bold mb-2">
+                                                Products to Deliver (
+                                                {activeItems.length})
+                                            </h6>
+                                            {activeItems.map((it, i) => (
+                                                <div
+                                                    key={i}
+                                                    className="d-flex justify-content-between align-items-center py-1 border-bottom"
+                                                >
+                                                    <span className="fw-semibold">
+                                                        {it?.title ||
+                                                            it?.name ||
+                                                            "Product"}{" "}
+                                                        (x
+                                                        {it?.quantity ||
+                                                            it?.qty ||
+                                                            1}
+                                                        )
+                                                    </span>
+                                                    <span className="badge bg-success">
+                                                        Deliver
+                                                    </span>
+                                                </div>
+                                            ))}
+                                            {cancelledItems.length > 0 && (
+                                                <div className="mt-2">
+                                                    <span className="ship-info-label text-danger">
+                                                        Cancelled by Customer (Hidden from Delivery Boy)
+                                                    </span>
+                                                    {cancelledItems.map(
+                                                        (it, i) => (
+                                                            <div
+                                                                key={i}
+                                                                className="d-flex justify-content-between align-items-center py-1 text-muted"
+                                                            >
+                                                                <span className="text-decoration-line-through">
+                                                                    {it?.title ||
+                                                                        it?.name ||
+                                                                        "Product"}{" "}
+                                                                    (x
+                                                                    {it?.quantity ||
+                                                                        it?.qty ||
+                                                                        1}
+                                                                    )
+                                                                </span>
+                                                                <span className="badge bg-danger">
+                                                                    Cancelled
+                                                                </span>
+                                                            </div>
+                                                        )
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })()}
+
                             </div>
 
                             <div className="ship-modal-foot">
@@ -3275,20 +3404,86 @@ function AdminShipments() {
 
                                 </div>
 
-                                <div className="ship-info-box mb-3">
+                                {(() => {
+                                    const ord =
+                                        ordersMap[
+                                            String(
+                                                selectedRequest.originalOrderId ||
+                                                    ""
+                                            )
+                                        ] || null;
+                                    const rxItem = resolveReturnRequestItem(
+                                        selectedRequest,
+                                        ord
+                                    );
+                                    return (
+                                        <>
+                                            <div className="ship-info-box mb-3">
+                                                <span className="ship-info-label">
+                                                    {String(
+                                                        selectedRequest.type ||
+                                                            ""
+                                                    ).toUpperCase() ===
+                                                    "EXCHANGE"
+                                                        ? "Product to Exchange"
+                                                        : "Product to Return"}
+                                                </span>
+                                                <div className="d-flex align-items-center gap-3 mt-2">
+                                                    {rxItem?.itemImage && (
+                                                        <img
+                                                            src={
+                                                                rxItem.itemImage
+                                                            }
+                                                            alt={
+                                                                rxItem.itemName
+                                                            }
+                                                            style={{
+                                                                width: 52,
+                                                                height: 52,
+                                                                objectFit:
+                                                                    "cover",
+                                                                borderRadius: 10,
+                                                            }}
+                                                            className="border"
+                                                        />
+                                                    )}
+                                                    <div>
+                                                        <div className="ship-info-value">
+                                                            {rxItem?.itemName ||
+                                                                "Product"}
+                                                        </div>
+                                                        <span className="ship-small">
+                                                            Quantity: x
+                                                            {rxItem?.itemQty ||
+                                                                1}
+                                                            {rxItem?.itemPrice
+                                                                ? ` • Price: ₹${Number(
+                                                                      rxItem.itemPrice *
+                                                                          (rxItem.itemQty ||
+                                                                              1)
+                                                                  ).toFixed(2)}`
+                                                                : ""}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
 
-                                    <span className="ship-info-label">
-                                        Customer Reason
-                                    </span>
+                                            <div className="ship-info-box mb-3">
+                                                <span className="ship-info-label">
+                                                    Customer Reason
+                                                </span>
 
-                                    <div className="ship-info-value">
-                                        {
-                                            selectedRequest.reason ||
-                                            "No reason provided."
-                                        }
-                                    </div>
-
-                                </div>
+                                                <div className="ship-info-value">
+                                                    {rxItem?.cleanReason ||
+                                                        extractCleanReason(
+                                                            selectedRequest.reason
+                                                        ) ||
+                                                        "No reason provided."}
+                                                </div>
+                                            </div>
+                                        </>
+                                    );
+                                })()}
 
                                 <div className="row g-3">
 

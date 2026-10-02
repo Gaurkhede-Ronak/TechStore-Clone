@@ -343,11 +343,19 @@ const getAvatar = (order) => {
 
 const getItems = (order) => {
 
-    const possibleItems =
+    let possibleItems =
         order?.items ||
         order?.products ||
         order?.cartItems ||
         [];
+
+    if (typeof possibleItems === "string") {
+        try {
+            possibleItems = JSON.parse(possibleItems);
+        } catch {
+            possibleItems = [];
+        }
+    }
 
     if (
         !Array.isArray(
@@ -358,35 +366,57 @@ const getItems = (order) => {
     }
 
     return possibleItems.map(
-        (item) => ({
-
-            name:
-                item?.name ||
-                item?.productName ||
-                item?.title ||
-                "Product",
-
-            qty:
-                Number(
-                    item?.qty ??
-                    item?.quantity ??
-                    1
-                ) || 1,
-
-            price:
+        (item) => {
+            const origPrice =
                 Number(
                     item?.price ??
                     item?.sellingPrice ??
                     item?.productPrice ??
                     item?.amount ??
                     0
-                ) || 0,
+                ) || 0;
+            const disc = Number(item?.discount || 0);
+            const finalPrice =
+                disc > 0 && origPrice > 0
+                    ? origPrice - (origPrice * disc) / 100
+                    : origPrice;
+            const isCancelled =
+                Boolean(item?.isCancelled) ||
+                ["CANCELLED", "CANCELED"].includes(
+                    String(item?.status || "").trim().toUpperCase()
+                );
 
-            image:
-                item?.image ||
-                item?.productImage ||
-                "",
-        })
+            return {
+                name:
+                    item?.name ||
+                    item?.productName ||
+                    item?.title ||
+                    "Product",
+
+                qty:
+                    Number(
+                        item?.qty ??
+                        item?.quantity ??
+                        1
+                    ) || 1,
+
+                price: finalPrice,
+
+                image:
+                    item?.thumbnail ||
+                    item?.image ||
+                    item?.img ||
+                    item?.productImage ||
+                    "",
+
+                isCancelled,
+                status: isCancelled
+                    ? "Cancelled"
+                    : item?.status || "Active",
+                returnReferenceId: item?.returnReferenceId || "",
+                returnType: item?.returnType || "",
+            };
+        }
     );
 };
 
@@ -3229,6 +3259,10 @@ function Orders() {
                                                             </th>
 
                                                             <th>
+                                                                Status
+                                                            </th>
+
+                                                            <th>
                                                                 Qty
                                                             </th>
 
@@ -3257,6 +3291,11 @@ function Orders() {
                                                                     key={
                                                                         index
                                                                     }
+                                                                    className={
+                                                                        item.isCancelled
+                                                                            ? "table-danger opacity-75"
+                                                                            : ""
+                                                                    }
                                                                 >
 
                                                                     <td>
@@ -3279,14 +3318,39 @@ function Orders() {
 
                                                                             )}
 
-                                                                            <span>
-                                                                                {
-                                                                                    item.name
-                                                                                }
-                                                                            </span>
+                                                                            <div>
+                                                                                <span className={item.isCancelled ? "text-decoration-line-through text-muted" : "fw-semibold"}>
+                                                                                    {
+                                                                                        item.name
+                                                                                    }
+                                                                                </span>
+                                                                                {item.returnReferenceId && (
+                                                                                    <div className="small text-primary fw-semibold">
+                                                                                        {item.returnType === "EXCHANGE" ? "Exchange" : "Return"}: {item.returnReferenceId}
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
 
                                                                         </div>
 
+                                                                    </td>
+
+                                                                    <td>
+                                                                        {item.isCancelled ? (
+                                                                            <span className="badge bg-danger">
+                                                                                Cancelled (Do Not Deliver)
+                                                                            </span>
+                                                                        ) : item.returnReferenceId ? (
+                                                                            <span className="badge bg-info text-dark">
+                                                                                {item.returnType === "EXCHANGE"
+                                                                                    ? "Exchange Requested"
+                                                                                    : "Return Requested"}
+                                                                            </span>
+                                                                        ) : (
+                                                                            <span className="badge bg-success">
+                                                                                Active (To Deliver)
+                                                                            </span>
+                                                                        )}
                                                                     </td>
 
 

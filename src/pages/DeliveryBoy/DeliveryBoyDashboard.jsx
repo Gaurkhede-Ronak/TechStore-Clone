@@ -25,6 +25,11 @@ import shipmentService from "../../appwrite/shipmentService";
 import orderService from "../../appwrite/orderService";
 import authService from "../../appwrite/authService";
 import returnExchangeService from "../../appwrite/returnExchangeService";
+import {
+    getActiveDeliveryItems,
+    resolveReturnRequestItem,
+    extractCleanReason,
+} from "../../utils/orderItemHelper";
 
 import "../../css/DeliveryPremiumUI.css";
 
@@ -802,12 +807,35 @@ function DeliveryBoyDashboard() {
                                                     {getAddress(item)}
                                                 </strong>
                                             </div>
-                                            {request?.reason && (
-                                                <div className="delivery-reason-box">
-                                                    <span>Reason</span>
-                                                    <p>{request.reason}</p>
-                                                </div>
-                                            )}
+                                            {(() => {
+                                                const rxItem = resolveReturnRequestItem(
+                                                    request,
+                                                    item?.order
+                                                );
+                                                return (
+                                                    <>
+                                                        {rxItem?.itemName && (
+                                                            <div className="delivery-info-row">
+                                                                <span>
+                                                                    {isExchange
+                                                                        ? "Exchange Item"
+                                                                        : "Return Item"}
+                                                                </span>
+                                                                <strong>
+                                                                    {rxItem.itemName} (x
+                                                                    {rxItem.itemQty || 1})
+                                                                </strong>
+                                                            </div>
+                                                        )}
+                                                        {rxItem?.cleanReason && (
+                                                            <div className="delivery-reason-box">
+                                                                <span>Reason</span>
+                                                                <p>{rxItem.cleanReason}</p>
+                                                            </div>
+                                                        )}
+                                                    </>
+                                                );
+                                            })()}
                                         </div>
 
                                         <div className="delivery-operation-footer">
@@ -945,6 +973,28 @@ function DeliveryBoyDashboard() {
                                             </strong>
                                         </div>
                                     </div>
+
+                                    {(() => {
+                                        const activeItems = getActiveDeliveryItems(
+                                            item?.order
+                                        );
+                                        if (activeItems.length === 0) return null;
+                                        return (
+                                            <div className="delivery-info-row mb-2">
+                                                <span>
+                                                    Items to Deliver ({activeItems.length})
+                                                </span>
+                                                <strong>
+                                                    {activeItems
+                                                        .map(
+                                                            (it) =>
+                                                                `${it?.title || it?.name || "Product"} (x${it?.quantity || it?.qty || 1})`
+                                                        )
+                                                        .join(", ")}
+                                                </strong>
+                                            </div>
+                                        );
+                                    })()}
 
                                     <div className="delivery-address-box">
                                         <div className="delivery-address-icon">

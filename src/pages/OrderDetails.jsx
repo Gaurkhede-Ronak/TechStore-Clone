@@ -12,6 +12,7 @@ import shipmentEventService from "../appwrite/shipmentEventService";
 import warehouseService from "../appwrite/warehouseService";
 import deliveryOtpService from "../appwrite/deliveryOtpService";
 import returnExchangeService from "../appwrite/returnExchangeService";
+import { doesRequestMatchItem } from "../utils/orderItemHelper";
 
 import {
   FaArrowLeft,
@@ -992,19 +993,57 @@ function OrderDetails() {
   }, [location.search, location.state]);
 
   const focusedReturnRequest = useMemo(() => {
+    // If user clicked a specific product in "Other Products in this Order", match that item's request
+    if (selectedProductOverride) {
+      const matchedForOverride = returnRequests.find((r) =>
+        doesRequestMatchItem(r, activeProduct, activeProductIndex, order)
+      );
+      return matchedForOverride || null;
+    }
+
     if (selectedReturnIdParam) {
       const matched = returnRequests.find(
         (r) =>
           String(r?.referenceId || "") === String(selectedReturnIdParam) ||
           String(r?.$id || "") === String(selectedReturnIdParam)
       );
-      if (matched) return matched;
+      if (
+        matched &&
+        doesRequestMatchItem(matched, activeProduct, activeProductIndex, order)
+      ) {
+        return matched;
+      }
     }
-    if (location.state?.returnRequest) {
+
+    // Also check if the currently viewed activeProduct has an active return/exchange request
+    const matchedForActiveItem = returnRequests.find((r) =>
+      doesRequestMatchItem(r, activeProduct, activeProductIndex, order)
+    );
+    if (matchedForActiveItem) {
+      return matchedForActiveItem;
+    }
+
+    if (
+      location.state?.returnRequest &&
+      doesRequestMatchItem(
+        location.state.returnRequest,
+        activeProduct,
+        activeProductIndex,
+        order
+      )
+    ) {
       return location.state.returnRequest;
     }
     return null;
-  }, [selectedReturnIdParam, returnRequests, location.state]);
+  }, [
+    selectedProductOverride,
+    selectedReturnIdParam,
+    returnRequests,
+    location.state,
+    activeProduct,
+    activeProductIndex,
+    order,
+  ]);
 
   const isFocusedExchange =
     String(focusedReturnRequest?.type || "").toUpperCase() === "EXCHANGE";
@@ -1080,10 +1119,12 @@ function OrderDetails() {
   const existingActiveRequest = useMemo(() => {
     return (
       returnRequests.find(
-        (r) => String(r?.status || "").trim().toUpperCase() !== "CANCELLED"
+        (r) =>
+          String(r?.status || "").trim().toUpperCase() !== "CANCELLED" &&
+          doesRequestMatchItem(r, activeProduct, activeProductIndex, order)
       ) || null
     );
-  }, [returnRequests]);
+  }, [returnRequests, activeProduct, activeProductIndex, order]);
 
   const hasExistingReturnOrExchange = Boolean(existingActiveRequest);
 
@@ -2581,10 +2622,24 @@ function OrderDetails() {
         return;
       }
 
+      const rxParams = new URLSearchParams();
+      rxParams.set("itemIdx", String(activeProductIndex));
+      const prodId = getProductId(activeProduct);
+      if (prodId) {
+        rxParams.set("itemId", String(prodId));
+      }
+
       navigate(
         `/return-exchange/${encodeURIComponent(
           orderReference
-        )}`
+        )}?${rxParams.toString()}`,
+        {
+          state: {
+            order,
+            singleProduct: activeProduct,
+            itemIndex: activeProductIndex,
+          },
+        }
       );
     };
 
@@ -4273,6 +4328,22 @@ function OrderDetails() {
                         }
                         if (itemProdId) {
                           params.set("itemId", itemProdId);
+                        } else {
+                          params.delete("itemId");
+                        }
+
+                        const itemMatchedReq = returnRequests.find((r) =>
+                          doesRequestMatchItem(
+                            r,
+                            item,
+                            clickedIdx >= 0 ? clickedIdx : 0,
+                            order
+                          )
+                        );
+                        if (itemMatchedReq?.referenceId) {
+                          params.set("returnId", itemMatchedReq.referenceId);
+                        } else {
+                          params.delete("returnId");
                         }
 
                         navigate(`/order-details?${params.toString()}`, {
@@ -4284,6 +4355,7 @@ function OrderDetails() {
                               : order,
                             singleProduct: item,
                             itemIndex: clickedIdx >= 0 ? clickedIdx : 0,
+                            returnRequest: itemMatchedReq || null,
                           },
                         });
 

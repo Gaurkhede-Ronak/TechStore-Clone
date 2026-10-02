@@ -25,6 +25,7 @@ import authService from "../appwrite/authService";
 import orderService from "../appwrite/orderService";
 import shipmentService from "../appwrite/shipmentService";
 import returnExchangeService from "../appwrite/returnExchangeService";
+import { resolveReturnRequestItem } from "../utils/orderItemHelper";
 import reviewService from "../appwrite/reviewService";
 
   // HELPERS
@@ -842,10 +843,22 @@ function OrderHistory() {
 
                   {/* SUB-CARDS */}
                   <div className="d-flex flex-column gap-3">
-                    {(isReturnEntry || isExchangeEntry
-                      ? orderItems.slice(0, 1)
-                      : orderItems
-                    ).map((item, itemIdx) => {
+                    {(() => {
+                      if (isReturnEntry || isExchangeEntry) {
+                        const resolvedRx = resolveReturnRequestItem(
+                          returnRequest,
+                          order
+                        );
+                        const rxItem = resolvedRx?.item || orderItems[0];
+                        const rxIdx =
+                          resolvedRx?.itemIndex >= 0 ? resolvedRx.itemIndex : 0;
+                        return rxItem ? [{ item: rxItem, itemIdx: rxIdx }] : [];
+                      }
+                      return orderItems.map((it, idx) => ({
+                        item: it,
+                        itemIdx: idx,
+                      }));
+                    })().map(({ item, itemIdx }) => {
                       const isThisItemCancelled =
                         Boolean(item?.isCancelled) ||
                         normalizeStatus(item?.status) === "CANCELLED" ||

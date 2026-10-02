@@ -25,6 +25,12 @@ import shipmentService from "../../appwrite/shipmentService";
 import orderService from "../../appwrite/orderService";
 import deliveryOtpService from "../../appwrite/deliveryOtpService";
 import returnExchangeService from "../../appwrite/returnExchangeService";
+import {
+    getActiveDeliveryItems,
+    getReturnExchangeItemsForDelivery,
+    resolveReturnRequestItem,
+    extractCleanReason,
+} from "../../utils/orderItemHelper";
 import "../../css/DeliveryPremiumUI.css";
 
 function formatAddressValue(rawAddress) {
@@ -263,11 +269,15 @@ function DeliveryShipmentDetails() {
         try {
             setVerifying(true);
 
+            const resolvedItem = resolveReturnRequestItem(request, order);
             const amount = Number(
-                order?.totalAmount ||
+                request?.refundAmount ||
+                    (resolvedItem?.itemPrice
+                        ? resolvedItem.itemPrice * (resolvedItem.itemQty || 1)
+                        : 0) ||
+                    order?.totalAmount ||
                     order?.total ||
                     order?.grandTotal ||
-                    request?.refundAmount ||
                     0
             );
 
@@ -343,21 +353,19 @@ function DeliveryShipmentDetails() {
             shipment?.destinationAddress
     );
 
-    let products = [];
-
-    if (Array.isArray(order?.items)) {
-        products = order.items;
-    } else if (typeof order?.items === "string") {
-        try {
-            products = JSON.parse(order.items);
-        } catch {
-            products = [];
-        }
-    }
-
     const isDelivered = shipment?.status === "DELIVERED";
     const isOutForDelivery = shipment?.status === "OUT_FOR_DELIVERY";
     const isReturnExchange = !!request;
+
+    // For Return/Exchange: show ONLY the specific product requested for return/exchange.
+    // For Normal Delivery: show ONLY active (non-cancelled) products to deliver.
+    const products = isReturnExchange
+        ? getReturnExchangeItemsForDelivery(request, order)
+        : getActiveDeliveryItems(order);
+
+    const resolvedReturnItem = isReturnExchange
+        ? resolveReturnRequestItem(request, order)
+        : null;
 
     const normalizedRequestStatus = String(request?.status || "").toUpperCase();
     const isAssigned =
@@ -548,6 +556,18 @@ function DeliveryShipmentDetails() {
                                 <span>
                                     Original Order:{" "}
                                     <b>{request.originalOrderId}</b>
+                                    {resolvedReturnItem?.itemName ? (
+                                        <>
+                                            {" "}• Product:{" "}
+                                            <b>{resolvedReturnItem.itemName}</b>
+                                        </>
+                                    ) : null}
+                                    {resolvedReturnItem?.cleanReason ? (
+                                        <>
+                                            {" "}• Reason:{" "}
+                                            <b>{resolvedReturnItem.cleanReason}</b>
+                                        </>
+                                    ) : null}
                                 </span>
                             </div>
                         </div>
@@ -654,7 +674,13 @@ function DeliveryShipmentDetails() {
                                 <div className="delivery-products">
                                     <div className="delivery-products-title">
                                         <FaBox />
-                                        <span>Products</span>
+                                        <span>
+                                            {isReturnExchange
+                                                ? request?.type === "EXCHANGE"
+                                                    ? "Product to Exchange"
+                                                    : "Product to Pick Up (Return)"
+                                                : "Products to Deliver"}
+                                        </span>
                                         <b>{products.length}</b>
                                     </div>
 

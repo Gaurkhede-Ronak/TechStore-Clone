@@ -19,6 +19,9 @@ const DELIVERY_OTPS_COLLECTION_ID =
 const ORDERS_COLLECTION_ID =
   import.meta.env.VITE_APPWRITE_ORDERS_COLLECTION_ID;
 
+const NOTIFICATIONS_COLLECTION_ID =
+  import.meta.env.VITE_APPWRITE_NOTIFICATIONS_COLLECTION_ID;
+
 class DeliveryOtpService {
   // GENERATE RANDOM 6-DIGIT OTP
 
@@ -356,7 +359,43 @@ class DeliveryOtpService {
           cleanShipmentId
         );
 
-      if (!otpDocument) {
+      // Also check customer's DELIVERY_OTP notification in case OTP is read from Notifications page
+      let notificationOtp = "";
+      if (NOTIFICATIONS_COLLECTION_ID) {
+        try {
+          const notifRes = await databases.listDocuments(
+            DATABASE_ID,
+            NOTIFICATIONS_COLLECTION_ID,
+            [
+              Query.equal("type", "DELIVERY_OTP"),
+              Query.orderDesc("$createdAt"),
+              Query.limit(25),
+            ]
+          );
+          const matchedNotif = (notifRes?.documents || []).find(
+            (n) =>
+              (n?.shipmentId && String(n.shipmentId) === cleanShipmentId) ||
+              (shipment.orderId &&
+                n?.orderId &&
+                String(n.orderId) === String(shipment.orderId))
+          );
+          if (matchedNotif) {
+            const directOtp = String(matchedNotif.otp || "").replace(/\D/g, "").trim();
+            if (directOtp.length === 6) {
+              notificationOtp = directOtp;
+            } else {
+              const msgMatch = String(matchedNotif.message || "").match(/\b(\d{6})\b/);
+              if (msgMatch) {
+                notificationOtp = msgMatch[1];
+              }
+            }
+          }
+        } catch (notifLookupErr) {
+          console.warn("Notification OTP lookup warning:", notifLookupErr);
+        }
+      }
+
+      if (!otpDocument && !notificationOtp) {
         return {
           success: false,
           message:
@@ -368,10 +407,14 @@ class DeliveryOtpService {
       // It remains valid until the parcel is actually delivered.
 
       const storedOtp = String(
-        otpDocument.otpCode || ""
+        otpDocument?.otpCode || otpDocument?.otp || ""
       ).trim();
 
-      if (enteredOtp !== storedOtp) {
+      const isOtpMatch =
+        (storedOtp && enteredOtp === storedOtp) ||
+        (notificationOtp && enteredOtp === notificationOtp);
+
+      if (!isOtpMatch) {
         const updatedAttempts =
           Number(otpDocument.attempts || 0) + 1;
 
@@ -399,15 +442,17 @@ class DeliveryOtpService {
       const verifiedAt =
         new Date().toISOString();
 
-      await databases.updateDocument(
-        DATABASE_ID,
-        DELIVERY_OTPS_COLLECTION_ID,
-        otpDocument.$id,
-        {
-          verified: true,
-          verifiedAt,
-        }
-      );
+      if (otpDocument?.$id) {
+        await databases.updateDocument(
+          DATABASE_ID,
+          DELIVERY_OTPS_COLLECTION_ID,
+          otpDocument.$id,
+          {
+            verified: true,
+            verifiedAt,
+          }
+        );
+      }
 
       const deliveredLocation =
         [
@@ -470,6 +515,7 @@ class DeliveryOtpService {
       }
 
       // Sync Order status in ORDERS_COLLECTION_ID to "Delivered"
+      // while keeping any cancelled items marked as Cancelled
       if (ORDERS_COLLECTION_ID && shipment.orderId) {
         try {
           const orderLookup =
@@ -485,26 +531,66 @@ class DeliveryOtpService {
               ]
             );
 
-          const orderDoc =
+          let orderDoc =
             orderLookup?.documents?.[0] || null;
 
+          if (!orderDoc) {
+            try {
+              orderDoc = await databases.getDocument(
+                DATABASE_ID,
+                ORDERS_COLLECTION_ID,
+                String(shipment.orderId)
+              );
+            } catch {
+              orderDoc = null;
+            }
+          }
+
           if (orderDoc?.$id) {
+            const orderUpdatePayload = {
+              status: "Delivered",
+            };
+
+            if (orderDoc.items) {
+              try {
+                const parsedItems =
+                  typeof orderDoc.items === "string"
+                    ? JSON.parse(orderDoc.items)
+                    : Array.isArray(orderDoc.items)
+                    ? orderDoc.items
+                    : [];
+
+                if (Array.isArray(parsedItems) && parsedItems.length > 0) {
+                  const syncedItems = parsedItems.map((it) => {
+                    const isCanc =
+                      Boolean(it?.isCancelled) ||
+                      ["CANCELLED", "CANCELED"].includes(
+                        String(it?.status || "").trim().toUpperCase()
+                      );
+                    if (isCanc) {
+                      return {
+                        ...it,
+                        isCancelled: true,
+                        status: "Cancelled",
+                      };
+                    }
+                    return {
+                      ...it,
+                      status: "Delivered",
+                    };
+                  });
+                  orderUpdatePayload.items = JSON.stringify(syncedItems);
+                }
+              } catch (itemParseErr) {
+                console.warn("Order items delivery sync warning:", itemParseErr);
+              }
+            }
+
             await databases.updateDocument(
               DATABASE_ID,
               ORDERS_COLLECTION_ID,
               orderDoc.$id,
-              {
-                status: "Delivered",
-              }
-            );
-          } else {
-            await databases.updateDocument(
-              DATABASE_ID,
-              ORDERS_COLLECTION_ID,
-              String(shipment.orderId),
-              {
-                status: "Delivered",
-              }
+              orderUpdatePayload
             );
           }
         } catch (orderSyncError) {
@@ -517,7 +603,7 @@ class DeliveryOtpService {
 
       // Send Customer Notification: ORDER_DELIVERED
       const customerUserId = String(
-        shipment.userId || otpDocument.userId || ""
+        shipment.userId || otpDocument?.userId || ""
       ).trim();
 
       if (customerUserId) {
