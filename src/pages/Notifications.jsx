@@ -1120,12 +1120,6 @@ const Notifications = () => {
                                                         </span>
                                                     </div>
                                                 )}
-                                                    </span>
-                                                    <span className="ts-notif-otp-note">
-                                                        • Valid until parcel is delivered
-                                                    </span>
-                                                </div>
-                                            )}
 
 
                                             {/* ORDER INFO */}
