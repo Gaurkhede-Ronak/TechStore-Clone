@@ -147,6 +147,7 @@ function Products() {
     if (cat === "Mobile") return "Mobiles & Tablets";
     if (cat === "Smart Watches") return "Smart Watches";
     if (cat === "Headphones") return "Headphones & Audio";
+    if (cat === "Tablet") return "Tablets";
 
     return cat;
   };
@@ -200,6 +201,22 @@ function Products() {
         const brandLower =
           (product.brand || "").toLowerCase();
 
+        const isAudioCategory =
+          catLower.includes("headphone") ||
+          catLower.includes("earphone") ||
+          catLower.includes("earbud") ||
+          catLower.includes("buds") ||
+          catLower.includes("audio") ||
+          catLower.includes("neckband") ||
+          catLower.includes("speaker");
+
+        const isMobileCategory =
+          !isAudioCategory &&
+          (catLower.includes("mobile") ||
+            catLower === "phone" ||
+            catLower === "phones" ||
+            catLower.includes("smartphone"));
+
         /* SMART WATCHES */
 
         if (target.includes("watch")) {
@@ -207,17 +224,16 @@ function Products() {
             titleLower.includes("watch") ||
             catLower.includes("watch") ||
             brandLower.includes("fireboltt") ||
+            brandLower.includes("fire-boltt") ||
             brandLower.includes("noise");
 
           const isAudio =
+            isAudioCategory ||
             titleLower.includes("buds") ||
             titleLower.includes("headphone") ||
-            titleLower.includes("earphone") ||
-            catLower.includes("headphone");
+            titleLower.includes("earphone");
 
-          const isPhone =
-            catLower.includes("mobile") ||
-            catLower.includes("phone");
+          const isPhone = isMobileCategory;
 
           const isLaptop =
             catLower.includes("laptop") ||
@@ -240,6 +256,7 @@ function Products() {
           target.includes("audio")
         ) {
           const isAudio =
+            isAudioCategory ||
             titleLower.includes("buds") ||
             titleLower.includes("headphone") ||
             titleLower.includes("earphone") ||
@@ -247,18 +264,15 @@ function Products() {
             titleLower.includes("airpod") ||
             titleLower.includes("audio") ||
             titleLower.includes("neckband") ||
+            titleLower.includes("rockerz") ||
             (titleLower.includes("air") &&
-              catLower.includes("accessories")) ||
-            catLower.includes("headphone") ||
-            catLower.includes("audio");
+              catLower.includes("accessories"));
 
           const isWatch =
             titleLower.includes("watch") ||
             catLower.includes("watch");
 
-          const isPhone =
-            catLower.includes("mobile") ||
-            catLower.includes("phone");
+          const isPhone = isMobileCategory;
 
           const isLaptop =
             catLower.includes("laptop") ||
@@ -288,20 +302,22 @@ function Products() {
             titleLower.includes("macbook") ||
             titleLower.includes("notebook") ||
             titleLower.includes("thinkpad") ||
-            titleLower.includes("chromebook");
+            titleLower.includes("chromebook") ||
+            titleLower.includes("victus") ||
+            titleLower.includes("alienware") ||
+            titleLower.includes("tuf gaming");
 
           const isWatch =
             titleLower.includes("watch") ||
             catLower.includes("watch");
 
           const isAudio =
+            isAudioCategory ||
             titleLower.includes("buds") ||
             titleLower.includes("headphone") ||
             titleLower.includes("earphone");
 
-          const isPhone =
-            catLower.includes("mobile") ||
-            catLower.includes("phone");
+          const isPhone = isMobileCategory;
 
           return (
             isLaptop &&
@@ -311,21 +327,31 @@ function Products() {
           );
         }
 
+        /* TABLETS ONLY */
+
+        if (target === "tablet" || target === "tablets") {
+          return (
+            catLower.includes("tablet") ||
+            titleLower.includes("tablet") ||
+            titleLower.includes("ipad") ||
+            titleLower.includes("tab ") ||
+            titleLower.includes("pad ")
+          );
+        }
+
         /* MOBILE & TABLETS */
 
         if (
           target.includes("mobile") ||
           target.includes("phone") ||
-          target.includes("tablet") ||
           target.includes("smartphone") ||
           target.includes("ipad")
         ) {
           const isMobileOrTablet =
-            catLower.includes("mobile") ||
-            catLower.includes("phone") ||
+            isMobileCategory ||
             catLower.includes("tablet") ||
-            catLower.includes("smartphone") ||
-            titleLower.includes("phone") ||
+            titleLower.includes("iphone") ||
+            titleLower.includes("smartphone") ||
             titleLower.includes("mobile") ||
             titleLower.includes("tablet") ||
             titleLower.includes("ipad") ||
@@ -342,16 +368,16 @@ function Products() {
             catLower.includes("watch");
 
           const isAudio =
+            isAudioCategory ||
             titleLower.includes("buds") ||
             titleLower.includes("headphone") ||
             titleLower.includes("earphone") ||
-            titleLower.includes("air") ||
-            catLower.includes("headphone") ||
-            catLower.includes("audio");
+            titleLower.includes("rockerz");
 
           const isLaptop =
             catLower.includes("laptop") ||
-            titleLower.includes("laptop");
+            titleLower.includes("laptop") ||
+            titleLower.includes("macbook");
 
           return (
             isMobileOrTablet &&
@@ -523,8 +549,16 @@ function Products() {
 
             {/* CATEGORY CUSTOM DROPDOWN */}
 
-            <div className="col-lg-3 col-md-6">
-              <div className="product-custom-select">
+            <div
+              className={`col-lg-3 col-md-6 ${
+                openDropdown === "category" ? "dropdown-col-open" : ""
+              }`}
+            >
+              <div
+                className={`product-custom-select ${
+                  openDropdown === "category" ? "is-open" : ""
+                }`}
+              >
 
                 <button
                   type="button"
@@ -588,8 +622,16 @@ function Products() {
 
             {/* SORT CUSTOM DROPDOWN */}
 
-            <div className="col-lg-3 col-md-6">
-              <div className="product-custom-select">
+            <div
+              className={`col-lg-3 col-md-6 ${
+                openDropdown === "sort" ? "dropdown-col-open" : ""
+              }`}
+            >
+              <div
+                className={`product-custom-select ${
+                  openDropdown === "sort" ? "is-open" : ""
+                }`}
+              >
 
                 <button
                   type="button"

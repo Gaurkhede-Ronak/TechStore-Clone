@@ -1103,10 +1103,23 @@ const Notifications = () => {
                                                 {notification.message}
                                             </p>
 
-                                            {String(notification.type || "").toUpperCase() === "DELIVERY_OTP" && extractOtpCode(notification) && (
-                                                <div className="ts-notif-otp-box">
-                                                    <span className="ts-notif-otp-code">
-                                                        🔐 OTP: {extractOtpCode(notification)}
+                                            {String(notification.type || "").toUpperCase() === "DELIVERY_OTP" &&
+                                                extractOtpCode(notification) &&
+                                                !notifications.some(
+                                                    (n) =>
+                                                        String(n.type || "").toUpperCase().includes("DELIVERED") &&
+                                                        ((notification.orderId && n.orderId === notification.orderId) ||
+                                                            (notification.shipmentId && n.shipmentId === notification.shipmentId))
+                                                ) && (
+                                                    <div className="ts-notif-otp-box">
+                                                        <span className="ts-notif-otp-code">
+                                                            🔐 OTP: {extractOtpCode(notification)}
+                                                        </span>
+                                                        <span className="ts-notif-otp-note">
+                                                            • Valid until parcel is delivered
+                                                        </span>
+                                                    </div>
+                                                )}
                                                     </span>
                                                     <span className="ts-notif-otp-note">
                                                         • Valid until parcel is delivered

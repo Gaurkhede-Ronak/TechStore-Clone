@@ -340,12 +340,64 @@ function Categories() {
                   value
                 );
 
-              return (
-                normalizedValue ===
-                  categoryName ||
-                normalizedValue ===
-                  categoryId
-              );
+              if (!normalizedValue) return false;
+
+              if (
+                normalizedValue === categoryName ||
+                normalizedValue === categoryId ||
+                normalizedValue.replace(/s$/, "") ===
+                  categoryName.replace(/s$/, "")
+              ) {
+                return true;
+              }
+
+              if (
+                (categoryName.includes("headphone") ||
+                  categoryName.includes("audio")) &&
+                (normalizedValue.includes("headphone") ||
+                  normalizedValue.includes("audio") ||
+                  normalizedValue.includes("earphone") ||
+                  normalizedValue.includes("buds"))
+              ) {
+                return true;
+              }
+
+              if (
+                categoryName.includes("watch") &&
+                normalizedValue.includes("watch")
+              ) {
+                return true;
+              }
+
+              if (
+                categoryName.includes("laptop") &&
+                normalizedValue.includes("laptop")
+              ) {
+                return true;
+              }
+
+              if (
+                categoryName.includes("tablet") &&
+                normalizedValue.includes("tablet")
+              ) {
+                return true;
+              }
+
+              if (
+                (categoryName.includes("mobile") ||
+                  categoryName === "phone" ||
+                  categoryName === "phones") &&
+                !normalizedValue.includes("headphone") &&
+                !normalizedValue.includes("earphone") &&
+                (normalizedValue.includes("mobile") ||
+                  normalizedValue === "phone" ||
+                  normalizedValue === "phones" ||
+                  normalizedValue.includes("smartphone"))
+              ) {
+                return true;
+              }
+
+              return false;
             }
           );
 

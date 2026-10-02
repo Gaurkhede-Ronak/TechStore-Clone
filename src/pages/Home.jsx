@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 import Hero from "../components/Hero";
@@ -105,7 +105,114 @@ function Home() {
     };
   }, []);
 
-  const homeProducts = products.slice(0, 8);
+  const homeProducts = useMemo(() => {
+    if (!Array.isArray(products) || products.length === 0) return [];
+
+    const usedIds = new Set();
+    const selected = [];
+
+    const classifyProduct = (p) => {
+      const cat = String(p?.category || "").trim().toLowerCase();
+      const title = String(p?.title || "").trim().toLowerCase();
+
+      if (
+        cat.includes("headphone") ||
+        cat.includes("audio") ||
+        cat.includes("earphone") ||
+        cat.includes("buds") ||
+        title.includes("headphone") ||
+        title.includes("earphone") ||
+        title.includes("buds") ||
+        title.includes("rockerz")
+      ) {
+        return "headphone";
+      }
+      if (
+        cat.includes("watch") ||
+        title.includes("watch") ||
+        title.includes("colorfit")
+      ) {
+        return "watch";
+      }
+      if (
+        cat.includes("tablet") ||
+        title.includes("ipad") ||
+        title.includes("tab ") ||
+        title.includes("pad ")
+      ) {
+        return "tablet";
+      }
+      if (
+        cat.includes("laptop") ||
+        title.includes("laptop") ||
+        title.includes("macbook") ||
+        title.includes("victus") ||
+        title.includes("alienware") ||
+        title.includes("loq")
+      ) {
+        return "laptop";
+      }
+      if (
+        cat.includes("mobile") ||
+        cat === "phone" ||
+        cat === "phones" ||
+        cat.includes("smartphone") ||
+        title.includes("iphone") ||
+        title.includes("galaxy a") ||
+        title.includes("redmi note") ||
+        title.includes("vivo")
+      ) {
+        return "mobile";
+      }
+      return "other";
+    };
+
+    const headphones = products.filter((p) => classifyProduct(p) === "headphone");
+    const laptops = products.filter((p) => classifyProduct(p) === "laptop");
+    const mobiles = products.filter((p) => classifyProduct(p) === "mobile");
+    const watches = products.filter((p) => classifyProduct(p) === "watch");
+    const tablets = products.filter((p) => classifyProduct(p) === "tablet");
+
+    // Pick 4 unique Headphones (preferring distinct brands first, then remaining unique models)
+    const seenHeadphoneBrands = new Set();
+    for (const item of headphones) {
+      if (selected.length >= 4) break;
+      const brandKey = String(item?.brand || "").trim().toLowerCase();
+      if (brandKey && !seenHeadphoneBrands.has(brandKey) && !usedIds.has(item.$id)) {
+        seenHeadphoneBrands.add(brandKey);
+        usedIds.add(item.$id);
+        selected.push(item);
+      }
+    }
+    for (const item of headphones) {
+      if (selected.length >= 4) break;
+      if (!usedIds.has(item.$id)) {
+        usedIds.add(item.$id);
+        selected.push(item);
+      }
+    }
+
+    // Pick 1 Laptop, 1 Mobile, 1 Smart Watch, and 1 Tablet
+    const singleBuckets = [laptops, mobiles, watches, tablets];
+    for (const bucket of singleBuckets) {
+      const match = bucket.find((item) => !usedIds.has(item.$id));
+      if (match) {
+        usedIds.add(match.$id);
+        selected.push(match);
+      }
+    }
+
+    // Fallback: fill up to 8 items if any category had fewer items
+    for (const item of products) {
+      if (selected.length >= 8) break;
+      if (!usedIds.has(item.$id)) {
+        usedIds.add(item.$id);
+        selected.push(item);
+      }
+    }
+
+    return selected.slice(0, 8);
+  }, [products]);
 
   return (
     <div className="home-page-wrapper">

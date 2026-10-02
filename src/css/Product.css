@@ -165,12 +165,21 @@ body.dark .premium-input:focus {
 
 /* PREMIUM CUSTOM DROPDOWN */
 
+.dropdown-col-open {
+  position: relative;
+  z-index: 99999 !important;
+}
+
 .product-custom-select {
   position: relative;
 
   width: 100%;
 
-  z-index: 100;
+  z-index: 10;
+}
+
+.product-custom-select.is-open {
+  z-index: 99999 !important;
 }
 
 /* DROPDOWN BUTTON */

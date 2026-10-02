@@ -32,6 +32,8 @@ import {
   FaMobileAlt,
   FaInfoCircle,
   FaExclamationTriangle,
+  FaCopy,
+  FaLock,
 } from "react-icons/fa";
 
 import toast from "react-hot-toast";
@@ -2138,32 +2140,51 @@ function OrderDetails() {
     let cancelled = false;
 
     const syncActiveOtp = async () => {
-      if (!shipment?.$id || currentStatus !== "OUT_FOR_DELIVERY") {
-        if (currentStatus === "DELIVERED") {
-          setDeliveryOtp("");
-          setShowOtp(false);
-          setOtpExpiresAt(null);
-          setOtpTimeLeft(0);
-        }
+      if (
+        !shipment?.$id ||
+        currentStatus !== "OUT_FOR_DELIVERY" ||
+        isDelivered ||
+        isCancelled
+      ) {
+        setDeliveryOtp("");
+        setShowOtp(false);
+        setOtpExpiresAt(null);
+        setOtpTimeLeft(0);
         return;
       }
 
       try {
-        const activeDoc =
+        let activeDoc =
           await deliveryOtpService.getActiveOtpByShipmentId(
             shipment.$id
           );
 
-        if (!cancelled && activeDoc) {
-          const code = String(
-            activeDoc.otp || activeDoc.otpCode || ""
-          ).trim();
-          if (code) {
-            setDeliveryOtp(code);
-            setOtpExpiresAt(activeDoc.expiresAt || null);
-            setShowOtp(true);
-            setOtpTimeLeft(999999);
+        let code = String(
+          activeDoc?.otp || activeDoc?.otpCode || ""
+        ).trim();
+
+        if (!code) {
+          const genResult = await deliveryOtpService.generateOtp({
+            shipmentId: String(shipment.$id),
+            orderId: String(
+              shipment.orderId || order?.orderId || order?.$id || ""
+            ),
+            userId: String(
+              shipment.userId || order?.userId || currentUser?.$id || ""
+            ),
+            trackingId: String(shipment.trackingId || ""),
+          });
+          if (genResult?.success && genResult?.otp) {
+            code = String(genResult.otp).trim();
+            activeDoc = genResult.document || activeDoc;
           }
+        }
+
+        if (!cancelled && code) {
+          setDeliveryOtp(code);
+          setOtpExpiresAt(activeDoc?.expiresAt || null);
+          setShowOtp(true);
+          setOtpTimeLeft(999999);
         }
       } catch (err) {
         console.warn("Active OTP load warning:", err);
@@ -2175,7 +2196,20 @@ function OrderDetails() {
     return () => {
       cancelled = true;
     };
-  }, [shipment?.$id, currentStatus, otpExpiresAt]);
+  }, [
+    shipment?.$id,
+    shipment?.orderId,
+    shipment?.userId,
+    shipment?.trackingId,
+    order?.orderId,
+    order?.$id,
+    order?.userId,
+    currentUser?.$id,
+    currentStatus,
+    isDelivered,
+    isCancelled,
+    otpExpiresAt,
+  ]);
 
   /* LOAD EXISTING USER REVIEW FOR ACTIVE PRODUCT */
   useEffect(() => {
@@ -3652,6 +3686,81 @@ function OrderDetails() {
                   </div>
                 ) : (
                   <div className="shipment-progress-timeline">
+                    {currentStatus === "OUT_FOR_DELIVERY" &&
+                      !isDelivered &&
+                      !isCancelled &&
+                      deliveryOtp && (
+                        <div
+                          className="mb-3 p-3 rounded-4 d-flex flex-wrap align-items-center justify-content-between gap-3"
+                          style={{
+                            background:
+                              "linear-gradient(135deg, rgba(37, 99, 235, 0.1), rgba(124, 58, 237, 0.08))",
+                            border: "1.5px dashed rgba(37, 99, 235, 0.45)",
+                          }}
+                        >
+                          <div className="d-flex align-items-center gap-3">
+                            <div
+                              className="d-flex align-items-center justify-content-center rounded-circle flex-shrink-0"
+                              style={{
+                                width: "42px",
+                                height: "42px",
+                                background: "rgba(37, 99, 235, 0.15)",
+                                color: "#2563eb",
+                                fontSize: "18px",
+                              }}
+                            >
+                              <FaLock />
+                            </div>
+                            <div>
+                              <div className="d-flex align-items-center flex-wrap gap-2">
+                                <span
+                                  className="fw-bold text-uppercase"
+                                  style={{
+                                    fontSize: "0.75rem",
+                                    letterSpacing: "0.06em",
+                                    color: "#2563eb",
+                                  }}
+                                >
+                                  Delivery Verification OTP
+                                </span>
+                                <span
+                                  className="badge rounded-pill"
+                                  style={{
+                                    background: "rgba(16, 185, 129, 0.15)",
+                                    color: "#059669",
+                                    fontSize: "0.7rem",
+                                  }}
+                                >
+                                  Active until delivered
+                                </span>
+                              </div>
+                              <div
+                                className="fw-bolder mt-1"
+                                style={{
+                                  fontFamily: "monospace",
+                                  fontSize: "1.35rem",
+                                  letterSpacing: "4px",
+                                }}
+                              >
+                                {deliveryOtp}
+                              </div>
+                              <small className="text-muted d-block">
+                                Share this 6-digit OTP with the delivery executive when your parcel arrives.
+                              </small>
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-primary d-inline-flex align-items-center gap-2 rounded-pill px-3 py-2 fw-semibold"
+                            onClick={handleCopyOtp}
+                          >
+                            <FaCopy size={13} />
+                            <span>Copy OTP</span>
+                          </button>
+                        </div>
+                      )}
+
                     {isDeliveryUnsuccessful && (
                       <div className="shipment-unsuccessful-banner">
                         <FaExclamationTriangle className="shipment-unsuccessful-icon" />

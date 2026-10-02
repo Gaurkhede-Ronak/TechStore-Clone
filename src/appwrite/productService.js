@@ -1,3 +1,4 @@
+import { Query } from "appwrite";
 import { databases, ID } from "./database";
 import { storage } from "./storage";
 
@@ -255,32 +256,25 @@ class ProductService {
 
     // Get All Products
     async getProducts(forceRefresh = false) {
-        if (!forceRefresh && this.cachedResponse?.documents?.length) {
-            databases
-                .listDocuments(DATABASE_ID, COLLECTION_ID)
-                .then((res) => {
-                    if (res?.documents) {
-                        this.cachedResponse = res;
-                        res.documents.forEach((doc) => {
-                            if (doc?.$id) this.cachedById.set(doc.$id, doc);
-                        });
-                    }
-                })
-                .catch(() => {});
-            return this.cachedResponse;
+        try {
+            const response = await databases.listDocuments(
+                DATABASE_ID,
+                COLLECTION_ID,
+                [Query.limit(500)]
+            );
+            if (response?.documents) {
+                this.cachedResponse = response;
+                response.documents.forEach((doc) => {
+                    if (doc?.$id) this.cachedById.set(doc.$id, doc);
+                });
+            }
+            return response;
+        } catch (err) {
+            if (!forceRefresh && this.cachedResponse?.documents?.length) {
+                return this.cachedResponse;
+            }
+            throw err;
         }
-
-        const response = await databases.listDocuments(
-            DATABASE_ID,
-            COLLECTION_ID
-        );
-        if (response?.documents) {
-            this.cachedResponse = response;
-            response.documents.forEach((doc) => {
-                if (doc?.$id) this.cachedById.set(doc.$id, doc);
-            });
-        }
-        return response;
     }
 
     // Get Single Product

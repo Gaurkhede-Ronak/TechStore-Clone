@@ -1077,12 +1077,16 @@ class ShipmentHelper {
 
             if (
                 normalizedStatus ===
-                    "OUT_FOR_DELIVERY" &&
-                previousStatus !==
-                    "OUT_FOR_DELIVERY"
+                "OUT_FOR_DELIVERY"
             ) {
 
                 try {
+                    const resolvedUserId = String(
+                        eventData.userId ||
+                        updatedShipment.userId ||
+                        currentShipment.userId ||
+                        ""
+                    );
 
                     const otpResult =
                         await deliveryOtpService.generateOtp({
@@ -1094,15 +1098,13 @@ class ShipmentHelper {
 
                             orderId:
                                 String(
+                                    eventData.orderId ||
                                     updatedShipment.orderId ||
                                     ""
                                 ),
 
                             userId:
-                                String(
-                                    updatedShipment.userId ||
-                                    ""
-                                ),
+                                resolvedUserId,
 
                             trackingId:
                                 String(
@@ -1119,7 +1121,10 @@ class ShipmentHelper {
                             otpResult?.error
                         );
 
-                    } else {
+                    } else if (
+                        previousStatus !== "OUT_FOR_DELIVERY" ||
+                        !otpResult.alreadyExists
+                    ) {
 
                         console.log(
                             "Delivery OTP generated successfully:",
@@ -1133,10 +1138,7 @@ class ShipmentHelper {
                             await notificationService.createNotification({
 
                                 userId:
-                                    String(
-                                        updatedShipment.userId ||
-                                        ""
-                                    ),
+                                    resolvedUserId,
 
                                 type:
                                     "DELIVERY_OTP",
