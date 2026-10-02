@@ -909,7 +909,7 @@ function OrderHistory() {
                           }
                         >
                           {/* LEFT: THUMBNAIL + OPTIONAL BADGE */}
-                          <div className="d-flex align-items-center gap-3 gap-md-3 flex-grow-1 min-w-0">
+                          <div className="ajio-card-left d-flex align-items-center gap-2 gap-md-3 flex-grow-1 min-w-0">
                             <div className="ajio-thumb-container position-relative flex-shrink-0">
                               <img
                                 src={productImg}
@@ -938,7 +938,7 @@ function OrderHistory() {
                             <div className="ajio-card-content min-w-0">
                               {isReturnEntry ? (
                                 <>
-                                  <h5 className="fw-bold text-dark mb-1 fs-5 ajio-card-title">
+                                  <h5 className="fw-bold text-dark mb-1 ajio-card-title">
                                     {isReqCancelled
                                       ? "Return Cancelled"
                                       : "Returned"}
@@ -954,7 +954,7 @@ function OrderHistory() {
                                 </>
                               ) : isExchangeEntry ? (
                                 <>
-                                  <h5 className="fw-bold text-dark mb-1 fs-5 ajio-card-title">
+                                  <h5 className="fw-bold text-dark mb-1 ajio-card-title">
                                     {isReqCancelled
                                       ? "Exchange Cancelled"
                                       : "Exchanged"}
@@ -970,7 +970,7 @@ function OrderHistory() {
                                 </>
                               ) : isThisItemCancelled ? (
                                 <>
-                                  <h5 className="fw-bold text-dark mb-1 fs-5 ajio-card-title">
+                                  <h5 className="fw-bold text-dark mb-1 ajio-card-title">
                                     Cancelled
                                   </h5>
                                   <div className="text-muted small mb-1">
@@ -982,7 +982,7 @@ function OrderHistory() {
                                 </>
                               ) : isDelivered ? (
                                 <>
-                                  <h5 className="fw-bold text-dark mb-1 fs-5 ajio-card-title">
+                                  <h5 className="fw-bold text-dark mb-1 ajio-card-title">
                                     Delivered
                                   </h5>
                                   <div className="text-muted small mb-1">
@@ -1014,7 +1014,7 @@ function OrderHistory() {
                                 </>
                               ) : (
                                 <>
-                                  <h5 className="fw-bold text-dark mb-1 fs-5 ajio-card-title text-truncate">
+                                  <h5 className="fw-bold text-dark mb-1 ajio-card-title text-truncate">
                                     {productTitle}
                                   </h5>
                                   <div className="text-muted small mb-1">
@@ -1032,7 +1032,7 @@ function OrderHistory() {
                           </div>
 
                           {/* RIGHT: STATUS PILL BADGE & CHEVRON */}
-                          <div className="ajio-card-end d-flex align-items-center gap-2 gap-md-3 flex-shrink-0 ms-3">
+                          <div className="ajio-card-end d-flex align-items-center gap-1 gap-md-3 flex-shrink-0 ms-2 ms-md-3">
                             {isReturnEntry
                               ? renderStatusBadge(
                                   isReqCancelled

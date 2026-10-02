@@ -1121,17 +1121,29 @@ function ProductDetails() {
 
   // PRODUCT CALCULATIONS
 
-    const originalPrice =
+    const mrpPrice =
         Number(
             product.price || 0
         );
 
+    const discountPercent =
+        Number(
+            product.discount || 0
+        );
+
+    const originalPrice =
+        discountPercent > 0
+            ? Number(
+                  (
+                      mrpPrice -
+                      (mrpPrice * discountPercent) / 100
+                  ).toFixed(2)
+              )
+            : mrpPrice;
 
     const oldPrice =
-        originalPrice > 0
-            ? Math.round(
-                  originalPrice * 1.25
-              )
+        discountPercent > 0
+            ? mrpPrice
             : 0;
 
 
@@ -1163,7 +1175,12 @@ function ProductDetails() {
 
                     <div className="col-lg-6">
 
-                        <div className="main-image-wrapper">
+                        <div className="main-image-wrapper position-relative">
+                            {discountPercent > 0 && (
+                                <span className="pd-discount-floating-badge">
+                                    -{discountPercent}%
+                                </span>
+                            )}
 
                             <img
                                 src={
@@ -1295,16 +1312,17 @@ function ProductDetails() {
 
 
                             {oldPrice > 0 && (
-
-                                <h5 className="old-price">
-
-                                    ₹
-                                    {oldPrice.toLocaleString(
-                                        "en-IN"
-                                    )}
-
-                                </h5>
-
+                                <>
+                                    <h5 className="old-price">
+                                        ₹
+                                        {oldPrice.toLocaleString(
+                                            "en-IN"
+                                        )}
+                                    </h5>
+                                    <span className="pd-discount-pill">
+                                        {discountPercent}% OFF
+                                    </span>
+                                </>
                             )}
 
                         </div>
@@ -1509,67 +1527,62 @@ function ProductDetails() {
                             <tbody>
 
                                 <tr>
-
-                                    <th>
-                                        Brand
-                                    </th>
-
-                                    <td>
-
-                                        {product.brand ||
-                                            "TechStore"}
-
-                                    </td>
-
+                                    <th>Product Name</th>
+                                    <td>{product.title || "N/A"}</td>
                                 </tr>
 
-
                                 <tr>
-
-                                    <th>
-                                        Category
-                                    </th>
-
-                                    <td>
-
-                                        {product.category ||
-                                            "N/A"}
-
-                                    </td>
-
+                                    <th>Brand</th>
+                                    <td>{product.brand || "TechStore"}</td>
                                 </tr>
 
-
                                 <tr>
-
-                                    <th>
-                                        Price
-                                    </th>
-
-                                    <td>
-
-                                        ₹
-                                        {originalPrice.toLocaleString(
-                                            "en-IN"
-                                        )}
-
-                                    </td>
-
+                                    <th>Category</th>
+                                    <td>{product.category || "N/A"}</td>
                                 </tr>
 
+                                <tr>
+                                    <th>Original Price (MRP)</th>
+                                    <td>₹{mrpPrice.toLocaleString("en-IN")}</td>
+                                </tr>
+
+                                {discountPercent > 0 && (
+                                    <tr>
+                                        <th>Discount</th>
+                                        <td>
+                                            <span className="text-danger fw-bold">
+                                                {discountPercent}% OFF
+                                            </span>{" "}
+                                            <span className="text-success ms-1">
+                                                (You Save ₹
+                                                {Number(
+                                                    (mrpPrice - originalPrice).toFixed(2)
+                                                ).toLocaleString("en-IN")}
+                                                )
+                                            </span>
+                                        </td>
+                                    </tr>
+                                )}
 
                                 <tr>
-
-                                    <th>
-                                        Stock Units
-                                    </th>
-
-                                    <td>
-
-                                        {stock} Units Available
-
+                                    <th>Final Selling Price</th>
+                                    <td className="text-primary fw-bold">
+                                        ₹{originalPrice.toLocaleString("en-IN")}
                                     </td>
+                                </tr>
 
+                                <tr>
+                                    <th>Stock Units</th>
+                                    <td>
+                                        {stock > 0
+                                            ? `${stock} Units Available`
+                                            : "Out of Stock"}
+                                    </td>
+                                </tr>
+
+                                <tr>
+                                    <th>Description</th>
+                                    <td>{product.description || "N/A"}</td>
                                 </tr>
 
 
