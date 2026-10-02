@@ -1,7 +1,6 @@
 import { Databases, ID, Query } from "appwrite";
 import client from "./config";
 import notificationService from "./notificationService";
-import shipmentEventService from "./shipmentEventService";
 
 const databases = new Databases(client);
 
@@ -10,6 +9,9 @@ const DATABASE_ID =
 
 const SHIPMENTS_COLLECTION_ID =
   import.meta.env.VITE_APPWRITE_SHIPMENTS_COLLECTION_ID;
+
+const SHIPMENT_EVENTS_COLLECTION_ID =
+  import.meta.env.VITE_APPWRITE_SHIPMENT_EVENTS_COLLECTION_ID;
 
 const DELIVERY_OTPS_COLLECTION_ID =
   import.meta.env.VITE_APPWRITE_DELIVERY_OTPS_COLLECTION_ID;
@@ -22,208 +24,16 @@ const NOTIFICATIONS_COLLECTION_ID =
 
 class DeliveryOtpService {
   // GENERATE RANDOM 6-DIGIT OTP
+
   generateOtpCode() {
     return String(
       Math.floor(100000 + Math.random() * 900000)
     );
   }
 
-  // HELPER: RESOLVE MISSING ORDER / USER / TRACKING INFO
-  async resolveShipmentContext(shipmentId, data = {}) {
-    let orderId = String(data.orderId || "").trim();
-    let userId = String(data.userId || "").trim();
-    let trackingId = String(data.trackingId || "").trim();
-    let shipmentDoc = null;
-
-    if (shipmentId && SHIPMENTS_COLLECTION_ID) {
-      try {
-        shipmentDoc = await databases.getDocument(
-          DATABASE_ID,
-          SHIPMENTS_COLLECTION_ID,
-          String(shipmentId)
-        );
-        if (shipmentDoc) {
-          orderId = orderId || String(shipmentDoc.orderId || "").trim();
-          userId = userId || String(shipmentDoc.userId || "").trim();
-          trackingId = trackingId || String(shipmentDoc.trackingId || "").trim();
-        }
-      } catch {
-        // ignore
-      }
-    }
-
-    if ((!userId || !orderId) && orderId && ORDERS_COLLECTION_ID) {
-      try {
-        const orderLookup = await databases.listDocuments(
-          DATABASE_ID,
-          ORDERS_COLLECTION_ID,
-          [Query.equal("orderId", orderId), Query.limit(1)]
-        );
-        let orderDoc = orderLookup?.documents?.[0] || null;
-        if (!orderDoc) {
-          try {
-            orderDoc = await databases.getDocument(
-              DATABASE_ID,
-              ORDERS_COLLECTION_ID,
-              orderId
-            );
-          } catch {
-            orderDoc = null;
-          }
-        }
-        if (orderDoc) {
-          userId = userId || String(orderDoc.userId || "").trim();
-          orderId = String(orderDoc.orderId || orderDoc.$id || orderId).trim();
-        }
-      } catch {
-        // ignore
-      }
-    }
-
-    return {
-      orderId,
-      userId,
-      trackingId,
-      shipmentDoc,
-    };
-  }
-
-  // ENSURE CUSTOMER HAS DELIVERY_OTP NOTIFICATION IN APPWRITE
-  async ensureDeliveryOtpNotification({
-    userId,
-    orderId,
-    shipmentId,
-    trackingId,
-    otpCode,
-  }) {
-    const cleanUserId = String(userId || "").trim();
-    const cleanShipmentId = String(shipmentId || "").trim();
-    const cleanOrderId = String(orderId || "").trim();
-    const cleanTrackingId = String(trackingId || "").trim();
-    const cleanOtp = String(otpCode || "").trim();
-
-    if (!cleanUserId || !cleanOtp || !NOTIFICATIONS_COLLECTION_ID) {
-      return null;
-    }
-
-    try {
-      const existingRes = await databases.listDocuments(
-        DATABASE_ID,
-        NOTIFICATIONS_COLLECTION_ID,
-        [
-          Query.equal("userId", cleanUserId),
-          Query.equal("type", "DELIVERY_OTP"),
-          Query.orderDesc("$createdAt"),
-          Query.limit(25),
-        ]
-      );
-
-      const existingNotif = (existingRes?.documents || []).find(
-        (n) =>
-          (cleanShipmentId && String(n.shipmentId || "") === cleanShipmentId) ||
-          (cleanOrderId && String(n.orderId || "") === cleanOrderId)
-      );
-
-      const expectedMessage =
-        `Your delivery OTP for Order ${cleanOrderId || ""} is ${cleanOtp}. ` +
-        `Please share this 6-digit OTP with our delivery executive at the time of delivery.`;
-
-      if (existingNotif) {
-        if (!String(existingNotif.message || "").includes(cleanOtp)) {
-          try {
-            return await databases.updateDocument(
-              DATABASE_ID,
-              NOTIFICATIONS_COLLECTION_ID,
-              existingNotif.$id,
-              {
-                title: "Out for Delivery — Your OTP 🔐",
-                message: expectedMessage,
-                isRead: false,
-              }
-            );
-          } catch {
-            return existingNotif;
-          }
-        }
-        return existingNotif;
-      }
-
-      return await notificationService.createNotification({
-        userId: cleanUserId,
-        type: "DELIVERY_OTP",
-        title: "Out for Delivery — Your OTP 🔐",
-        message: expectedMessage,
-        orderId: cleanOrderId,
-        shipmentId: cleanShipmentId,
-        trackingId: cleanTrackingId,
-        isRead: false,
-        createdAt: new Date().toISOString(),
-      });
-    } catch (err) {
-      console.warn("ensureDeliveryOtpNotification warning:", err);
-      return null;
-    }
-  }
-
-  // ENSURE CUSTOMER HAS ORDER_DELIVERED NOTIFICATION IN APPWRITE
-  async ensureOrderDeliveredNotification({
-    userId,
-    orderId,
-    shipmentId,
-    trackingId,
-  }) {
-    const cleanUserId = String(userId || "").trim();
-    const cleanShipmentId = String(shipmentId || "").trim();
-    const cleanOrderId = String(orderId || "").trim();
-    const cleanTrackingId = String(trackingId || "").trim();
-
-    if (!cleanUserId || !NOTIFICATIONS_COLLECTION_ID) {
-      return null;
-    }
-
-    try {
-      const existingRes = await databases.listDocuments(
-        DATABASE_ID,
-        NOTIFICATIONS_COLLECTION_ID,
-        [
-          Query.equal("userId", cleanUserId),
-          Query.equal("type", "ORDER_DELIVERED"),
-          Query.orderDesc("$createdAt"),
-          Query.limit(25),
-        ]
-      );
-
-      const existingNotif = (existingRes?.documents || []).find(
-        (n) =>
-          (cleanShipmentId && String(n.shipmentId || "") === cleanShipmentId) ||
-          (cleanOrderId && String(n.orderId || "") === cleanOrderId)
-      );
-
-      if (existingNotif) {
-        return existingNotif;
-      }
-
-      return await notificationService.createNotification({
-        userId: cleanUserId,
-        type: "ORDER_DELIVERED",
-        title: "Order Delivered Successfully ✅",
-        message: `Your order ${cleanOrderId || ""} ${
-          cleanTrackingId ? `(Tracking ID: ${cleanTrackingId}) ` : ""
-        }has been delivered successfully after OTP verification! Thank you for shopping with TechStore.`,
-        orderId: cleanOrderId,
-        shipmentId: cleanShipmentId,
-        trackingId: cleanTrackingId,
-        isRead: false,
-        createdAt: new Date().toISOString(),
-      });
-    } catch (err) {
-      console.warn("ensureOrderDeliveredNotification warning:", err);
-      return null;
-    }
-  }
-
   // GENERATE & SAVE OTP FOR OUT_FOR_DELIVERY SHIPMENT
   // NOTE: OTP never expires until the parcel is actually delivered!
+
   async generateOtp(shipmentIdOrData, data = {}) {
     try {
       const isObjectArg =
@@ -248,66 +58,72 @@ class DeliveryOtpService {
         throw new Error("Shipment ID is required.");
       }
 
-      const context = await this.resolveShipmentContext(
-        cleanShipmentId,
-        mergedData
-      );
-      const resolvedOrderId = context.orderId || cleanShipmentId;
-      const resolvedUserId = context.userId || "";
-      const resolvedTrackingId =
-        context.trackingId || resolvedOrderId || cleanShipmentId;
+      if (!DELIVERY_OTPS_COLLECTION_ID) {
+        throw new Error(
+          "VITE_APPWRITE_DELIVERY_OTPS_COLLECTION_ID is missing in .env"
+        );
+      }
 
       const now = new Date();
+
       // Keep OTP valid for 10 years so it NEVER expires before delivery
       const nonExpiringDate = new Date(
         now.getTime() + 3650 * 24 * 60 * 60 * 1000
       ).toISOString();
 
-      let existingDocs = [];
-      if (DELIVERY_OTPS_COLLECTION_ID) {
-        try {
-          const existingOtpResponse =
-            await databases.listDocuments(
-              DATABASE_ID,
-              DELIVERY_OTPS_COLLECTION_ID,
-              [
-                Query.equal("shipmentId", cleanShipmentId),
-                Query.equal("verified", false),
-                Query.orderDesc("$createdAt"),
-                Query.limit(10),
-              ]
-            );
-          existingDocs = existingOtpResponse?.documents || [];
-        } catch (listErr) {
-          console.warn("List existing OTP warning:", listErr);
-        }
-      }
+      // Reuse existing unverified OTP unless forceNew is explicitly requested
+      const existingOtpResponse =
+        await databases.listDocuments(
+          DATABASE_ID,
+          DELIVERY_OTPS_COLLECTION_ID,
+          [
+            Query.equal(
+              "shipmentId",
+              cleanShipmentId
+            ),
+            Query.equal("verified", false),
+            Query.orderDesc("$createdAt"),
+            Query.limit(10),
+          ]
+        );
+
+      const existingDocs =
+        existingOtpResponse?.documents || [];
 
       if (!mergedData.forceNew && existingDocs.length > 0) {
         const activeOtp = existingDocs[0];
-        const existingCode = String(
-          activeOtp.otpHash || activeOtp.otpCode || activeOtp.otp || ""
-        ).trim();
 
-        if (existingCode) {
-          await this.ensureDeliveryOtpNotification({
-            userId: resolvedUserId || activeOtp.userId,
-            orderId: resolvedOrderId || activeOtp.orderId,
-            shipmentId: cleanShipmentId,
-            trackingId: resolvedTrackingId || activeOtp.trackingId,
-            otpCode: existingCode,
-          });
+        try {
+          const updatedExisting =
+            await databases.updateDocument(
+              DATABASE_ID,
+              DELIVERY_OTPS_COLLECTION_ID,
+              activeOtp.$id,
+              {
+                expiresAt: nonExpiringDate,
+                maxAttempts: 999,
+              }
+            );
 
           return {
             success: true,
-            alreadyExists: true,
+            otpDocument: {
+              ...updatedExisting,
+              otp: updatedExisting.otpCode,
+            },
+            otp: updatedExisting.otpCode,
+            otpCode: updatedExisting.otpCode,
+            expiresAt: nonExpiringDate,
+          };
+        } catch {
+          return {
+            success: true,
             otpDocument: {
               ...activeOtp,
-              otp: existingCode,
-              otpCode: existingCode,
+              otp: activeOtp.otpCode,
             },
-            otp: existingCode,
-            otpCode: existingCode,
+            otp: activeOtp.otpCode,
+            otpCode: activeOtp.otpCode,
             expiresAt: activeOtp.expiresAt || nonExpiringDate,
           };
         }
@@ -324,79 +140,60 @@ class DeliveryOtpService {
               verified: true,
             }
           );
-        } catch {
-          // ignore cleanup warning
+        } catch (cleanupError) {
+          console.warn(
+            "Old OTP cleanup warning:",
+            cleanupError
+          );
         }
       }
 
       const otpCode = this.generateOtpCode();
-      let otpDocument = null;
 
-      if (DELIVERY_OTPS_COLLECTION_ID) {
-        try {
-          // Exact Appwrite delivery_otps collection schema
-          const payload = {
-            shipmentId: String(cleanShipmentId),
-            orderId: String(resolvedOrderId),
-            userId: String(resolvedUserId || "customer"),
-            trackingId: String(resolvedTrackingId),
-            otpHash: String(otpCode),
-            expiresAt: nonExpiringDate,
-            attempts: 0,
-            maxAttempts: 999,
-            verified: false,
-            verifiedAt: null,
-            createdAt: now.toISOString(),
-          };
-
-          otpDocument = await databases.createDocument(
-            DATABASE_ID,
-            DELIVERY_OTPS_COLLECTION_ID,
-            ID.unique(),
-            payload
-          );
-        } catch (createOtpErr) {
-          console.warn(
-            "delivery_otps createDocument warning (will still send notification OTP):",
-            createOtpErr?.message || createOtpErr
-          );
-        }
-      }
-
-      // Always create/ensure the customer's DELIVERY_OTP notification
-      const notifDoc = await this.ensureDeliveryOtpNotification({
-        userId: resolvedUserId,
-        orderId: resolvedOrderId,
+      const payload = {
         shipmentId: cleanShipmentId,
-        trackingId: resolvedTrackingId,
+        orderId: String(mergedData.orderId || ""),
+        trackingId: String(mergedData.trackingId || ""),
+        userId: String(mergedData.userId || ""),
+        customerEmail: String(
+          mergedData.customerEmail || ""
+        ),
+        customerPhone: String(
+          mergedData.customerPhone || ""
+        ),
         otpCode,
-      });
+        expiresAt: nonExpiringDate,
+        verified: false,
+        attempts: 0,
+        maxAttempts: 999,
+        createdAt: now.toISOString(),
+        verifiedAt: "",
+      };
+
+      const otpDocument =
+        await databases.createDocument(
+          DATABASE_ID,
+          DELIVERY_OTPS_COLLECTION_ID,
+          ID.unique(),
+          payload
+        );
 
       return {
         success: true,
-        alreadyExists: false,
-        otpDocument: otpDocument
-          ? {
-              ...otpDocument,
-              otp: otpCode,
-              otpCode,
-            }
-          : {
-              shipmentId: cleanShipmentId,
-              orderId: resolvedOrderId,
-              userId: resolvedUserId,
-              trackingId: resolvedTrackingId,
-              otp: otpCode,
-              otpCode,
-              otpHash: otpCode,
-            },
-        notification: notifDoc,
+        otpDocument: {
+          ...otpDocument,
+          otp: otpCode,
+        },
         otp: otpCode,
         otpCode,
         expiresAt: nonExpiringDate,
       };
     } catch (error) {
-      console.error("Generate delivery OTP error:", error);
+      console.error(
+        "Generate delivery OTP error:",
+        error
+      );
+
       return {
         success: false,
         error:
@@ -407,85 +204,46 @@ class DeliveryOtpService {
   }
 
   // GET ACTIVE OTP BY SHIPMENT ID
+
   async getActiveOtpByShipmentId(shipmentId) {
     try {
       const cleanShipmentId =
         String(shipmentId || "").trim();
 
-      if (!cleanShipmentId) {
+      if (
+        !cleanShipmentId ||
+        !DELIVERY_OTPS_COLLECTION_ID
+      ) {
         return null;
       }
 
-      if (DELIVERY_OTPS_COLLECTION_ID) {
-        try {
-          const response =
-            await databases.listDocuments(
-              DATABASE_ID,
-              DELIVERY_OTPS_COLLECTION_ID,
-              [
-                Query.equal("shipmentId", cleanShipmentId),
-                Query.equal("verified", false),
-                Query.orderDesc("$createdAt"),
-                Query.limit(1),
-              ]
-            );
+      const response =
+        await databases.listDocuments(
+          DATABASE_ID,
+          DELIVERY_OTPS_COLLECTION_ID,
+          [
+            Query.equal(
+              "shipmentId",
+              cleanShipmentId
+            ),
+            Query.equal("verified", false),
+            Query.orderDesc("$createdAt"),
+            Query.limit(1),
+          ]
+        );
 
-          const doc = response?.documents?.[0] || null;
-          if (doc) {
-            const code = String(
-              doc.otpHash || doc.otpCode || doc.otp || ""
-            ).trim();
-            if (code) {
-              return {
-                ...doc,
-                otp: code,
-                otpCode: code,
-                otpHash: code,
-              };
-            }
-          }
-        } catch (err) {
-          console.warn("getActiveOtpByShipmentId db lookup warning:", err);
-        }
-      }
-
-      // Fallback: check DELIVERY_OTP notification for this shipment
-      if (NOTIFICATIONS_COLLECTION_ID) {
-        try {
-          const notifRes = await databases.listDocuments(
-            DATABASE_ID,
-            NOTIFICATIONS_COLLECTION_ID,
-            [
-              Query.equal("type", "DELIVERY_OTP"),
-              Query.orderDesc("$createdAt"),
-              Query.limit(30),
-            ]
-          );
-          const matched = (notifRes?.documents || []).find(
-            (n) => String(n?.shipmentId || "") === cleanShipmentId
-          );
-          if (matched) {
-            const m = String(matched.message || "").match(/\b(\d{6})\b/);
-            if (m) {
-              return {
-                $id: "",
-                shipmentId: cleanShipmentId,
-                orderId: matched.orderId || "",
-                userId: matched.userId || "",
-                otp: m[1],
-                otpCode: m[1],
-                otpHash: m[1],
-              };
-            }
-          }
-        } catch {
-          // ignore
-        }
-      }
-
-      return null;
+      const doc = response?.documents?.[0] || null;
+      if (!doc) return null;
+      return {
+        ...doc,
+        otp: doc.otp || doc.otpCode || "",
+        otpCode: doc.otpCode || doc.otp || "",
+      };
     } catch (error) {
-      console.error("Get active delivery OTP error:", error);
+      console.error(
+        "Get active delivery OTP error:",
+        error
+      );
       return null;
     }
   }
@@ -497,19 +255,15 @@ class DeliveryOtpService {
       if (cleanShipmentId && DELIVERY_OTPS_COLLECTION_ID) {
         const activeOtp = await this.getActiveOtpByShipmentId(cleanShipmentId);
         if (activeOtp?.$id) {
-          try {
-            await databases.updateDocument(
-              DATABASE_ID,
-              DELIVERY_OTPS_COLLECTION_ID,
-              activeOtp.$id,
-              {
-                verified: true,
-                verifiedAt: new Date().toISOString(),
-              }
-            );
-          } catch {
-            // ignore
-          }
+          await databases.updateDocument(
+            DATABASE_ID,
+            DELIVERY_OTPS_COLLECTION_ID,
+            activeOtp.$id,
+            {
+              verified: true,
+              verifiedAt: new Date().toISOString(),
+            }
+          );
         }
       }
 
@@ -539,6 +293,7 @@ class DeliveryOtpService {
   }
 
   // VERIFY OTP & MARK SHIPMENT + ORDER AS DELIVERED + NOTIFY USER
+
   async verifyOtp(shipmentId, otpInput) {
     try {
       const cleanShipmentId =
@@ -558,7 +313,8 @@ class DeliveryOtpService {
       if (enteredOtp.length !== 6) {
         return {
           success: false,
-          message: "Please enter a valid 6-digit OTP.",
+          message:
+            "Please enter a valid 6-digit OTP.",
         };
       }
 
@@ -583,11 +339,14 @@ class DeliveryOtpService {
       if (currentStatus === "DELIVERED") {
         return {
           success: false,
-          message: "This order has already been delivered.",
+          message:
+            "This order has already been delivered.",
         };
       }
 
-      if (currentStatus !== "OUT_FOR_DELIVERY") {
+      if (
+        currentStatus !== "OUT_FOR_DELIVERY"
+      ) {
         return {
           success: false,
           message:
@@ -596,11 +355,12 @@ class DeliveryOtpService {
       }
 
       const otpDocument =
-        await this.getActiveOtpByShipmentId(cleanShipmentId);
+        await this.getActiveOtpByShipmentId(
+          cleanShipmentId
+        );
 
       // Also check customer's DELIVERY_OTP notification in case OTP is read from Notifications page
       let notificationOtp = "";
-      let matchedNotifUserId = "";
       if (NOTIFICATIONS_COLLECTION_ID) {
         try {
           const notifRes = await databases.listDocuments(
@@ -609,7 +369,7 @@ class DeliveryOtpService {
             [
               Query.equal("type", "DELIVERY_OTP"),
               Query.orderDesc("$createdAt"),
-              Query.limit(30),
+              Query.limit(25),
             ]
           );
           const matchedNotif = (notifRes?.documents || []).find(
@@ -620,16 +380,11 @@ class DeliveryOtpService {
                 String(n.orderId) === String(shipment.orderId))
           );
           if (matchedNotif) {
-            matchedNotifUserId = String(matchedNotif.userId || "").trim();
-            const directOtp = String(matchedNotif.otp || "")
-              .replace(/\D/g, "")
-              .trim();
+            const directOtp = String(matchedNotif.otp || "").replace(/\D/g, "").trim();
             if (directOtp.length === 6) {
               notificationOtp = directOtp;
             } else {
-              const msgMatch = String(matchedNotif.message || "").match(
-                /\b(\d{6})\b/
-              );
+              const msgMatch = String(matchedNotif.message || "").match(/\b(\d{6})\b/);
               if (msgMatch) {
                 notificationOtp = msgMatch[1];
               }
@@ -643,12 +398,16 @@ class DeliveryOtpService {
       if (!otpDocument && !notificationOtp) {
         return {
           success: false,
-          message: "No active OTP found for this shipment.",
+          message:
+            "No active OTP found for this shipment.",
         };
       }
 
+      // NOTE: OTP never expires while the parcel is Out for Delivery.
+      // It remains valid until the parcel is actually delivered.
+
       const storedOtp = String(
-        otpDocument?.otpHash || otpDocument?.otpCode || otpDocument?.otp || ""
+        otpDocument?.otpCode || otpDocument?.otp || ""
       ).trim();
 
       const isOtpMatch =
@@ -656,96 +415,125 @@ class DeliveryOtpService {
         (notificationOtp && enteredOtp === notificationOtp);
 
       if (!isOtpMatch) {
-        if (otpDocument?.$id) {
-          const updatedAttempts = Number(otpDocument.attempts || 0) + 1;
-          try {
-            await databases.updateDocument(
-              DATABASE_ID,
-              DELIVERY_OTPS_COLLECTION_ID,
-              otpDocument.$id,
-              {
-                attempts: updatedAttempts,
-              }
-            );
-          } catch (attemptErr) {
-            console.warn("OTP attempt update warning:", attemptErr);
-          }
-        }
+        const updatedAttempts =
+          Number(otpDocument.attempts || 0) + 1;
 
-        return {
-          success: false,
-          message:
-            "Invalid OTP. Please check the 6-digit Delivery OTP in customer notifications and try again.",
-        };
-      }
-
-      // OTP MATCHED
-      const verifiedAt = new Date().toISOString();
-
-      if (otpDocument?.$id) {
         try {
           await databases.updateDocument(
             DATABASE_ID,
             DELIVERY_OTPS_COLLECTION_ID,
             otpDocument.$id,
             {
-              verified: true,
-              verifiedAt,
+              attempts: updatedAttempts,
             }
           );
-        } catch (markOtpErr) {
-          console.warn("Mark OTP verified warning:", markOtpErr);
+        } catch (attemptErr) {
+          console.warn("OTP attempt update warning:", attemptErr);
         }
+
+        return {
+          success: false,
+          message:
+            "Invalid OTP. Please check your 6-digit Delivery OTP and try again.",
+        };
       }
 
-      // Update Shipment using exact Appwrite shipments schema fields
-      const updatedShipment = await databases.updateDocument(
-        DATABASE_ID,
-        SHIPMENTS_COLLECTION_ID,
-        cleanShipmentId,
-        {
-          status: "DELIVERED",
-          otpRequired: false,
-          otpVerified: true,
-          deliveredAt: verifiedAt,
-        }
-      );
+      // OTP MATCHED
+      const verifiedAt =
+        new Date().toISOString();
 
-      // Create Shipment Event using exact Appwrite shipment_events schema fields
+      if (otpDocument?.$id) {
+        await databases.updateDocument(
+          DATABASE_ID,
+          DELIVERY_OTPS_COLLECTION_ID,
+          otpDocument.$id,
+          {
+            verified: true,
+            verifiedAt,
+          }
+        );
+      }
+
+      const deliveredLocation =
+        [
+          shipment.destinationCity,
+          shipment.destinationState,
+        ]
+          .filter(Boolean)
+          .join(", ") ||
+        shipment.currentLocation ||
+        "Customer Address";
+
+      const updatedShipment =
+        await databases.updateDocument(
+          DATABASE_ID,
+          SHIPMENTS_COLLECTION_ID,
+          cleanShipmentId,
+          {
+            status: "DELIVERED",
+            currentLocation: deliveredLocation,
+            deliveredAt: verifiedAt,
+            updatedAt: verifiedAt,
+          }
+        );
+
       try {
-        await shipmentEventService.createEvent({
-          shipmentId: cleanShipmentId,
-          orderId: String(shipment.orderId || otpDocument?.orderId || ""),
-          trackingId: String(
-            shipment.trackingId || otpDocument?.trackingId || ""
-          ),
-          status: "DELIVERED",
-          title: "Shipment Delivered",
-          description:
-            "Your shipment has been delivered successfully after OTP verification.",
-          city: String(shipment.destinationCity || ""),
-          state: String(shipment.destinationState || ""),
-          hubName: "",
-          timestamp: verifiedAt,
-        });
+        await databases.createDocument(
+          DATABASE_ID,
+          SHIPMENT_EVENTS_COLLECTION_ID,
+          ID.unique(),
+          {
+            shipmentId: cleanShipmentId,
+            trackingId: String(
+              shipment.trackingId || ""
+            ),
+            status: "DELIVERED",
+            location: deliveredLocation,
+            city: String(
+              shipment.destinationCity || ""
+            ),
+            state: String(
+              shipment.destinationState || ""
+            ),
+            latitude: Number(
+              shipment.destinationLat || 0
+            ),
+            longitude: Number(
+              shipment.destinationLng || 0
+            ),
+            description:
+              "Delivered successfully after customer OTP verification.",
+             scanType: "DELIVERED",
+            timestamp: verifiedAt,
+          }
+        );
       } catch (eventError) {
-        console.warn("Shipment delivered event creation warning:", eventError);
+        console.warn(
+          "Shipment delivered event creation warning:",
+          eventError
+        );
       }
 
       // Sync Order status in ORDERS_COLLECTION_ID to "Delivered"
-      let resolvedOrderUserId = "";
+      // while keeping any cancelled items marked as Cancelled
       if (ORDERS_COLLECTION_ID && shipment.orderId) {
         try {
-          const orderLookup = await databases.listDocuments(
-            DATABASE_ID,
-            ORDERS_COLLECTION_ID,
-            [
-              Query.equal("orderId", String(shipment.orderId)),
-              Query.limit(1),
-            ]
-          );
+          const orderLookup =
+            await databases.listDocuments(
+              DATABASE_ID,
+              ORDERS_COLLECTION_ID,
+              [
+                Query.equal(
+                  "orderId",
+                  String(shipment.orderId)
+                ),
+                Query.limit(1),
+              ]
+            );
 
-          let orderDoc = orderLookup?.documents?.[0] || null;
+          let orderDoc =
+            orderLookup?.documents?.[0] || null;
+
           if (!orderDoc) {
             try {
               orderDoc = await databases.getDocument(
@@ -759,7 +547,6 @@ class DeliveryOtpService {
           }
 
           if (orderDoc?.$id) {
-            resolvedOrderUserId = String(orderDoc.userId || "").trim();
             const orderUpdatePayload = {
               status: "Delivered",
             };
@@ -816,77 +603,70 @@ class DeliveryOtpService {
 
       // Send Customer Notification: ORDER_DELIVERED
       const customerUserId = String(
-        shipment.userId ||
-          otpDocument?.userId ||
-          resolvedOrderUserId ||
-          matchedNotifUserId ||
-          ""
+        shipment.userId || otpDocument?.userId || ""
       ).trim();
 
       if (customerUserId) {
-        await this.ensureOrderDeliveredNotification({
-          userId: customerUserId,
+        try {
+          await notificationService.createNotification({
+            userId: customerUserId,
+            recipientRole: "user",
+            title: "Order Delivered ✅",
+            message: `Your order ${shipment.orderId || ""} (Tracking ID: ${shipment.trackingId || "N/A"}) has been delivered successfully! Thank you for shopping with TechStore. You can now rate and review your product.`,
+            type: "ORDER_DELIVERED",
+            orderId: String(shipment.orderId || ""),
+            shipmentId: cleanShipmentId,
+            trackingId: String(shipment.trackingId || ""),
+            otp: "",
+          });
+        } catch (notifError) {
+          console.warn(
+            "Customer delivered notification warning:",
+            notifError
+          );
+        }
+      }
+
+      // Send Admin Notification: ORDER_DELIVERED
+      try {
+        await notificationService.createAdminNotification({
+          title: "Order Delivered ✅",
+          message: `Order ${shipment.orderId || ""} (${shipment.trackingId || ""}) has been delivered to ${shipment.customerName || "Customer"} after OTP verification.`,
+          type: "ORDER_DELIVERED",
           orderId: String(shipment.orderId || ""),
           shipmentId: cleanShipmentId,
           trackingId: String(shipment.trackingId || ""),
         });
+      } catch (adminNotifError) {
+        console.warn(
+          "Admin delivered notification warning:",
+          adminNotifError
+        );
       }
 
       return {
         success: true,
-        message: "OTP verified! Order marked as Delivered.",
+        message:
+          "OTP verified! Order marked as Delivered.",
         shipment: updatedShipment,
       };
     } catch (error) {
-      console.error("Verify delivery OTP error:", error);
-      return {
-        success: false,
-        message: error.message || "Failed to verify OTP.",
-      };
-    }
-  }
-
-  // AUTO-SYNC MISSING DELIVERY_OTP & ORDER_DELIVERED NOTIFICATIONS FOR USER
-  async syncUserShipmentNotifications(userId) {
-    const cleanUserId = String(userId || "").trim();
-    if (!cleanUserId || !SHIPMENTS_COLLECTION_ID) return;
-
-    try {
-      const shipRes = await databases.listDocuments(
-        DATABASE_ID,
-        SHIPMENTS_COLLECTION_ID,
-        [
-          Query.equal("userId", cleanUserId),
-          Query.orderDesc("$createdAt"),
-          Query.limit(20),
-        ]
+      console.error(
+        "Verify delivery OTP error:",
+        error
       );
 
-      const userShipments = shipRes?.documents || [];
-      for (const ship of userShipments) {
-        const st = String(ship?.status || "").trim().toUpperCase();
-        if (st === "OUT_FOR_DELIVERY") {
-          await this.generateOtp({
-            shipmentId: String(ship.$id),
-            orderId: String(ship.orderId || ""),
-            userId: cleanUserId,
-            trackingId: String(ship.trackingId || ""),
-          });
-        } else if (st === "DELIVERED") {
-          await this.ensureOrderDeliveredNotification({
-            userId: cleanUserId,
-            orderId: String(ship.orderId || ""),
-            shipmentId: String(ship.$id),
-            trackingId: String(ship.trackingId || ""),
-          });
-        }
-      }
-    } catch (syncErr) {
-      console.warn("syncUserShipmentNotifications warning:", syncErr);
+      return {
+        success: false,
+        message:
+          error.message ||
+          "Failed to verify OTP.",
+      };
     }
   }
 }
 
-const deliveryOtpService = new DeliveryOtpService();
+const deliveryOtpService =
+  new DeliveryOtpService();
 
 export default deliveryOtpService;
