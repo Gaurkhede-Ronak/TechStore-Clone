@@ -2206,7 +2206,6 @@ function OrderDetails() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser?.$id, activeProduct, isDelivered]);
 
-  // eslint-disable-next-line no-unused-vars
   const handleCopyOtp =
     async () => {
       if (!deliveryOtp) return;
