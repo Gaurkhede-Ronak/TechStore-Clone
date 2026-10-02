@@ -1166,6 +1166,13 @@ class ShipmentHelper {
                                         ""
                                     ),
 
+                                otp:
+                                    String(
+                                        otpResult.otp ||
+                                        otpResult.otpCode ||
+                                        ""
+                                    ),
+
                                 isRead:
                                     false,
 
@@ -1188,6 +1195,43 @@ class ShipmentHelper {
                         "OTP / Notification creation error:",
                         otpNotificationError
                     );
+                }
+            }
+
+            // AUTOMATIC CUSTOMER ORDER DELIVERED NOTIFICATION & ORDER STATUS SYNC
+            if (
+                normalizedStatus ===
+                    "DELIVERED" &&
+                previousStatus !==
+                    "DELIVERED"
+            ) {
+                await deliveryOtpService.markShipmentDeliveredSync(
+                    String(updatedShipment.$id || shipmentId || ""),
+                    String(updatedShipment.orderId || "")
+                );
+
+                if (updatedShipment?.userId) {
+                    try {
+                        await notificationService.createNotification({
+                            userId: String(updatedShipment.userId),
+                            recipientRole: "user",
+                            type: "ORDER_DELIVERED",
+                            title: "Order Delivered ✅",
+                            message:
+                                `Your order ${updatedShipment.orderId || ""} (Tracking ID: ${updatedShipment.trackingId || "N/A"}) has been delivered successfully! Thank you for shopping with TechStore. You can now rate and review your product.`,
+                            orderId: String(updatedShipment.orderId || ""),
+                            shipmentId: String(updatedShipment.$id || shipmentId || ""),
+                            trackingId: String(updatedShipment.trackingId || ""),
+                            otp: "",
+                            isRead: false,
+                            createdAt: new Date().toISOString(),
+                        });
+                    } catch (customerDeliveredNotifErr) {
+                        console.error(
+                            "Customer delivered notification error:",
+                            customerDeliveredNotifErr
+                        );
+                    }
                 }
             }
 

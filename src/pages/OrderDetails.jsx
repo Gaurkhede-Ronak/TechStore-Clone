@@ -1,6 +1,8 @@
+import { scrollToPageTop } from "../components/ScrollToTop";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
+import client from "../appwrite/config";
 import orderService from "../appwrite/orderService";
 import shipmentHelper from "../appwrite/shipmentHelper";
 import reviewService from "../appwrite/reviewService";
@@ -19,7 +21,6 @@ import {
   FaExchangeAlt,
   FaSpinner,
   FaMapMarkerAlt,
-  FaBoxOpen,
   FaTimes,
   FaCheckCircle,
   FaRoute,
@@ -217,6 +218,9 @@ const formatMoney = (value) =>
 
 function OrderDetails() {
   const navigate = useNavigate();
+  useEffect(() => {
+    scrollToPageTop();
+  }, []);
   const location = useLocation();
 
   /* ORDER */
@@ -309,6 +313,12 @@ function OrderDetails() {
     useState(false);
 
   const [reviewSubmitted, setReviewSubmitted] =
+    useState(false);
+
+  const [existingProductReview, setExistingProductReview] =
+    useState(null);
+
+  const [isEditingReview, setIsEditingReview] =
     useState(false);
 
   const [cancelReturnLoading, setCancelReturnLoading] =
@@ -798,7 +808,7 @@ function OrderDetails() {
   /* RETURN / EXCHANGE */
 
   const loadReturnExchangeRequests =
-    useCallback(async () => {
+    useCallback(async (showLoader = false) => {
       const orderReference =
         getOrderReference(order);
 
@@ -808,9 +818,9 @@ function OrderDetails() {
       }
 
       try {
-        setReturnRequestLoading(
-          true
-        );
+        if (showLoader) {
+          setReturnRequestLoading(true);
+        }
 
         const response =
           await returnExchangeService.getRequestsByOrderId(
@@ -855,26 +865,87 @@ function OrderDetails() {
 
         setReturnRequests([]);
       } finally {
-        setReturnRequestLoading(
-          false
-        );
+        if (showLoader) {
+          setReturnRequestLoading(false);
+        }
       }
     }, [order]);
 
   useEffect(() => {
-    if (!order) return;
+    const orderReference = getOrderReference(order);
+    if (!orderReference) return;
 
-    loadReturnExchangeRequests();
+    loadReturnExchangeRequests(true);
 
-    const timer =
-      setInterval(() => {
-        loadReturnExchangeRequests();
-      }, 10000);
+    const silentRefreshAll = async () => {
+      try {
+        await Promise.allSettled([
+          loadShipmentFromAppwrite(false),
+          loadReturnExchangeRequests(false),
+          orderService
+            .getOrderSmart(String(orderReference))
+            .then((freshOrder) => {
+              if (freshOrder) {
+                setOrder((prev) => {
+                  if (!prev) return freshOrder;
+                  const prevSig = JSON.stringify({
+                    s: prev.status,
+                    ps: prev.paymentStatus,
+                    u: prev.$updatedAt,
+                    it: prev.items,
+                  });
+                  const nextSig = JSON.stringify({
+                    s: freshOrder.status,
+                    ps: freshOrder.paymentStatus,
+                    u: freshOrder.$updatedAt,
+                    it: freshOrder.items,
+                  });
+                  return prevSig === nextSig ? prev : freshOrder;
+                });
+              }
+            })
+            .catch(() => {}),
+        ]);
+      } catch {
+        // Ignore background refresh errors
+      }
+    };
 
-    return () =>
-      clearInterval(timer);
+    const pollTimer = setInterval(silentRefreshAll, 3000);
+
+    let unsubscribe = null;
+    try {
+      unsubscribe = client.subscribe(["documents"], (event) => {
+        const payload = event?.payload;
+        if (!payload) return;
+        const payloadOrderRef = String(
+          payload.orderId || payload.orderID || payload.$id || ""
+        ).trim();
+        if (
+          !payloadOrderRef ||
+          payloadOrderRef === String(orderReference) ||
+          payload.shipmentId
+        ) {
+          silentRefreshAll();
+        }
+      });
+    } catch {
+      // Realtime optional fallback
+    }
+
+    return () => {
+      clearInterval(pollTimer);
+      if (typeof unsubscribe === "function") {
+        try {
+          unsubscribe();
+        } catch {
+          // ignore cleanup error
+        }
+      }
+    };
   }, [
     order,
+    loadShipmentFromAppwrite,
     loadReturnExchangeRequests,
   ]);
 
@@ -996,13 +1067,25 @@ function OrderDetails() {
 
   const getProductId = (
     product
-  ) =>
-    String(
+  ) => {
+    const rawId =
       product?.productId ||
-        product?.$id ||
-        product?.id ||
-        ""
-    );
+      product?.$id ||
+      product?.id ||
+      product?.productID ||
+      "";
+    if (String(rawId).trim()) {
+      return String(rawId).trim();
+    }
+    const fallbackTitle = String(
+      product?.title || product?.name || product?.productName || ""
+    )
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "");
+    return fallbackTitle || String(order?.orderId || order?.$id || "product");
+  };
 
   const getProductName = (
     product
@@ -2049,54 +2132,79 @@ function OrderDetails() {
       }
     };
 
-  /* OTP TIMER */
+  /* OTP — NEVER EXPIRES UNTIL DELIVERED */
 
   useEffect(() => {
-    if (!otpExpiresAt) {
-      setOtpTimeLeft(0);
-      return;
-    }
+    let cancelled = false;
 
-    const calculateOtpTime =
-      () => {
-        const expiry =
-          new Date(
-            otpExpiresAt
-          ).getTime();
-
-        const remaining =
-          Math.max(
-            0,
-            Math.floor(
-              (
-                expiry -
-                Date.now()
-              ) / 1000
-            )
-          );
-
-        setOtpTimeLeft(
-          remaining
-        );
-
-        if (remaining <= 0) {
+    const syncActiveOtp = async () => {
+      if (!shipment?.$id || currentStatus !== "OUT_FOR_DELIVERY") {
+        if (currentStatus === "DELIVERED") {
           setDeliveryOtp("");
           setShowOtp(false);
           setOtpExpiresAt(null);
+          setOtpTimeLeft(0);
         }
-      };
+        return;
+      }
 
-    calculateOtpTime();
+      try {
+        const activeDoc =
+          await deliveryOtpService.getActiveOtpByShipmentId(
+            shipment.$id
+          );
 
-    const timer =
-      setInterval(
-        calculateOtpTime,
-        1000
-      );
+        if (!cancelled && activeDoc) {
+          const code = String(
+            activeDoc.otp || activeDoc.otpCode || ""
+          ).trim();
+          if (code) {
+            setDeliveryOtp(code);
+            setOtpExpiresAt(activeDoc.expiresAt || null);
+            setShowOtp(true);
+            setOtpTimeLeft(999999);
+          }
+        }
+      } catch (err) {
+        console.warn("Active OTP load warning:", err);
+      }
+    };
 
-    return () =>
-      clearInterval(timer);
-  }, [otpExpiresAt]);
+    syncActiveOtp();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [shipment?.$id, currentStatus, otpExpiresAt]);
+
+  /* LOAD EXISTING USER REVIEW FOR ACTIVE PRODUCT */
+  useEffect(() => {
+    let cancelled = false;
+
+    const checkUserReview = async () => {
+      const uid = String(currentUser?.$id || "").trim();
+      const pid = getProductId(activeProduct);
+      if (!uid || !pid || !isDelivered) {
+        if (!cancelled) setExistingProductReview(null);
+        return;
+      }
+      try {
+        const found = await reviewService.getUserReviewForProduct(uid, pid);
+        if (!cancelled) {
+          setExistingProductReview(found || null);
+        }
+      } catch {
+        if (!cancelled) setExistingProductReview(null);
+      }
+    };
+
+    checkUserReview();
+
+    return () => {
+      cancelled = true;
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.$id, activeProduct, isDelivered]);
 
   // eslint-disable-next-line no-unused-vars
   const handleCopyOtp =
@@ -2152,11 +2260,28 @@ function OrderDetails() {
         activeProduct
       );
 
-      setReviewRating(5);
-      setReviewText("");
+      if (existingProductReview) {
+        setReviewRating(Number(existingProductReview.rating || 5));
+        setReviewText(String(existingProductReview.review || ""));
+        setIsEditingReview(false);
+      } else {
+        setReviewRating(5);
+        setReviewText("");
+        setIsEditingReview(true);
+      }
+
       setReviewSubmitted(false);
       setReviewModalOpen(true);
     };
+
+  useEffect(() => {
+    if (!reviewModalOpen) return undefined;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prevOverflow || "";
+    };
+  }, [reviewModalOpen]);
 
   const closeReviewModal =
     () => {
@@ -2166,8 +2291,7 @@ function OrderDetails() {
 
       setReviewModalOpen(false);
       setReviewProduct(null);
-      setReviewRating(5);
-      setReviewText("");
+      setIsEditingReview(false);
       setReviewSubmitted(false);
     };
 
@@ -2216,61 +2340,72 @@ function OrderDetails() {
           true
         );
 
-        await reviewService.createReview(
-          {
-            productId:
-              getProductId(
-                reviewProduct
-              ),
+        let savedReview = null;
 
-            productName:
-              getProductName(
-                reviewProduct
-              ),
+        if (existingProductReview?.$id) {
+          toast.error("Approved reviews are locked and cannot be edited.");
+          setIsEditingReview(false);
+          setReviewSubmitting(false);
+          return;
+        } else {
+          savedReview = await reviewService.createReview(
+            {
+              productId:
+                getProductId(
+                  reviewProduct
+                ),
 
-            userId:
-              String(
-                currentUser.$id
-              ),
+              productName:
+                getProductName(
+                  reviewProduct
+                ),
 
-            customerName:
-              getCustomerName(),
+              userId:
+                String(
+                  currentUser.$id
+                ),
 
-            customerEmail:
-              getCustomerEmail(),
+              customerName:
+                getCustomerName(),
 
-            rating:
-              Number(
-                reviewRating
-              ),
+              customerEmail:
+                getCustomerEmail(),
 
-            review:
-              cleanReview,
+              rating:
+                Number(
+                  reviewRating
+                ),
 
-            status:
-              "Pending",
+              review:
+                cleanReview,
 
-            orderId:
-              String(
-                order?.orderId ||
-                  order?.$id ||
-                  ""
-              ),
+              status:
+                "Approved",
 
-            createdAt:
-              new Date().toISOString(),
-          }
-        );
+              orderId:
+                String(
+                  order?.orderId ||
+                    order?.$id ||
+                    ""
+                ),
 
-        setReviewSubmitted(
-          true
-        );
+              createdAt:
+                new Date().toISOString(),
+            }
+          );
+        }
 
-        setReviewText("");
-        setReviewRating(5);
+        if (savedReview) {
+          setExistingProductReview(savedReview);
+        }
+
+        setIsEditingReview(false);
+        setReviewSubmitted(true);
 
         toast.success(
-          "Review submitted successfully ⭐"
+          existingProductReview?.$id
+            ? "Review updated successfully ⭐"
+            : "Review submitted successfully ⭐"
         );
       } catch (error) {
         console.error(
@@ -2341,10 +2476,15 @@ function OrderDetails() {
         return;
       }
 
+      const ref = getOrderReference(order);
       navigate(
-        "/invoice",
+        ref ? `/invoice?orderId=${encodeURIComponent(ref)}` : "/invoice",
         {
-          state: order,
+          state: {
+            ...order,
+            shipment,
+            autoDownload: true,
+          },
         }
       );
     };
@@ -2933,16 +3073,12 @@ function OrderDetails() {
 
         <div className="pro-card p-4 mb-4 glass-card hover-lift order-product-summary-card">
 
-          <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
+          <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3 order-product-card-head">
 
             <div>
-              <small className="text-muted d-block mb-1">
-                Product
+              <small className="text-muted d-block order-product-card-label">
+                Ordered Item{rawOrderItems.length > 1 ? ` (${activeProductIndex + 1} of ${rawOrderItems.length})` : ""}
               </small>
-
-              <h5 className="fw-bold mb-0">
-                {itemName}
-              </h5>
             </div>
 
             <div>
@@ -3664,7 +3800,9 @@ function OrderDetails() {
                     onClick={handleReviewProducts}
                   >
                     <FaStar className="text-warning flex-shrink-0" />
-                    <span>Review Product</span>
+                    <span>
+                      {existingProductReview ? "Your Review" : "Review Product"}
+                    </span>
                   </button>
 
                   <button
@@ -3697,7 +3835,9 @@ function OrderDetails() {
                     onClick={handleReviewProducts}
                   >
                     <FaStar className="text-warning flex-shrink-0" />
-                    <span>Review Product</span>
+                    <span>
+                      {existingProductReview ? "Your Review" : "Review Product"}
+                    </span>
                   </button>
                 </div>
               )
@@ -4271,134 +4411,92 @@ function OrderDetails() {
 
         </div>
 
-        {/* REVIEW MODAL */}
+        {/* REVIEW MODAL — FULL LIGHT & DARK MODE */}
 
         {reviewModalOpen && (
           <div
-            className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
-            style={{
-              zIndex: 9999,
-              background:
-                "rgba(0,0,0,0.65)",
-              backdropFilter:
-                "blur(6px)",
-              padding: "20px",
-            }}
+            className="od-review-modal-backdrop"
             onClick={(event) => {
-              if (
-                event.target ===
-                event.currentTarget
-              ) {
+              if (event.target === event.currentTarget) {
                 closeReviewModal();
               }
             }}
           >
-
             <div
-              className="bg-white rounded-4 shadow-lg w-100"
-              style={{
-                maxWidth:
-                  "560px",
-                maxHeight:
-                  "90vh",
-                overflowY:
-                  "auto",
-              }}
+              className="od-review-modal-card"
+              onClick={(e) => e.stopPropagation()}
             >
-
-              <div className="d-flex align-items-center justify-content-between p-4 border-bottom">
-
+              {/* Modal Header */}
+              <div className="od-review-modal-header">
                 <div>
-                  <h4 className="fw-bold mb-1">
-                    Write a Review ⭐
+                  <span className="od-review-eyebrow">
+                    <FaStar className="text-warning" /> VERIFIED BUYER FEEDBACK
+                  </span>
+                  <h4 className="od-review-modal-title">
+                    {existingProductReview && !isEditingReview && !reviewSubmitted
+                      ? "Your Submitted Review"
+                      : existingProductReview && isEditingReview
+                      ? "Update Your Review"
+                      : "Write a Product Review"}
                   </h4>
-
-                  <small className="text-muted">
-                    Share your
-                    experience
-                    with this
-                    product
-                  </small>
                 </div>
 
                 <button
                   type="button"
-                  className="btn btn-light rounded-circle d-flex align-items-center justify-content-center"
-                  style={{
-                    width:
-                      "40px",
-                    height:
-                      "40px",
-                  }}
-                  onClick={
-                    closeReviewModal
-                  }
-                  disabled={
-                    reviewSubmitting
-                  }
+                  className="od-review-close-btn"
+                  onClick={closeReviewModal}
+                  disabled={reviewSubmitting}
+                  aria-label="Close review modal"
                 >
                   <FaTimes />
                 </button>
-
               </div>
 
-              <div className="p-4">
-
+              {/* Modal Body */}
+              <div className="od-review-modal-body">
                 {reviewSubmitted ? (
-                  <div className="text-center py-4">
-
-                    <div
-                      className="d-flex align-items-center justify-content-center rounded-circle bg-success-subtle text-success mx-auto mb-3"
-                      style={{
-                        width:
-                          "75px",
-                        height:
-                          "75px",
-                        fontSize:
-                          "34px",
-                      }}
-                    >
+                  <div className="od-review-success-state">
+                    <div className="od-review-success-icon">
                       <FaCheck />
                     </div>
 
-                    <h4 className="fw-bold mb-2">
-                      Review Submitted!
+                    <h4 className="od-review-success-title">
+                      Thank You for Your Review!
                     </h4>
 
-                    <p className="text-muted mb-4">
-                      Thank you for
-                      sharing your
-                      experience.
-                      <br />
-                      Your review
-                      is currently{" "}
-                      <strong>
-                        Pending Admin
-                        Approval
-                      </strong>
-                      .
+                    <p className="od-review-success-text">
+                      Your verified purchase review for{" "}
+                      <strong>{getProductName(reviewProduct)}</strong> has been
+                      published.
                     </p>
 
-                    <button
-                      type="button"
-                      className="btn btn-dark px-4"
-                      onClick={
-                        closeReviewModal
-                      }
-                    >
-                      Done
-                    </button>
-
+                    <div className="od-review-success-actions">
+                      {getProductId(reviewProduct) && (
+                        <button
+                          type="button"
+                          className="od-review-btn od-review-btn-secondary"
+                          onClick={() => {
+                            const pid = getProductId(reviewProduct);
+                            closeReviewModal();
+                            navigate(`/product/${pid}`);
+                          }}
+                        >
+                          View on Product Page
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="od-review-btn od-review-btn-primary"
+                        onClick={closeReviewModal}
+                      >
+                        Done
+                      </button>
+                    </div>
                   </div>
-                ) : (
-                  <form
-                    onSubmit={
-                      handleSubmitReview
-                    }
-                  >
-
-                    <div className="d-flex align-items-center gap-3 p-3 rounded-4 border bg-light mb-4">
-
+                ) : existingProductReview && !isEditingReview ? (
+                  <div className="od-review-existing-view">
+                    {/* Product Strip */}
+                    <div className="od-review-product-strip">
                       <img
                         src={
                           reviewProduct?.thumbnail ||
@@ -4406,216 +4504,273 @@ function OrderDetails() {
                           reviewProduct?.img ||
                           "https://images.unsplash.com/photo-1523275335684-37898b30?w=500&auto=format&fit=crop&q=60"
                         }
-                        alt={getProductName(
-                          reviewProduct
-                        )}
+                        alt={getProductName(reviewProduct)}
                         referrerPolicy="no-referrer"
-                        style={{
-                          width:
-                            "70px",
-                          height:
-                            "70px",
-                          objectFit:
-                            "cover",
-                          borderRadius:
-                            "14px",
-                        }}
+                        className="od-review-product-img"
+                      />
+                      <div className="od-review-product-meta">
+                        <span className="od-review-verified-pill">
+                          <FaCheck /> Verified Purchase
+                        </span>
+                        <h6 className="od-review-product-name">
+                          {getProductName(reviewProduct)}
+                        </h6>
+                      </div>
+                    </div>
+
+                    {/* Submitted Review Card */}
+                    <div className="od-review-saved-box">
+                      <div className="od-review-saved-top">
+                        <div className="od-review-saved-stars">
+                          {[1, 2, 3, 4, 5].map((s) => (
+                            <FaStar
+                              key={s}
+                              className={
+                                s <= Number(existingProductReview.rating || 5)
+                                  ? "star-filled"
+                                  : "star-empty"
+                              }
+                            />
+                          ))}
+                          <strong>
+                            {Number(existingProductReview.rating || 5).toFixed(1)} / 5
+                          </strong>
+                        </div>
+                        <span
+                          className={`od-review-status-pill ${String(
+                            existingProductReview.status || "Approved"
+                          ).toLowerCase()}`}
+                        >
+                          {existingProductReview.status || "Approved"}
+                        </span>
+                      </div>
+
+                      <p className="od-review-saved-text">
+                        {existingProductReview.review}
+                      </p>
+
+                      <div className="od-review-saved-footer">
+                        <span>
+                          By <strong>{existingProductReview.customerName || getCustomerName()}</strong>
+                        </span>
+                        <span>
+                          {formatDate(
+                            existingProductReview.createdAt ||
+                              existingProductReview.$createdAt
+                          )}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="od-review-locked-note mb-3">
+                      <FaCheckCircle className="text-success flex-shrink-0" />
+                      <span>
+                        Your review is verified and approved. Approved reviews are permanently published and cannot be edited.
+                      </span>
+                    </div>
+
+                    <div className="od-review-modal-actions">
+                      {getProductId(reviewProduct) && (
+                        <button
+                          type="button"
+                          className="od-review-btn od-review-btn-secondary"
+                          onClick={() => {
+                            const pid = getProductId(reviewProduct);
+                            closeReviewModal();
+                            navigate(`/product/${pid}`);
+                          }}
+                        >
+                          View on Product Page
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="od-review-btn od-review-btn-primary"
+                        onClick={closeReviewModal}
+                      >
+                        Done
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <form onSubmit={handleSubmitReview}>
+                    {/* Product Strip */}
+                    <div className="od-review-product-strip">
+                      <img
+                        src={
+                          reviewProduct?.thumbnail ||
+                          reviewProduct?.image ||
+                          reviewProduct?.img ||
+                          "https://images.unsplash.com/photo-1523275335684-37898b30?w=500&auto=format&fit=crop&q=60"
+                        }
+                        alt={getProductName(reviewProduct)}
+                        referrerPolicy="no-referrer"
+                        className="od-review-product-img"
                       />
 
-                      <div className="flex-grow-1">
-
-                        <small className="text-muted d-block">
-                          Reviewing
-                        </small>
-
-                        <h6 className="fw-bold mb-0">
-                          {getProductName(
-                            reviewProduct
-                          )}
+                      <div className="od-review-product-meta">
+                        <span className="od-review-verified-pill">
+                          <FaCheck /> Verified Purchase • Order #{getOrderReference(order)}
+                        </span>
+                        <h6 className="od-review-product-name">
+                          {getProductName(reviewProduct)}
                         </h6>
-
                       </div>
                     </div>
 
-                    <div className="p-3 rounded-4 border mb-4">
+                    {/* Interactive Rating Selector */}
+                    <div className="od-review-field-group">
+                      <div className="od-review-label-row">
+                        <label className="od-review-label">Overall Rating</label>
+                        <span className="od-review-rating-tag">
+                          {reviewRating === 5
+                            ? "5.0 ★ Excellent"
+                            : reviewRating === 4
+                            ? "4.0 ★ Very Good"
+                            : reviewRating === 3
+                            ? "3.0 ★ Good"
+                            : reviewRating === 2
+                            ? "2.0 ★ Fair"
+                            : "1.0 ★ Poor"}
+                        </span>
+                      </div>
 
-                      <small className="text-muted d-block mb-1">
-                        Review by
-                      </small>
-
-                      <strong className="d-block">
-                        {getCustomerName()}
-                      </strong>
-
-                      {getCustomerEmail() && (
-                        <small className="text-muted">
-                          {getCustomerEmail()}
-                        </small>
-                      )}
-
+                      <div className="od-review-star-picker">
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <button
+                            key={star}
+                            type="button"
+                            className={`od-review-star-btn ${
+                              star <= reviewRating ? "active" : ""
+                            }`}
+                            onClick={() => setReviewRating(star)}
+                            aria-label={`Rate ${star} out of 5 stars`}
+                          >
+                            <FaStar />
+                          </button>
+                        ))}
+                      </div>
                     </div>
 
-                    <div className="mb-4">
-
-                      <label className="form-label fw-bold">
-                        Your Rating
+                    {/* Quick Feedback Chips */}
+                    <div className="od-review-field-group">
+                      <label className="od-review-label">
+                        Quick Highlights <small>(Tap to add)</small>
                       </label>
-
-                      <div className="d-flex gap-2">
-
-                        {[1, 2, 3, 4, 5].map(
-                          (star) => (
+                      <div className="od-review-quick-tags">
+                        {[
+                          "Excellent build quality!",
+                          "Great value for money.",
+                          "Fast & safe delivery.",
+                          "Works exactly as described.",
+                          "Highly recommended!",
+                        ].map((tagText) => {
+                          const isAdded = reviewText
+                            .toLowerCase()
+                            .includes(tagText.toLowerCase());
+                          return (
                             <button
-                              key={
-                                star
-                              }
+                              key={tagText}
                               type="button"
-                              className="btn p-0 border-0"
-                              style={{
-                                background:
-                                  "transparent",
-                                fontSize:
-                                  "32px",
+                              className={`od-review-tag-chip ${
+                                isAdded ? "active" : ""
+                              }`}
+                              onClick={() => {
+                                if (isAdded) return;
+                                setReviewText((prev) => {
+                                  const cleanPrev = prev.trim();
+                                  return cleanPrev
+                                    ? `${cleanPrev} ${tagText}`
+                                    : tagText;
+                                });
                               }}
-                              onClick={() =>
-                                setReviewRating(
-                                  star
-                                )
-                              }
                             >
-                              <FaStar
-                                className={
-                                  star <=
-                                  reviewRating
-                                    ? "text-warning"
-                                    : "text-secondary opacity-25"
-                                }
-                              />
+                              + {tagText}
                             </button>
-                          )
-                        )}
-
+                          );
+                        })}
                       </div>
-
                     </div>
 
-                    <div className="mb-4">
-
-                      <label
-                        htmlFor="orderReviewText"
-                        className="form-label fw-bold"
-                      >
-                        Your Review
+                    {/* Review Textarea */}
+                    <div className="od-review-field-group">
+                      <label htmlFor="orderReviewText" className="od-review-label">
+                        Your Detailed Review
                       </label>
 
                       <textarea
                         id="orderReviewText"
-                        className="form-control rounded-4"
-                        rows="5"
-                        placeholder="Tell us about your experience with this product..."
-                        value={
-                          reviewText
-                        }
-                        onChange={(
-                          event
-                        ) =>
-                          setReviewText(
-                            event.target
-                              .value
-                          )
-                        }
-                        maxLength={
-                          2000
-                        }
-                        disabled={
-                          reviewSubmitting
-                        }
+                        className="od-review-textarea"
+                        rows="4"
+                        placeholder="Share what you liked most about the product quality, performance, and packaging..."
+                        value={reviewText}
+                        onChange={(event) => setReviewText(event.target.value)}
+                        maxLength={2000}
+                        disabled={reviewSubmitting}
                       />
 
-                      <div className="d-flex justify-content-between mt-2">
-
-                        <small className="text-muted">
-                          Minimum 5
-                          characters
-                        </small>
-
-                        <small className="text-muted">
-                          {
-                            reviewText.length
-                          }
-                          /2000
-                        </small>
-
+                      <div className="od-review-char-row">
+                        <span>Minimum 5 characters</span>
+                        <span>{reviewText.length}/2000</span>
                       </div>
-
                     </div>
 
-                    <div className="alert alert-light border rounded-4 mb-4">
-
-                      <div className="d-flex align-items-center gap-2 mb-1">
-
-                        <FaBoxOpen />
-
-                        <strong>
-                          Verified
-                          Purchase
-                        </strong>
-
+                    {/* Reviewer Identity Box */}
+                    <div className="od-review-identity-bar">
+                      <div className="od-review-identity-avatar">
+                        {getCustomerName().charAt(0).toUpperCase()}
                       </div>
-
-                      <small className="text-muted">
-                        This review is
-                        being
-                        submitted
-                        from your
-                        delivered
-                        TechStore
-                        order.
-                      </small>
-
+                      <div className="od-review-identity-info">
+                        <strong>Posting as {getCustomerName()}</strong>
+                        <span>
+                          {getCustomerEmail() || "Verified TechStore Customer"}
+                        </span>
+                      </div>
                     </div>
 
-                    <div className="d-flex gap-2">
-
+                    {/* Submit / Cancel Buttons */}
+                    <div className="od-review-modal-actions">
                       <button
                         type="button"
-                        className="btn btn-outline-secondary flex-fill"
-                        onClick={
-                          closeReviewModal
-                        }
-                        disabled={
-                          reviewSubmitting
-                        }
+                        className="od-review-btn od-review-btn-secondary"
+                        onClick={() => {
+                          if (existingProductReview && isEditingReview) {
+                            setIsEditingReview(false);
+                          } else {
+                            closeReviewModal();
+                          }
+                        }}
+                        disabled={reviewSubmitting}
                       >
                         Cancel
                       </button>
 
                       <button
                         type="submit"
-                        className="btn btn-dark flex-fill d-flex align-items-center justify-content-center gap-2"
+                        className="od-review-btn od-review-btn-primary"
                         disabled={
-                          reviewSubmitting ||
-                          !reviewText.trim()
+                          reviewSubmitting || reviewText.trim().length < 5
                         }
                       >
                         {reviewSubmitting ? (
                           <>
                             <FaSpinner className="fa-spin" />
-                            Submitting...
+                            <span>Submitting...</span>
                           </>
                         ) : (
                           <>
                             <FaStar />
-                            Submit Review
+                            <span>
+                              {existingProductReview?.$id
+                                ? "Update Review"
+                                : "Submit Review"}
+                            </span>
                           </>
                         )}
                       </button>
-
                     </div>
-
                   </form>
                 )}
-
               </div>
             </div>
           </div>

@@ -1,3 +1,4 @@
+import { scrollToPageTop } from "../components/ScrollToTop";
 import { useEffect, useState, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
@@ -21,6 +22,9 @@ import "../css/PaymentSuccess.css";
 
 function PaymentSuccess() {
   const navigate = useNavigate();
+  useEffect(() => {
+    scrollToPageTop();
+  }, []);
   const location = useLocation();
 
   const order = useMemo(

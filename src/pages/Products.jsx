@@ -1,14 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import ProductCard from "../components/ProductCard";
-import SkeletonCard from "../components/SkeletonCard";
 import EmptyState from "../components/EmptyState";
 import productService from "../appwrite/productService";
 import "../css/Product.css";
+import { scrollToPageTop } from "../components/ScrollToTop";
 
 function Products() {
-  const [products, setProducts] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [products, setProducts] = useState(
+    () => productService.getCachedProducts() || []
+  );
+  const [loading, setLoading] = useState(
+    () => !(productService.getCachedProducts()?.length > 0)
+  );
 
   const [searchParams] = useSearchParams();
 
@@ -67,6 +71,7 @@ function Products() {
     setSearch(paramSearch);
     setCategory(paramCategory);
     setCurrentPage(1);
+    scrollToPageTop();
   }, [paramSearch, paramCategory]);
 
   /* CLOSE CUSTOM DROPDOWN WHEN CLICKING OUTSIDE */
@@ -458,15 +463,10 @@ function Products() {
     return (
       <div className="product-page-wrapper">
         <div className="container py-5">
-          <div className="row g-4">
-            {[...Array(8)].map((_, index) => (
-              <div
-                className="col-6 col-md-4 col-lg-3"
-                key={index}
-              >
-                <SkeletonCard />
-              </div>
-            ))}
+          <div className="products-clean-loader">
+            <div className="products-clean-spinner" />
+            <h5>Loading Products...</h5>
+            <p>Fetching the latest collection for you</p>
           </div>
         </div>
       </div>

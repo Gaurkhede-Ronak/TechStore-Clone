@@ -1,3 +1,4 @@
+import { scrollToPageTop } from "../components/ScrollToTop";
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
@@ -126,6 +127,9 @@ const getRefundStatusLabel = (status) => {
 
 function ReturnExchange() {
   const navigate = useNavigate();
+  useEffect(() => {
+    scrollToPageTop();
+  }, []);
   const { orderId } = useParams();
 
   const [user, setUser] = useState(null);

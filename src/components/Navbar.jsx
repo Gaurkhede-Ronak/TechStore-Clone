@@ -650,7 +650,9 @@ function Navbar() {
 
 
                     navigate(
-                        "/orders"
+                        `/order-details?orderId=${encodeURIComponent(
+                            notification.orderId
+                        )}`
                     );
 
                     return;

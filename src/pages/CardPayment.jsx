@@ -1,4 +1,5 @@
-import { useState, useMemo } from "react";
+import { scrollToPageTop } from "../components/ScrollToTop";
+import { useEffect, useState, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import {
@@ -18,6 +19,9 @@ import "../css/Payment.css";
 
 function CardPayment() {
   const navigate = useNavigate();
+  useEffect(() => {
+    scrollToPageTop();
+  }, []);
   const location = useLocation();
 
   const order = location.state || {};

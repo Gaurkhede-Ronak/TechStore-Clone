@@ -23,6 +23,7 @@ import authService from "../appwrite/authService";
 import orderService from "../appwrite/orderService";
 
 import "../css/ProductDetails.css";
+import { scrollToPageTop } from "../components/ScrollToTop";
 
 
 const FALLBACK_PRODUCT_IMAGE =
@@ -36,6 +37,10 @@ function ProductDetails() {
     const navigate = useNavigate();
 
     const dispatch = useDispatch();
+
+    useEffect(() => {
+        scrollToPageTop();
+    }, [id]);
 
 
   // PRODUCT STATE
@@ -106,8 +111,8 @@ function ProductDetails() {
         return reviews.filter(
             (review) =>
                 String(
-                    review.status || ""
-                ).toLowerCase() === "approved"
+                    review.status || "Approved"
+                ).toLowerCase() !== "rejected"
         );
 
     }, [reviews]);
@@ -630,7 +635,8 @@ function ProductDetails() {
                 const verification =
                     await orderService.getDeliveredOrderForProduct(
                         currentUser.$id,
-                        product.$id
+                        product.$id,
+                        product.title || product.name || ""
                     );
 
 
@@ -931,7 +937,7 @@ function ProductDetails() {
                         cleanReview,
 
                     status:
-                        "Pending",
+                        "Approved",
 
                     orderId:
                         String(
@@ -988,7 +994,7 @@ function ProductDetails() {
 
 
                 toast.success(
-                    "Review submitted successfully! It is waiting for admin approval. ⭐"
+                    "Review submitted successfully! Thank you for your feedback. ⭐"
                 );
 
 
@@ -1099,40 +1105,15 @@ function ProductDetails() {
   // LOADING
 
     if (loading) {
-
         return (
-
             <div className="product-details-page">
-
                 <div className="container py-5">
-
-                    <div className="product-details-skeleton">
-
-                        <div className="skeleton skeleton-image"></div>
-
-
-                        <div className="skeleton-content">
-
-                            <div className="skeleton skeleton-small"></div>
-
-                            <div className="skeleton skeleton-title"></div>
-
-                            <div className="skeleton skeleton-rating"></div>
-
-                            <div className="skeleton skeleton-price"></div>
-
-                            <div className="skeleton skeleton-text"></div>
-
-                            <div className="skeleton skeleton-text short"></div>
-
-                            <div className="skeleton skeleton-btn"></div>
-
-                        </div>
-
+                    <div className="pd-clean-loader-card">
+                        <div className="pd-clean-spinner" />
+                        <h4>Loading Product Details...</h4>
+                        <p>Preparing specifications, gallery, and verified reviews</p>
                     </div>
-
                 </div>
-
             </div>
         );
     }
@@ -2187,13 +2168,14 @@ function ProductDetails() {
 
                                                 <div>
 
-                                                    <h6>
-
-                                                        {
-                                                            review.customerName
-                                                        }
-
-                                                    </h6>
+                                                    <div className="review-author-name-row">
+                                                        <h6>
+                                                            {review.customerName}
+                                                        </h6>
+                                                        <span className="review-verified-badge">
+                                                            <FaCheckCircle /> Verified Buyer
+                                                        </span>
+                                                    </div>
 
 
                                                     <span>

@@ -1098,3 +1098,68 @@ body.dark .input-icon-wrapper .search-icon {
     font-size: 15px !important;
   }
 }
+
+/* =========================================================
+   CLEAN MODERN PRODUCT LOADER (REPLACES SKELETON STRIPS)
+   ========================================================= */
+.products-clean-loader {
+  min-height: 360px;
+  padding: 56px 20px;
+  border-radius: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 12px 35px rgba(15, 23, 42, 0.04);
+}
+
+body.dark .products-clean-loader {
+  background: #111827;
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.35);
+}
+
+.products-clean-spinner {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 3.5px solid rgba(37, 99, 235, 0.18);
+  border-top-color: #2563eb;
+  animation: productsSpin 0.75s linear infinite;
+  margin-bottom: 16px;
+}
+
+body.dark .products-clean-spinner {
+  border-color: rgba(96, 165, 250, 0.2);
+  border-top-color: #60a5fa;
+}
+
+@keyframes productsSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.products-clean-loader h5 {
+  margin: 0 0 6px;
+  font-size: 18px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+body.dark .products-clean-loader h5 {
+  color: #f8fafc;
+}
+
+.products-clean-loader p {
+  margin: 0;
+  font-size: 13.5px;
+  color: #64748b;
+}
+
+body.dark .products-clean-loader p {
+  color: #94a3b8;
+}

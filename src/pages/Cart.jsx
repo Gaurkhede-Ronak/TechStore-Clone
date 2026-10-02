@@ -27,6 +27,7 @@ import {
 } from "../redux/slices/cartSlice";
 
 import "../css/Cart.css";
+import { scrollToPageTop } from "../components/ScrollToTop";
 
 const FALLBACK_PRODUCT_IMAGE =
   "https://images.unsplash.com/photo-1526738549149-8e07eca6c147?auto=format&fit=crop&w=400&q=80";
@@ -34,6 +35,10 @@ const FALLBACK_PRODUCT_IMAGE =
 function Cart() {
   const navigate = useNavigate();
   const dispatch = useDispatch();
+
+  useEffect(() => {
+    scrollToPageTop();
+  }, []);
 
   const cartItems = useSelector(
     (state) => state.cart.items

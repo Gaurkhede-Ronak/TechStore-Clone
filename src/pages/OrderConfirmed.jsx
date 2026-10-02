@@ -1,3 +1,4 @@
+import { scrollToPageTop } from "../components/ScrollToTop";
 import { useEffect, useMemo } from "react";
 
 import { useLocation, useNavigate } from "react-router-dom";
@@ -23,6 +24,9 @@ import "../css/OrderConfirmed.css";
 
 function OrderConfirmed() {
     const navigate = useNavigate();
+  useEffect(() => {
+    scrollToPageTop();
+  }, []);
     const location = useLocation();
 
   // REDUX USER

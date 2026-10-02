@@ -1299,54 +1299,18 @@ function OrderDetails() {
       }
     };
 
-  /* OTP TIMER */
+  /* OTP — NEVER EXPIRES UNTIL DELIVERED */
 
   useEffect(() => {
-    if (!otpExpiresAt) {
+    if (currentStatus === "DELIVERED") {
+      setDeliveryOtp("");
+      setShowOtp(false);
+      setOtpExpiresAt(null);
       setOtpTimeLeft(0);
-      return;
+    } else if (otpExpiresAt) {
+      setOtpTimeLeft(999999);
     }
-
-    const calculateOtpTime =
-      () => {
-        const expiry =
-          new Date(
-            otpExpiresAt
-          ).getTime();
-
-        const remaining =
-          Math.max(
-            0,
-            Math.floor(
-              (
-                expiry -
-                Date.now()
-              ) / 1000
-            )
-          );
-
-        setOtpTimeLeft(
-          remaining
-        );
-
-        if (remaining <= 0) {
-          setDeliveryOtp("");
-          setShowOtp(false);
-          setOtpExpiresAt(null);
-        }
-      };
-
-    calculateOtpTime();
-
-    const timer =
-      setInterval(
-        calculateOtpTime,
-        1000
-      );
-
-    return () =>
-      clearInterval(timer);
-  }, [otpExpiresAt]);
+  }, [otpExpiresAt, currentStatus]);
 
   // eslint-disable-next-line no-unused-vars
   const handleCopyOtp =
@@ -1498,7 +1462,7 @@ function OrderDetails() {
               cleanReview,
 
             status:
-              "Pending",
+              "Approved",
 
             orderId:
               String(

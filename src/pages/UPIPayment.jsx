@@ -1,3 +1,4 @@
+import { scrollToPageTop } from "../components/ScrollToTop";
 import { useEffect, useState } from "react";
 
 import { useLocation, useNavigate } from "react-router-dom";
@@ -26,6 +27,9 @@ import "../css/Payment.css";
 function UPIPayment() {
 
     const navigate = useNavigate();
+  useEffect(() => {
+    scrollToPageTop();
+  }, []);
 
     const location = useLocation();
 

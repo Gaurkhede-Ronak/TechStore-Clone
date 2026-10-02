@@ -1,3 +1,4 @@
+import { scrollToPageTop } from "../components/ScrollToTop";
 import { useEffect, useState, useMemo, useRef } from "react";
 import {
   FaBoxOpen,
@@ -144,6 +145,9 @@ const getPaymentSubtitle = (order) => {
 
 function OrderHistory() {
   const navigate = useNavigate();
+  useEffect(() => {
+    scrollToPageTop();
+  }, []);
 
   const [orders, setOrders] = useState([]);
   const [userReviews, setUserReviews] = useState([]);

@@ -1,3 +1,4 @@
+import { scrollToPageTop } from "../components/ScrollToTop";
 import {
   useCallback,
   useEffect,
@@ -362,6 +363,9 @@ const getEventDate = (event) =>
 
 function TrackOrder() {
   const navigate = useNavigate();
+  useEffect(() => {
+    scrollToPageTop();
+  }, []);
   const location = useLocation();
   const dispatch = useDispatch();
 
@@ -392,6 +396,7 @@ function TrackOrder() {
   );
 
   const [loading, setLoading] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
   const [error, setError] = useState("");
   const [lastUpdated, setLastUpdated] = useState(null);
 
@@ -1128,7 +1133,12 @@ function TrackOrder() {
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
-    fetchTracking(trackingInput);
+    setShowDetails(true);
+    fetchTracking(
+      trackingInput || displayAwb || urlTrackingId || urlOrderId,
+      shipment?.orderId || urlOrderId,
+      urlReturnId
+    );
   };
 
   const handleBack = () => {
@@ -1764,7 +1774,7 @@ function TrackOrder() {
           )}
 
           {/* LOADING STATE */}
-          {loading && !shipment && (
+          {showDetails && loading && !shipment && (
             <div className="cp-empty-card">
               <FaSyncAlt className="fa-spin mb-3" size={28} />
               <h4 className="fw-bold mb-1">
@@ -1777,7 +1787,7 @@ function TrackOrder() {
           )}
 
           {/* 3. UNIQUE PORTAL STRUCTURES PER COURIER BRAND */}
-          {shipment && (
+          {shipment && showDetails && (
             <>
               {/* PORTAL 1: FastNexTech (Express Split Ribbon + 2-Col) */}
               {detectedCourier.key === "FastNexTech" && (

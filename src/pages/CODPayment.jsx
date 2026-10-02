@@ -1,3 +1,4 @@
+import { scrollToPageTop } from "../components/ScrollToTop";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   FaMoneyBillWave,
@@ -8,7 +9,7 @@ import {
   FaCheckCircle,
   FaSpinner,
 } from "react-icons/fa";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 
 import walletService from "../appwrite/walletService";
@@ -17,6 +18,9 @@ import "../css/Payment.css";
 
 function CODPayment() {
   const navigate = useNavigate();
+  useEffect(() => {
+    scrollToPageTop();
+  }, []);
   const location = useLocation();
 
   const order = useMemo(() => location.state || {}, [location.state]);

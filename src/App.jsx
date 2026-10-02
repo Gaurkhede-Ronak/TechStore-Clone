@@ -9,6 +9,7 @@ import { useSelector, useDispatch } from "react-redux";
 
 import userService from "./appwrite/userService";
 import Navbar from "./components/Navbar";
+import ScrollToTop from "./components/ScrollToTop";
 import Footer from "./components/Footer";
 import ProtectedRoute from "./components/ProtectedRoute";
 import AdminProtectedRoute from "./components/AdminProtectedRoute";
@@ -341,6 +342,7 @@ function App() {
 
     return (
         <>
+            <ScrollToTop />
             {/* CUSTOMER NAVBAR (Hidden on Admin, Delivery Boy, and Standalone Courier Tracking Portal) */}
 
             {!isAdminRoute &&

@@ -655,16 +655,141 @@ const Notifications = () => {
     }
 
 
+  // HELPER TO EXTRACT OTP CODE FROM NOTIFICATION
+    const extractOtpCode = (notification) => {
+        if (notification?.otp && String(notification.otp).trim()) {
+            return String(notification.otp).trim();
+        }
+        const msg = String(notification?.message || "");
+        const match = msg.match(/\b(\d{6})\b/);
+        return match ? match[1] : "";
+    };
+
   // MAIN UI
 
     return (
 
         <div
-            className="container py-4 py-md-5"
+            className="container py-4 py-md-5 ts-notifications-page"
             style={{
                 minHeight: "75vh",
             }}
         >
+            <style>{`
+                .ts-notifications-page .ts-notif-card {
+                    border-radius: 16px;
+                    overflow: hidden;
+                    background: #ffffff;
+                    border: 1px solid #e2e8f0;
+                    border-left: 4px solid transparent;
+                    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
+                    transition: transform 0.2s ease, box-shadow 0.2s ease;
+                }
+                .ts-notifications-page .ts-notif-card.unread {
+                    background: #f8fbff;
+                    border-left-color: #2563eb;
+                }
+                .ts-notifications-page .ts-notif-card.delivered-type {
+                    border-left-color: #16a34a;
+                }
+                .ts-notifications-page .ts-notif-card:hover {
+                    transform: translateY(-2px);
+                    box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+                }
+                .ts-notifications-page .ts-notif-title {
+                    color: #0f172a;
+                }
+                .ts-notifications-page .ts-notif-msg {
+                    color: #475569;
+                    font-size: 0.92rem;
+                    line-height: 1.55;
+                }
+                .ts-notifications-page .ts-notif-meta-badge {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 5px;
+                    padding: 5px 11px;
+                    border-radius: 8px;
+                    background: #f1f5f9;
+                    border: 1px solid #e2e8f0;
+                    color: #1e293b;
+                    font-size: 0.76rem;
+                    font-weight: 700;
+                }
+                .ts-notifications-page .ts-notif-otp-box {
+                    display: inline-flex;
+                    align-items: center;
+                    flex-wrap: wrap;
+                    gap: 10px;
+                    padding: 8px 14px;
+                    border-radius: 11px;
+                    background: #eff6ff;
+                    border: 1px dashed #60a5fa;
+                    margin-bottom: 12px;
+                }
+                .ts-notifications-page .ts-notif-otp-code {
+                    font-family: monospace;
+                    font-size: 1.05rem;
+                    font-weight: 800;
+                    letter-spacing: 3px;
+                    color: #1d4ed8;
+                }
+                .ts-notifications-page .ts-notif-otp-note {
+                    font-size: 0.73rem;
+                    font-weight: 700;
+                    color: #059669;
+                }
+                .ts-notifications-page .ts-notif-empty-card {
+                    border-radius: 18px;
+                    background: #ffffff;
+                    border: 1px solid #e2e8f0;
+                }
+                /* Dark Mode */
+                body.dark .ts-notifications-page h2,
+                body.dark .ts-notifications-page .ts-notif-title,
+                body.dark .ts-notifications-page .ts-notif-empty-card h5,
+                body.dark-mode .ts-notifications-page h2,
+                body.dark-mode .ts-notifications-page .ts-notif-title,
+                html.dark .ts-notifications-page h2,
+                html.dark .ts-notifications-page .ts-notif-title {
+                    color: #f8fafc !important;
+                }
+                body.dark .ts-notifications-page .ts-notif-card,
+                body.dark .ts-notifications-page .ts-notif-empty-card,
+                body.dark-mode .ts-notifications-page .ts-notif-card,
+                html.dark .ts-notifications-page .ts-notif-card {
+                    background: #111827 !important;
+                    border-color: rgba(255, 255, 255, 0.08) !important;
+                    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.45) !important;
+                }
+                body.dark .ts-notifications-page .ts-notif-card.unread,
+                body.dark-mode .ts-notifications-page .ts-notif-card.unread,
+                html.dark .ts-notifications-page .ts-notif-card.unread {
+                    background: #172036 !important;
+                    border-left: 4px solid #3b82f6 !important;
+                }
+                body.dark .ts-notifications-page .ts-notif-card.delivered-type {
+                    border-left: 4px solid #22c55e !important;
+                }
+                body.dark .ts-notifications-page .ts-notif-msg {
+                    color: #cbd5e1 !important;
+                }
+                body.dark .ts-notifications-page .ts-notif-meta-badge {
+                    background: #1e293b !important;
+                    border-color: rgba(255, 255, 255, 0.1) !important;
+                    color: #e2e8f0 !important;
+                }
+                body.dark .ts-notifications-page .ts-notif-otp-box {
+                    background: rgba(37, 99, 235, 0.14) !important;
+                    border-color: rgba(96, 165, 250, 0.45) !important;
+                }
+                body.dark .ts-notifications-page .ts-notif-otp-code {
+                    color: #93c5fd !important;
+                }
+                body.dark .ts-notifications-page .ts-notif-otp-note {
+                    color: #4ade80 !important;
+                }
+            `}</style>
 
             {/* HEADER */}
 
@@ -805,13 +930,7 @@ const Notifications = () => {
             {filteredNotifications.length ===
                 0 && (
 
-                <div
-                    className="card border-0 shadow-sm"
-                    style={{
-                        borderRadius:
-                            "18px",
-                    }}
-                >
+                <div className="card ts-notif-empty-card shadow-sm">
 
                     <div
                         className="card-body text-center py-5"
@@ -887,21 +1006,15 @@ const Notifications = () => {
                                 key={
                                     notification.$id
                                 }
-                                className="card border-0 shadow-sm"
-                                style={{
-                                    borderRadius:
-                                        "16px",
-                                    overflow:
-                                        "hidden",
-                                    background:
-                                        isUnread
-                                            ? "#f8fbff"
-                                            : "#ffffff",
-                                    borderLeft:
-                                        isUnread
-                                            ? "4px solid #0d6efd"
-                                            : "4px solid transparent",
-                                }}
+                                className={`card ts-notif-card ${
+                                    isUnread ? "unread" : ""
+                                } ${
+                                    String(notification.type || "")
+                                        .toUpperCase()
+                                        .includes("DELIVERED")
+                                        ? "delivered-type"
+                                        : ""
+                                }`}
                             >
 
                                 <div className="card-body p-3 p-md-4">
@@ -948,7 +1061,7 @@ const Notifications = () => {
 
                                                 <div className="d-flex align-items-center gap-2">
 
-                                                    <h5 className="fw-bold mb-0">
+                                                    <h5 className="fw-bold mb-0 ts-notif-title">
 
                                                         {
                                                             notification.title
@@ -986,13 +1099,20 @@ const Notifications = () => {
                                             </div>
 
 
-                                            <p className="text-muted mt-2 mb-2">
-
-                                                {
-                                                    notification.message
-                                                }
-
+                                            <p className="ts-notif-msg mt-2 mb-2">
+                                                {notification.message}
                                             </p>
+
+                                            {String(notification.type || "").toUpperCase() === "DELIVERY_OTP" && extractOtpCode(notification) && (
+                                                <div className="ts-notif-otp-box">
+                                                    <span className="ts-notif-otp-code">
+                                                        🔐 OTP: {extractOtpCode(notification)}
+                                                    </span>
+                                                    <span className="ts-notif-otp-note">
+                                                        • Valid until parcel is delivered
+                                                    </span>
+                                                </div>
+                                            )}
 
 
                                             {/* ORDER INFO */}

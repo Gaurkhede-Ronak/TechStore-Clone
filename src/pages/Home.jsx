@@ -18,7 +18,6 @@ import {
   FaArrowRight,
 } from "react-icons/fa";
 
-import SkeletonCard from "../components/SkeletonCard";
 import "../css/Home.css";
 
 // Dynamic Category URLs aligned with product filters
@@ -77,8 +76,12 @@ const features = [
 ];
 
 function Home() {
-  const [products, setProducts] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [products, setProducts] = useState(
+    () => productService.getCachedProducts() || []
+  );
+  const [loading, setLoading] = useState(
+    () => !(productService.getCachedProducts()?.length > 0)
+  );
 
   useEffect(() => {
     let isMounted = true;
@@ -119,15 +122,13 @@ function Home() {
           </div>
 
           {loading ? (
-            <div className="row g-3 g-md-4">
-              {[...Array(4)].map((_, i) => (
-                <div
-                  className="col-xl-3 col-lg-3 col-md-4 col-sm-6 col-6"
-                  key={i}
-                >
-                  <SkeletonCard />
-                </div>
-              ))}
+            <div className="py-5 text-center">
+              <div
+                className="spinner-border text-primary mb-3"
+                role="status"
+                style={{ width: "2.6rem", height: "2.6rem" }}
+              />
+              <h6 className="fw-bold mb-1">Loading Featured Products...</h6>
             </div>
           ) : homeProducts.length > 0 ? (
             <div className="row g-3 g-md-4">

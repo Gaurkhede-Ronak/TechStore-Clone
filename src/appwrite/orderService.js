@@ -392,7 +392,8 @@ class OrderService {
 
   async getDeliveredOrderForProduct(
     userId,
-    productId
+    productId,
+    productTitle = ""
   ) {
     try {
       const cleanUserId =
@@ -401,9 +402,14 @@ class OrderService {
       const cleanProductId =
         String(productId || "").trim();
 
+      const cleanProductTitle =
+        String(productTitle || "")
+          .trim()
+          .toLowerCase();
+
       if (
         !cleanUserId ||
-        !cleanProductId
+        (!cleanProductId && !cleanProductTitle)
       ) {
         return null;
       }
@@ -468,12 +474,31 @@ class OrderService {
             ]
               .filter(Boolean)
               .map((value) =>
-                String(value)
+                String(value).trim()
               );
 
-            return possibleProductIds.includes(
-              cleanProductId
-            );
+            if (
+              cleanProductId &&
+              possibleProductIds.includes(cleanProductId)
+            ) {
+              return true;
+            }
+
+            const itemTitle = String(
+              item.title || item.name || item.productName || ""
+            )
+              .trim()
+              .toLowerCase();
+
+            if (
+              cleanProductTitle &&
+              itemTitle &&
+              itemTitle === cleanProductTitle
+            ) {
+              return true;
+            }
+
+            return false;
           });
 
         if (!purchasedProduct) {
@@ -506,8 +531,6 @@ class OrderService {
             "Shipment lookup failed:",
             shipmentError
           );
-
-          continue;
         }
 
         const shipments =
@@ -525,11 +548,11 @@ class OrderService {
             return status === "DELIVERED";
           });
 
-        if (deliveredShipment) {
+        if (deliveredShipment || orderStatus === "delivered") {
           return {
             verified: true,
             order,
-            shipment: deliveredShipment,
+            shipment: deliveredShipment || shipments[0] || null,
             productId: cleanProductId,
           };
         }

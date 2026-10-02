@@ -9,165 +9,60 @@ const DATABASE_ID =
 const REVIEWS_COLLECTION_ID =
   import.meta.env.VITE_APPWRITE_REVIEWS_COLLECTION_ID;
 
-
 class ReviewService {
+  // Check Configuration
+  isConfigured() {
+    return Boolean(
+      DATABASE_ID &&
+      REVIEWS_COLLECTION_ID
+    );
+  }
 
-  // CREATE REVIEW
-
-  async createReview(data) {
-
-    try {
-
-      if (!data?.productName) {
-        throw new Error("Product name is required.");
-      }
-
-      if (!data?.customerName) {
-        throw new Error("Customer name is required.");
-      }
-
-      if (!data?.customerEmail) {
-        throw new Error("Customer email is required.");
-      }
-
-      if (!data?.review) {
-        throw new Error("Review text is required.");
-      }
-
-      const rating = Number(data.rating);
-
-      if (
-        !Number.isInteger(rating) ||
-        rating < 1 ||
-        rating > 5
-      ) {
-        throw new Error(
-          "Rating must be between 1 and 5."
-        );
-      }
-
-      const now =
-        new Date().toISOString();
-
-      const payload = {
-
-        productId:
-          String(data.productId || ""),
-
-        productName:
-          String(data.productName),
-
-        userId:
-          String(data.userId || ""),
-
-        customerName:
-          String(data.customerName),
-
-        customerEmail:
-          String(data.customerEmail),
-
-        rating,
-
-        review:
-          String(data.review),
-
-        status:
-          String(data.status || "Pending"),
-
-        orderId:
-          String(data.orderId || ""),
-
-        createdAt:
-          String(data.createdAt || now),
-
-      };
-
-      const response =
-        await databases.createDocument(
-          DATABASE_ID,
-          REVIEWS_COLLECTION_ID,
-          ID.unique(),
-          payload
-        );
-
-      console.log(
-        "✅ Review created:",
-        response
+  ensureConfigured() {
+    if (!this.isConfigured()) {
+      throw new Error(
+        "Appwrite Reviews collection is not configured. Check VITE_APPWRITE_REVIEWS_COLLECTION_ID in .env"
       );
-
-      return response;
-
-    } catch (error) {
-
-      console.error(
-        "❌ Create Review Error:",
-        error
-      );
-
-      throw error;
     }
   }
 
-
-  // GET ALL REVIEWS
-
-  async getReviews() {
-
+  // Get All Reviews (Admin Panel)
+  async getAllReviews() {
     try {
+      this.ensureConfigured();
 
-      const response =
-        await databases.listDocuments(
-          DATABASE_ID,
-          REVIEWS_COLLECTION_ID,
-          [
-            Query.orderDesc("$createdAt"),
-            Query.limit(100),
-          ]
-        );
-
-      return response;
-
-    } catch (error) {
-
-      console.error(
-        "❌ Get Reviews Error:",
-        error
-      );
-
-      throw error;
-    }
-  }
-
-
-  // GET SINGLE REVIEW
-
-  async getReview(documentId) {
-
-    try {
-
-      return await databases.getDocument(
+      return await databases.listDocuments(
         DATABASE_ID,
         REVIEWS_COLLECTION_ID,
-        documentId
+        [
+          Query.orderDesc("$createdAt"),
+          Query.limit(100),
+        ]
       );
-
     } catch (error) {
-
       console.error(
-        "❌ Get Review Error:",
+        "Get all reviews error:",
         error
       );
-
       throw error;
     }
   }
 
-
-  // GET REVIEWS BY PRODUCT
-
+  // Get Product Reviews (Customer Product Page)
+  // Returns all Approved & Pending verified buyer reviews (excludes Rejected)
   async getReviewsByProduct(productId) {
-
     try {
+      this.ensureConfigured();
+
+      const cleanProductId =
+        String(productId || "").trim();
+
+      if (!cleanProductId) {
+        return {
+          documents: [],
+          total: 0,
+        };
+      }
 
       const response =
         await databases.listDocuments(
@@ -176,35 +71,229 @@ class ReviewService {
           [
             Query.equal(
               "productId",
-              String(productId)
-            ),
-            Query.equal(
-              "status",
-              "Approved"
+              cleanProductId
             ),
             Query.orderDesc("$createdAt"),
+            Query.limit(100),
           ]
         );
 
-      return response.documents;
-
-    } catch (error) {
-
-      console.error(
-        "❌ Get Product Reviews Error:",
-        error
+      const visibleDocs = (
+        response?.documents || []
+      ).filter(
+        (doc) =>
+          String(doc?.status || "Approved")
+            .trim()
+            .toLowerCase() !== "rejected"
       );
 
+      return {
+        ...response,
+        documents: visibleDocs,
+        total: visibleDocs.length,
+      };
+    } catch (error) {
+      console.error(
+        "Get product reviews error:",
+        error
+      );
       throw error;
     }
   }
 
-
-  // GET REVIEWS BY USER
-
-  async getReviewsByUser(userId) {
-
+  // Create Review
+  async createReview(data) {
     try {
+      this.ensureConfigured();
+
+      const payload = {
+        customerName:
+          String(
+            data.customerName || "Customer"
+          ).trim(),
+
+        customerEmail:
+          String(
+            data.customerEmail || ""
+          ).trim(),
+
+        userId:
+          String(
+            data.userId || ""
+          ).trim(),
+
+        productId:
+          String(
+            data.productId || ""
+          ).trim(),
+
+        productName:
+          String(
+            data.productName || ""
+          ).trim(),
+
+        orderId:
+          String(
+            data.orderId || ""
+          ).trim(),
+
+        rating:
+          Math.min(
+            5,
+            Math.max(
+              1,
+              Number(data.rating || 5)
+            )
+          ),
+
+        review:
+          String(
+            data.review || ""
+          ).trim(),
+
+        status:
+          data.status || "Approved",
+
+        createdAt:
+          data.createdAt ||
+          new Date().toISOString(),
+      };
+
+      return await databases.createDocument(
+        DATABASE_ID,
+        REVIEWS_COLLECTION_ID,
+        ID.unique(),
+        payload
+      );
+    } catch (error) {
+      console.error(
+        "Create review error:",
+        error
+      );
+      throw error;
+    }
+  }
+
+  // Update Review Status (Approve / Reject / Pending)
+  async updateReviewStatus(
+    reviewId,
+    status
+  ) {
+    try {
+      this.ensureConfigured();
+
+      return await databases.updateDocument(
+        DATABASE_ID,
+        REVIEWS_COLLECTION_ID,
+        reviewId,
+        {
+          status,
+        }
+      );
+    } catch (error) {
+      console.error(
+        "Update review status error:",
+        error
+      );
+      throw error;
+    }
+  }
+
+  // Update Review Document
+  async updateReview(
+    reviewId,
+    data
+  ) {
+    try {
+      this.ensureConfigured();
+
+      return await databases.updateDocument(
+        DATABASE_ID,
+        REVIEWS_COLLECTION_ID,
+        reviewId,
+        data
+      );
+    } catch (error) {
+      console.error(
+        "Update review error:",
+        error
+      );
+      throw error;
+    }
+  }
+
+  // Delete Review
+  async deleteReview(reviewId) {
+    try {
+      this.ensureConfigured();
+
+      return await databases.deleteDocument(
+        DATABASE_ID,
+        REVIEWS_COLLECTION_ID,
+        reviewId
+      );
+    } catch (error) {
+      console.error(
+        "Delete review error:",
+        error
+      );
+      throw error;
+    }
+  }
+
+  // Get Reviews By User
+  async getReviewsByUser(userId) {
+    try {
+      this.ensureConfigured();
+
+      if (!userId) {
+        return {
+          documents: [],
+          total: 0,
+        };
+      }
+
+      return await databases.listDocuments(
+        DATABASE_ID,
+        REVIEWS_COLLECTION_ID,
+        [
+          Query.equal(
+            "userId",
+            String(userId)
+          ),
+          Query.orderDesc("$createdAt"),
+          Query.limit(100),
+        ]
+      );
+    } catch (error) {
+      console.error(
+        "Get user reviews error:",
+        error
+      );
+      throw error;
+    }
+  }
+
+  // Get User Review For Product
+  async getUserReviewForProduct(
+    userId,
+    productId
+  ) {
+    try {
+      this.ensureConfigured();
+
+      const cleanUserId =
+        String(userId || "").trim();
+
+      const cleanProductId =
+        String(productId || "").trim();
+
+      if (
+        !cleanUserId ||
+        !cleanProductId
+      ) {
+        return null;
+      }
 
       const response =
         await databases.listDocuments(
@@ -213,148 +302,32 @@ class ReviewService {
           [
             Query.equal(
               "userId",
-              String(userId)
+              cleanUserId
             ),
-            Query.orderDesc("$createdAt"),
-          ]
-        );
-
-      return response.documents;
-
-    } catch (error) {
-
-      console.error(
-        "❌ Get User Reviews Error:",
-        error
-      );
-
-      throw error;
-    }
-  }
-
-
-  // GET REVIEWS BY STATUS
-
-  async getReviewsByStatus(status) {
-
-    try {
-
-      const response =
-        await databases.listDocuments(
-          DATABASE_ID,
-          REVIEWS_COLLECTION_ID,
-          [
             Query.equal(
-              "status",
-              String(status)
+              "productId",
+              cleanProductId
             ),
             Query.orderDesc("$createdAt"),
+            Query.limit(1),
           ]
         );
 
-      return response.documents;
-
+      return (
+        response?.documents?.[0] ||
+        null
+      );
     } catch (error) {
-
       console.error(
-        "❌ Get Status Reviews Error:",
+        "Get user product review error:",
         error
       );
-
-      throw error;
+      return null;
     }
   }
-
-
-  // UPDATE REVIEW
-
-  async updateReview(
-    documentId,
-    data
-  ) {
-
-    try {
-
-      return await databases.updateDocument(
-        DATABASE_ID,
-        REVIEWS_COLLECTION_ID,
-        documentId,
-        data
-      );
-
-    } catch (error) {
-
-      console.error(
-        "❌ Update Review Error:",
-        error
-      );
-
-      throw error;
-    }
-  }
-
-
-  // UPDATE STATUS
-
-  async updateReviewStatus(
-    documentId,
-    status
-  ) {
-
-    try {
-
-      return await databases.updateDocument(
-        DATABASE_ID,
-        REVIEWS_COLLECTION_ID,
-        documentId,
-        {
-          status: String(status),
-        }
-      );
-
-    } catch (error) {
-
-      console.error(
-        "❌ Update Review Status Error:",
-        error
-      );
-
-      throw error;
-    }
-  }
-
-
-  // DELETE REVIEW
-
-  async deleteReview(documentId) {
-
-    try {
-
-      await databases.deleteDocument(
-        DATABASE_ID,
-        REVIEWS_COLLECTION_ID,
-        documentId
-      );
-
-      console.log(
-        "✅ Review deleted:",
-        documentId
-      );
-
-      return true;
-
-    } catch (error) {
-
-      console.error(
-        "❌ Delete Review Error:",
-        error
-      );
-
-      throw error;
-    }
-  }
-
 }
 
+const reviewService =
+  new ReviewService();
 
-export default new ReviewService();
+export default reviewService;

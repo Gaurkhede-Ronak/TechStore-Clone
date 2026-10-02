@@ -1,9 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-
-import {
-  indianStates,
-  getCitiesByState,
-} from "../data/indiaLocations";
+import { useEffect, useMemo, useState } from "react";
 
 import { useSelector, useDispatch } from "react-redux";
 
@@ -37,6 +32,7 @@ import {
 } from "react-icons/fa";
 
 import "../css/Checkout.css";
+import { scrollToPageTop } from "../components/ScrollToTop";
 
 import authService from "../appwrite/authService";
 import orderService from "../appwrite/orderService";
@@ -187,166 +183,16 @@ function normalizePromotionDetails(data) {
   return result;
 }
 
-
-  // PREMIUM CUSTOM SELECT
-
-function CheckoutCustomSelect({
-  value = "",
-  onChange,
-  options = [],
-  placeholder = "Select",
-  disabled = false,
-}) {
-  const [open, setOpen] = useState(false);
-  const dropdownRef = useRef(null);
-
-  useEffect(() => {
-    const handleOutsideClick = (event) => {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(event.target)
-      ) {
-        setOpen(false);
-      }
-    };
-
-    const handleEscape = (event) => {
-      if (event.key === "Escape") {
-        setOpen(false);
-      }
-    };
-
-    document.addEventListener(
-      "mousedown",
-      handleOutsideClick
-    );
-
-    document.addEventListener(
-      "keydown",
-      handleEscape
-    );
-
-    return () => {
-      document.removeEventListener(
-        "mousedown",
-        handleOutsideClick
-      );
-
-      document.removeEventListener(
-        "keydown",
-        handleEscape
-      );
-    };
-  }, []);
-
-  const handleSelect = (option) => {
-    onChange(option);
-    setOpen(false);
-  };
-
-  return (
-    <div
-      ref={dropdownRef}
-      className={`checkout-custom-select ${
-        open ? "is-open" : ""
-      } ${disabled ? "is-disabled" : ""}`}
-    >
-      <button
-        type="button"
-        className="checkout-custom-select-trigger"
-        onClick={() => {
-          if (!disabled) {
-            setOpen((prev) => !prev);
-          }
-        }}
-        disabled={disabled}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-      >
-        <span
-          className={
-            value
-              ? "checkout-custom-select-value"
-              : "checkout-custom-select-placeholder"
-          }
-        >
-          {value || placeholder}
-        </span>
-
-        <span className="checkout-custom-select-arrow">
-          <span className="checkout-custom-select-arrow-line" />
-        </span>
-      </button>
-
-      {open && !disabled && (
-        <div
-          className="checkout-custom-select-menu"
-          role="listbox"
-        >
-          <button
-            type="button"
-            className={`checkout-custom-select-option ${
-              !value ? "active" : ""
-            }`}
-            onClick={() => handleSelect("")}
-            role="option"
-            aria-selected={!value}
-          >
-            <span>{placeholder}</span>
-
-            {!value && (
-              <FaCheckCircle
-                className="checkout-custom-select-check"
-              />
-            )}
-          </button>
-
-          {options.length > 0 ? (
-            options.map((option) => {
-              const selected =
-                String(value) === String(option);
-
-              return (
-                <button
-                  type="button"
-                  key={option}
-                  className={`checkout-custom-select-option ${
-                    selected ? "active" : ""
-                  }`}
-                  onClick={() =>
-                    handleSelect(option)
-                  }
-                  role="option"
-                  aria-selected={selected}
-                >
-                  <span>{option}</span>
-
-                  {selected && (
-                    <FaCheckCircle
-                      className="checkout-custom-select-check"
-                    />
-                  )}
-                </button>
-              );
-            })
-          ) : (
-            <div className="checkout-custom-select-empty">
-              {disabled
-                ? "Select State First"
-                : "No options available"}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-
   // CHECKOUT
 
 function Checkout() {
   const navigate = useNavigate();
+
+  useEffect(() => {
+    scrollToPageTop();
+    const timer = setTimeout(() => scrollToPageTop(), 80);
+    return () => clearTimeout(timer);
+  }, []);
   const dispatch = useDispatch();
   const location = useLocation();
 
@@ -524,20 +370,6 @@ function Checkout() {
     });
 
 
-  // CITIES
-
-  const availableCities = useMemo(() => {
-    const base = getCitiesByState(formData.state) || [];
-    if (
-      formData.city &&
-      !base.includes(formData.city)
-    ) {
-      return [formData.city, ...base];
-    }
-    return base;
-  }, [formData.state, formData.city]);
-
-
   // PAYMENT
 
   const isCOD =
@@ -665,29 +497,12 @@ function Checkout() {
             }
           }
 
-          const extracted = Array.from(uniqueMap.values());
+          const extracted = Array.from(uniqueMap.values()).slice(0, 2);
           if (mounted) {
             setSavedAddresses(extracted);
             if (extracted.length > 0) {
               const first = extracted[0];
               setSelectedAddressId(first.id);
-              const matchedState =
-                indianStates.find(
-                  (s) =>
-                    s.toLowerCase() ===
-                    String(first.state || "").trim().toLowerCase()
-                ) ||
-                first.state ||
-                "";
-              const stateCities = getCitiesByState(matchedState) || [];
-              const matchedCity =
-                stateCities.find(
-                  (c) =>
-                    c.toLowerCase() ===
-                    String(first.city || "").trim().toLowerCase()
-                ) ||
-                first.city ||
-                "";
 
               setFormData((prev) => {
                 if (prev.address && prev.pincode) return prev;
@@ -696,8 +511,8 @@ function Checkout() {
                   fullName: first.fullName || user?.name || "",
                   email: first.email || user?.email || "",
                   phone: first.phone || "",
-                  state: matchedState,
-                  city: matchedCity,
+                  state: String(first.state || "").trim(),
+                  city: String(first.city || "").trim(),
                   pincode: first.pincode || "",
                   address: first.address || "",
                 };
@@ -933,19 +748,6 @@ function Checkout() {
   function handleSelectSavedAddress(addr) {
     if (!addr) return;
     setSelectedAddressId(addr.id);
-    const matchedState =
-      indianStates.find(
-        (s) => s.toLowerCase() === String(addr.state || "").trim().toLowerCase()
-      ) ||
-      addr.state ||
-      "";
-    const stateCities = getCitiesByState(matchedState) || [];
-    const matchedCity =
-      stateCities.find(
-        (c) => c.toLowerCase() === String(addr.city || "").trim().toLowerCase()
-      ) ||
-      addr.city ||
-      "";
 
     setFormData((prev) => ({
       ...prev,
@@ -954,8 +756,8 @@ function Checkout() {
       phone: String(addr.phone || "")
         .replace(/\D/g, "")
         .slice(-10),
-      state: matchedState,
-      city: matchedCity,
+      state: String(addr.state || "").trim(),
+      city: String(addr.city || "").trim(),
       pincode: String(addr.pincode || "")
         .replace(/\D/g, "")
         .slice(0, 6),
@@ -1036,13 +838,11 @@ function Checkout() {
       setFormData((prev) => ({
         ...prev,
         state: value,
-        city: "",
       }));
 
       setErrors((prev) => ({
         ...prev,
         state: "",
-        city: "",
       }));
 
       return;
@@ -1155,14 +955,6 @@ function Checkout() {
     if (!formData.city.trim()) {
       newErrors.city =
         "City is required";
-    } else if (
-      formData.state &&
-      availableCities.length > 0 &&
-      !availableCities.includes(formData.city) &&
-      !savedAddresses.some((a) => a.city === formData.city)
-    ) {
-      newErrors.city =
-        "Please select a valid city for this state";
     }
 
 
@@ -2054,7 +1846,7 @@ function Checkout() {
                   </div>
 
                   <div className="checkout-saved-addresses-grid">
-                    {savedAddresses.map((addr, idx) => {
+                    {savedAddresses.slice(0, 2).map((addr, idx) => {
                       const isSelected = selectedAddressId === addr.id;
                       return (
                         <div
@@ -2242,18 +2034,13 @@ function Checkout() {
                       />
                     </span>
 
-                    <CheckoutCustomSelect
+                    <input
+                      type="text"
+                      className="form-control border-start-0 ps-0"
+                      placeholder="Enter State"
+                      name="state"
                       value={formData.state}
-                      onChange={(value) =>
-                        handleChange({
-                          target: {
-                            name: "state",
-                            value,
-                          },
-                        })
-                      }
-                      options={indianStates}
-                      placeholder="Select State"
+                      onChange={handleChange}
                     />
 
                   </div>
@@ -2282,23 +2069,13 @@ function Checkout() {
                       />
                     </span>
 
-                    <CheckoutCustomSelect
+                    <input
+                      type="text"
+                      className="form-control border-start-0 ps-0"
+                      placeholder="Enter City"
+                      name="city"
                       value={formData.city}
-                      onChange={(value) =>
-                        handleChange({
-                          target: {
-                            name: "city",
-                            value,
-                          },
-                        })
-                      }
-                      options={availableCities}
-                      placeholder={
-                        formData.state
-                          ? "Select City"
-                          : "Select State First"
-                      }
-                      disabled={!formData.state}
+                      onChange={handleChange}
                     />
 
                   </div>
