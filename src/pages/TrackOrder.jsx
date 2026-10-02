@@ -41,7 +41,6 @@ import shipmentEventService from "../appwrite/shipmentEventService";
 import warehouseService from "../appwrite/warehouseService";
 import orderService from "../appwrite/orderService";
 import returnExchangeService from "../appwrite/returnExchangeService";
-import deliveryOtpService from "../appwrite/deliveryOtpService";
 
 import "../css/TrackOrder.css";
 
@@ -392,7 +391,6 @@ function TrackOrder() {
   const [order, setOrder] = useState(stateOrder);
   const [returnRequest, setReturnRequest] = useState(null);
   const [assignedDeliveryBoy, setAssignedDeliveryBoy] = useState(null);
-  const [activeDeliveryOtp, setActiveDeliveryOtp] = useState("");
   const [phoneRollSeed, setPhoneRollSeed] = useState(() =>
     Math.floor(Math.random() * 100)
   );
@@ -738,31 +736,6 @@ function TrackOrder() {
           setAssignedDeliveryBoy(boyInfo);
         } else {
           setAssignedDeliveryBoy(null);
-        }
-
-        if (normSt === "OUT_FOR_DELIVERY" && shipmentData?.$id) {
-          try {
-            let otpDoc = await deliveryOtpService.getActiveOtpByShipmentId(
-              shipmentData.$id
-            );
-            let otpVal = String(otpDoc?.otp || otpDoc?.otpCode || "").trim();
-            if (!otpVal) {
-              const gen = await deliveryOtpService.generateOtp({
-                shipmentId: String(shipmentData.$id),
-                orderId: String(resolvedOrderId || ""),
-                userId: String(shipmentData.userId || orderData?.userId || ""),
-                trackingId: String(shipmentData.trackingId || ""),
-              });
-              if (gen?.success && gen?.otp) {
-                otpVal = String(gen.otp).trim();
-              }
-            }
-            setActiveDeliveryOtp(otpVal);
-          } catch {
-            setActiveDeliveryOtp("");
-          }
-        } else {
-          setActiveDeliveryOtp("");
         }
 
         setTrackingInput(
@@ -1255,32 +1228,6 @@ function TrackOrder() {
             <small className="cp-agent-privacy-note">
               Hub Code: {detectedCourier.code}-LM-{destCode}
             </small>
-            {currentStatus === "OUT_FOR_DELIVERY" && activeDeliveryOtp && (
-              <button
-                type="button"
-                onClick={() => handleCopy(activeDeliveryOtp, "Delivery OTP")}
-                style={{
-                  marginTop: "8px",
-                  padding: "6px 12px",
-                  borderRadius: "999px",
-                  border: "1.5px dashed #3b82f6",
-                  background: "rgba(37, 99, 235, 0.12)",
-                  color: "#2563eb",
-                  fontWeight: 800,
-                  fontSize: "0.82rem",
-                  letterSpacing: "1.5px",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  cursor: "pointer",
-                }}
-                title="Click to copy Delivery OTP"
-              >
-                <FaShieldAlt size={12} />
-                <span>OTP: {activeDeliveryOtp}</span>
-                <FaCopy size={11} />
-              </button>
-            )}
           </div>
         </div>
       </div>

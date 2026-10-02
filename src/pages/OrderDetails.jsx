@@ -518,7 +518,38 @@ function OrderDetails() {
     return [];
   }, [order]);
 
+  const [selectedProductOverride, setSelectedProductOverride] = useState(null);
+
+  useEffect(() => {
+    setSelectedProductOverride(null);
+  }, [location.search]);
+
   const { activeProduct, activeProductIndex } = useMemo(() => {
+    if (selectedProductOverride && rawOrderItems.length > 0) {
+      const overrideId = String(
+        selectedProductOverride?.productId ||
+          selectedProductOverride?.id ||
+          selectedProductOverride?.$id ||
+          ""
+      ).trim();
+      const overrideTitle = String(
+        selectedProductOverride?.title || selectedProductOverride?.name || ""
+      ).trim();
+      const overrideIdx = rawOrderItems.findIndex(
+        (it) =>
+          it === selectedProductOverride ||
+          (overrideId &&
+            String(it?.productId || it?.id || it?.$id || "").trim() ===
+              overrideId) ||
+          (overrideTitle &&
+            String(it?.title || it?.name || "").trim() === overrideTitle)
+      );
+      return {
+        activeProduct:
+          overrideIdx >= 0 ? rawOrderItems[overrideIdx] : selectedProductOverride,
+        activeProductIndex: overrideIdx >= 0 ? overrideIdx : 0,
+      };
+    }
     const params = new URLSearchParams(location.search);
     const paramIdx = params.get("itemIdx");
     const paramItemId = params.get("itemId");
@@ -584,7 +615,7 @@ function OrderDetails() {
       activeProduct: stateSingle || {},
       activeProductIndex: 0,
     };
-  }, [location.search, location.state, order?.singleProduct, rawOrderItems]);
+  }, [selectedProductOverride, location.search, location.state, order?.singleProduct, rawOrderItems]);
 
   const otherProducts =
     rawOrderItems.filter(
@@ -4209,23 +4240,54 @@ function OrderDetails() {
                         width: "100px",
                       }}
                       onClick={() => {
-                        setOrder(
-                          (
-                            previous
-                          ) => ({
-                            ...previous,
-                            singleProduct:
-                              item,
-                          })
+                        const clickedIdx = rawOrderItems.findIndex(
+                          (it) =>
+                            it === item ||
+                            JSON.stringify(it) === JSON.stringify(item)
+                        );
+                        const itemProdId = String(
+                          item?.productId || item?.id || item?.$id || ""
+                        ).trim();
+
+                        setSelectedProductOverride(item);
+                        setOrder((previous) =>
+                          previous
+                            ? {
+                                ...previous,
+                                singleProduct: item,
+                              }
+                            : previous
                         );
 
-                        window.scrollTo(
-                          {
-                            top: 0,
-                            behavior:
-                              "smooth",
-                          }
-                        );
+                        const params = new URLSearchParams(location.search);
+                        const ordRef =
+                          params.get("orderId") ||
+                          order?.orderId ||
+                          order?.$id ||
+                          "";
+                        if (ordRef) {
+                          params.set("orderId", String(ordRef));
+                        }
+                        if (clickedIdx >= 0) {
+                          params.set("itemIdx", String(clickedIdx));
+                        }
+                        if (itemProdId) {
+                          params.set("itemId", itemProdId);
+                        }
+
+                        navigate(`/order-details?${params.toString()}`, {
+                          replace: false,
+                          state: {
+                            ...(location.state || {}),
+                            order: order
+                              ? { ...order, singleProduct: item }
+                              : order,
+                            singleProduct: item,
+                            itemIndex: clickedIdx >= 0 ? clickedIdx : 0,
+                          },
+                        });
+
+                        scrollToPageTop();
                       }}
                     >
 

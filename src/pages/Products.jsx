@@ -25,7 +25,7 @@ function Products() {
   );
 
   const [sort, setSort] = useState("");
-  const [maxPrice, setMaxPrice] = useState(100000);
+  const [maxPrice, setMaxPrice] = useState(1000000000);
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -741,7 +741,7 @@ function Products() {
                   type="range"
                   className="form-range premium-range"
                   min="0"
-                  max="100000"
+                  max="1000000000"
                   step="1000"
                   value={maxPrice}
                   onChange={(e) =>
