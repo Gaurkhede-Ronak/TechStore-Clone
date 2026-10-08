@@ -1,6 +1,6 @@
 import { scrollToPageTop } from "../components/ScrollToTop";
 import { useEffect, useState } from "react";
-
+import { useDispatch } from "react-redux";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import {
@@ -19,6 +19,9 @@ import toast from "react-hot-toast";
 
 import orderService from "../appwrite/orderService";
 import walletService from "../appwrite/walletService";
+import couponService from "../appwrite/couponService";
+import notificationService from "../appwrite/notificationService";
+import { clearCart } from "../redux/slices/cartSlice";
 
 import "../css/Payment.css";
 
@@ -27,6 +30,7 @@ import "../css/Payment.css";
 function UPIPayment() {
 
     const navigate = useNavigate();
+    const dispatch = useDispatch();
   useEffect(() => {
     scrollToPageTop();
   }, []);
@@ -34,6 +38,7 @@ function UPIPayment() {
     const location = useLocation();
 
     const order = location.state || {};
+
 
 
 
@@ -303,15 +308,41 @@ function UPIPayment() {
 
             // =================================================
             // STEP 1
-            // COMPLETE UPI PAYMENT IN APPWRITE
+            // CREATE & COMPLETE UPI ORDER IN APPWRITE
+            // (Order is ONLY placed after user clicks "I Have Paid")
             // =================================================
 
-            const paidOrder =
-                await orderService.completePayment(
-                    order?.$id ||
-                    order?.orderId,
-                    "UPI"
-                );
+            let paidOrder = null;
+
+            if (order?.$id) {
+                paidOrder =
+                    await orderService.completePayment(
+                        order.$id,
+                        "UPI"
+                    );
+            } else {
+                const serializedItems =
+                    typeof order?.items === "string"
+                        ? order.items
+                        : JSON.stringify(order?.items || []);
+
+                const orderPayload = {
+                    ...order,
+                    payment: "UPI",
+                    paymentStatus: "PAID",
+                    status: "Placed",
+                    upiPaid: onlinePayable,
+                    onlinePaid: onlinePayable,
+                    totalPaid: Number((walletPaid + onlinePayable).toFixed(2)),
+                    items: serializedItems,
+                };
+
+                paidOrder =
+                    await orderService.addOrder(
+                        orderPayload,
+                        { createShipment: true }
+                    );
+            }
 
 
 
@@ -350,6 +381,52 @@ function UPIPayment() {
 
             // =================================================
             // STEP 3
+            // COUPON USAGE & NOTIFICATION & CLEAR CART
+            // =================================================
+
+            if (order?.appliedCoupon?.$id) {
+                try {
+                    await couponService.increaseUsage(
+                        order.appliedCoupon.$id,
+                        order.appliedCoupon.usedCount
+                    );
+                } catch (couponErr) {
+                    console.error("Coupon usage update failed:", couponErr);
+                }
+            }
+
+            try {
+                await notificationService.createNotification({
+                    userId: String(userId),
+                    type: "ORDER_PLACED",
+                    title: "Order Placed Successfully 🛒",
+                    message:
+                        `Your order ${orderId} has been placed successfully via UPI. ` +
+                        "We will notify you when your order status changes.",
+                    orderId: String(orderId || ""),
+                    shipmentId: String(
+                        paidOrder?.shipment?.$id ||
+                        paidOrder?.shipmentId ||
+                        ""
+                    ),
+                    trackingId: String(
+                        paidOrder?.trackingId ||
+                        paidOrder?.shipment?.trackingId ||
+                        ""
+                    ),
+                    isRead: false,
+                    createdAt: new Date().toISOString(),
+                });
+            } catch (notifErr) {
+                console.error("Order placed notification failed:", notifErr);
+            }
+
+            dispatch(clearCart());
+
+
+
+            // =================================================
+            // STEP 4
             // FINAL ORDER STATE
             // =================================================
 
@@ -358,6 +435,8 @@ function UPIPayment() {
                 ...order,
 
                 ...paidOrder,
+
+                items: order?.items,
 
                 payment:
                     "UPI",
@@ -436,8 +515,8 @@ function UPIPayment() {
 
             toast.success(
                 walletPaid > 0
-                    ? "UPI Payment Successful & Wallet Updated!"
-                    : "UPI Payment Successful!"
+                    ? "UPI Payment Verified, Order Placed & Wallet Updated!"
+                    : "UPI Payment Verified & Order Placed Successfully!"
             );
 
 

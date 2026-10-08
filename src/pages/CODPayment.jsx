@@ -1,5 +1,6 @@
 import { scrollToPageTop } from "../components/ScrollToTop";
 import { useLocation, useNavigate } from "react-router-dom";
+import { useDispatch } from "react-redux";
 import {
   FaMoneyBillWave,
   FaTruck,
@@ -8,16 +9,22 @@ import {
   FaWallet,
   FaCheckCircle,
   FaSpinner,
+  FaArrowLeft,
 } from "react-icons/fa";
 import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 
+import orderService from "../appwrite/orderService";
 import walletService from "../appwrite/walletService";
+import couponService from "../appwrite/couponService";
+import notificationService from "../appwrite/notificationService";
+import { clearCart } from "../redux/slices/cartSlice";
 
 import "../css/Payment.css";
 
 function CODPayment() {
   const navigate = useNavigate();
+  const dispatch = useDispatch();
   useEffect(() => {
     scrollToPageTop();
   }, []);
@@ -26,6 +33,7 @@ function CODPayment() {
   const order = useMemo(() => location.state || {}, [location.state]);
 
   const [processing, setProcessing] = useState(false);
+
 
   // PAYMENT AMOUNTS
 
@@ -147,7 +155,32 @@ function CODPayment() {
     setProcessing(true);
 
     try {
-  // DEDUCT WALLET
+  // STEP 1: CREATE ORDER & SHIPMENT IN APPWRITE ON CONFIRMATION
+      let savedOrder = null;
+
+      if (!order?.$id) {
+        const serializedItems =
+          typeof order?.items === "string"
+            ? order.items
+            : JSON.stringify(order?.items || []);
+
+        const orderPayload = {
+          ...order,
+          payment: "COD",
+          paymentStatus: "COD_PENDING",
+          status: "Placed",
+          payableAmount: codAmount,
+          total: codAmount,
+          totalPaid: walletPaid,
+          items: serializedItems,
+        };
+
+        savedOrder = await orderService.addOrder(orderPayload, {
+          createShipment: true,
+        });
+      }
+
+  // STEP 2: DEDUCT WALLET
 
       let walletResult = null;
 
@@ -170,6 +203,7 @@ function CODPayment() {
 
               orderId:
                 order.orderId ||
+                savedOrder?.$id ||
                 order.$id ||
                 "",
 
@@ -179,12 +213,58 @@ function CODPayment() {
               description:
                 `Wallet Payment for Order ${
                   order.orderId ||
+                  savedOrder?.$id ||
                   order.$id ||
                   ""
                 }`,
             }
           );
       }
+
+  // STEP 3: COUPON USAGE & NOTIFICATION & CLEAR CART
+
+      if (order?.appliedCoupon?.$id) {
+        try {
+          await couponService.increaseUsage(
+            order.appliedCoupon.$id,
+            order.appliedCoupon.usedCount
+          );
+        } catch (couponErr) {
+          console.error("Coupon usage update failed:", couponErr);
+        }
+      }
+
+      if (order?.userId) {
+        try {
+          await notificationService.createNotification({
+            userId: String(order.userId),
+            type: "ORDER_PLACED",
+            title: "Order Placed Successfully 🛒",
+            message:
+              `Your order ${order.orderId || savedOrder?.orderId || ""} has been confirmed & placed successfully. ` +
+              "We will notify you when your order status changes.",
+            orderId: String(order.orderId || savedOrder?.orderId || ""),
+            shipmentId: String(
+              savedOrder?.shipment?.$id ||
+              savedOrder?.shipmentId ||
+              order?.shipment?.$id ||
+              ""
+            ),
+            trackingId: String(
+              savedOrder?.trackingId ||
+              savedOrder?.shipment?.trackingId ||
+              order?.trackingId ||
+              ""
+            ),
+            isRead: false,
+            createdAt: new Date().toISOString(),
+          });
+        } catch (notifErr) {
+          console.error("Order placed notification failed:", notifErr);
+        }
+      }
+
+      dispatch(clearCart());
 
   // WALLET USAGE DETAILS
 
@@ -215,6 +295,9 @@ function CODPayment() {
 
       const finalOrder = {
         ...order,
+        ...(savedOrder || {}),
+
+        items: order.items,
 
   // PAYMENT
 
@@ -298,8 +381,8 @@ function CODPayment() {
 
       toast.success(
         walletPaid > 0
-          ? "Order Confirmed & Wallet Updated!"
-          : "Order Confirmed"
+          ? "Order Confirmed, Placed & Wallet Updated!"
+          : "Order Confirmed & Placed Successfully!"
       );
 
       navigate(
@@ -540,6 +623,17 @@ function CODPayment() {
             </>
           )}
         </button>
+
+        {!processing && (
+          <button
+            type="button"
+            className="btn btn-light w-100 mt-3 fw-semibold d-flex align-items-center justify-content-center gap-2"
+            onClick={() => navigate(-1)}
+          >
+            <FaArrowLeft />
+            Back to Checkout
+          </button>
+        )}
 
         {/* SECURITY */}
 

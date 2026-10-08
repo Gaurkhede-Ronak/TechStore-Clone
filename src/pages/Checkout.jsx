@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { useSelector, useDispatch } from "react-redux";
+import { useSelector } from "react-redux";
 
 import {
   useNavigate,
@@ -36,11 +36,8 @@ import { scrollToPageTop } from "../components/ScrollToTop";
 
 import authService from "../appwrite/authService";
 import orderService from "../appwrite/orderService";
-import couponService from "../appwrite/couponService";
-import notificationService from "../appwrite/notificationService";
 import walletService from "../appwrite/walletService";
 
-import { clearCart } from "../redux/slices/cartSlice";
 
 
   // ORDER IDENTIFIERS
@@ -193,7 +190,6 @@ function Checkout() {
     const timer = setTimeout(() => scrollToPageTop(), 80);
     return () => clearTimeout(timer);
   }, []);
-  const dispatch = useDispatch();
   const location = useLocation();
 
   const cartItems = useSelector(
@@ -1324,390 +1320,112 @@ function Checkout() {
         };
 
 
-  // SAVE ORDER
-        //
-        // COD:
-        // shipment is created immediately.
-        //
-        // UPI/Card:
-        // shipment is created only after payment succeeds.
-        // =====================================================
-
-  // APPWRITE ORDER PAYLOAD DEBUG
-        console.log(
-          "========== ORDER APPWRITE TEST =========="
-        );
-        console.table({
-          databaseId:
-            "6a62302900356784577e",
-          collectionId:
-            "orders",
-          total:
-            orderData.total,
-          gstApplied:
-            orderData.gstApplied,
-          platformFee:
-            orderData.platformFee,
-          orderGrandTotal:
-            orderData.orderGrandTotal,
-          payableAmount:
-            orderData.payableAmount,
-          walletPaid:
-            orderData.walletPaid,
-          upiPaid:
-            orderData.upiPaid,
-          cardPaid:
-            orderData.cardPaid,
-          onlinePaid:
-            orderData.onlinePaid,
-          totalPaid:
-            orderData.totalPaid,
-        });
-        console.log(
-          "Full orderData:",
-          orderData
-        );
-        console.log(
-          "========== ORDER APPWRITE TEST END =========="
-        );
-
-        const savedOrder =
-          await orderService.addOrder(
-            orderData,
-            {
-              createShipment:
-                isCOD,
-            }
-          );
-
-
-        const savedOrderId =
-          savedOrder?.$id ||
-          orderData.orderId;
-
-
-  // CUSTOMER ORDER PLACED NOTIFICATION
-
-        try {
-          await notificationService.createNotification(
-            {
-              userId:
-                String(user.$id),
-
-              type:
-                "ORDER_PLACED",
-
-              title:
-                "Order Placed Successfully 🛒",
-
-              message:
-                `Your order ${orderData.orderId} has been placed successfully. ` +
-                "We will notify you when your order status changes.",
-
-              orderId:
-                String(
-                  orderData.orderId ||
-                  ""
-                ),
-
-              shipmentId:
-                String(
-                  savedOrder?.shipment?.$id ||
-                  savedOrder?.shipmentId ||
-                  ""
-                ),
-
-              trackingId:
-                String(
-                  savedOrder?.trackingId ||
-                  savedOrder?.shipment?.trackingId ||
-                  ""
-                ),
-
-              isRead:
-                false,
-
-              createdAt:
-                new Date().toISOString(),
-            }
-          );
-        } catch (
-          notificationError
-        ) {
-          console.error(
-            "Order placed notification failed:",
-            notificationError
-          );
-        }
-
-
-  // FULL ORDER STATE
+  // PREPARE ORDER STATE FOR PAYMENT CONFIRMATION
+        // Order is ONLY placed in Appwrite when:
+        // - COD: User clicks "Confirm Order" on /cod-payment
+        // - UPI: User clicks "I Have Paid" on /upi-payment
+        // - CARD: User enters valid card details & clicks "Pay Now" on /card-payment
 
         const fullOrderState = {
           ...orderData,
 
-          $id:
-            savedOrder?.$id ||
-            "",
+          $id: "",
 
-          savedOrderId,
+          savedOrderId: orderData.orderId,
 
           gstApplied,
 
-          platformFee:
-            safePlatformFee,
+          platformFee: safePlatformFee,
 
+          appliedCoupon: appliedCoupon || null,
 
   // ORIGINAL ORDER TOTAL
 
-          orderGrandTotal:
-            Number(finalTotal),
-
+          orderGrandTotal: Number(finalTotal),
 
   // WALLET
 
-          walletPaid:
-            Number(finalWalletPaid),
+          walletPaid: Number(finalWalletPaid),
 
-          walletMonthlyPromotionUsed:
-            Number(
-              finalWalletUsage.monthlyPromotion ||
-              0
-            ),
+          walletMonthlyPromotionUsed: Number(
+            finalWalletUsage.monthlyPromotion || 0
+          ),
 
-          walletWelcomePromotionUsed:
-            Number(
-              finalWalletUsage.welcomePromotion ||
-              0
-            ),
+          walletWelcomePromotionUsed: Number(
+            finalWalletUsage.welcomePromotion || 0
+          ),
 
-          walletUserMoneyUsed:
-            Number(
-              finalWalletUsage.userMoney ||
-              0
-            ),
+          walletUserMoneyUsed: Number(
+            finalWalletUsage.userMoney || 0
+          ),
 
-          walletBalanceBefore:
-            Number(
-              walletBalance || 0
-            ),
+          walletBalanceBefore: Number(walletBalance || 0),
 
-          walletRemainingPayable:
-            Number(
-              finalPayableAmount
-            ),
+          walletRemainingPayable: Number(finalPayableAmount),
 
-          walletPaymentPending:
-            finalWalletPaid > 0,
-
+          walletPaymentPending: finalWalletPaid > 0,
 
   // PAYMENT
 
-          upiPaid:
-            isUPI
-              ? Number(
-                  finalPayableAmount
-                )
-              : 0,
+          upiPaid: isUPI ? Number(finalPayableAmount) : 0,
 
-          cardPaid:
-            isCARD
-              ? Number(
-                  finalPayableAmount
-                )
-              : 0,
+          cardPaid: isCARD ? Number(finalPayableAmount) : 0,
 
-          codAmount:
-            isCOD
-              ? Number(
-                  finalPayableAmount
-                )
-              : 0,
+          codAmount: isCOD ? Number(finalPayableAmount) : 0,
 
           onlinePaid:
-            isUPI || isCARD
-              ? Number(
-                  finalPayableAmount
-                )
-              : 0,
+            isUPI || isCARD ? Number(finalPayableAmount) : 0,
 
-          totalPaid:
-            isCOD
-              ? Number(
-                  finalWalletPaid
-                )
-              : Number(
-                  finalWalletPaid +
-                  finalPayableAmount
-                ),
-
+          totalPaid: isCOD
+            ? Number(finalWalletPaid)
+            : Number(finalWalletPaid + finalPayableAmount),
 
   // ITEMS
 
-          items:
-            cartItems,
-
+          items: cartItems,
 
   // SHIPPING ADDRESS
 
           shippingAddress: {
-            fullName:
-              formData.fullName.trim(),
-
-            phone:
-              "+91 " +
-              formData.phone,
-
-            address:
-              formData.address.trim(),
-
-            city:
-              formData.city,
-
-            state:
-              formData.state,
-
-            pincode:
-              formData.pincode,
+            fullName: formData.fullName.trim(),
+            phone: "+91 " + formData.phone,
+            address: formData.address.trim(),
+            city: formData.city,
+            state: formData.state,
+            pincode: formData.pincode,
           },
 
+  // SHIPMENT (will be created when order is confirmed/paid)
 
-  // SHIPMENT
-
-          shipment:
-            savedOrder?.shipment ||
-            null,
-
-          trackingId:
-            savedOrder?.trackingId ||
-            null,
-
-          courier:
-            savedOrder?.courier ||
-            null,
-
-          warehouse:
-            savedOrder?.warehouse ||
-            null,
-
-          estimatedDeliveryDate:
-            savedOrder?.estimatedDeliveryDate ||
-            null,
+          shipment: null,
+          trackingId: null,
+          courier: null,
+          warehouse: null,
+          estimatedDeliveryDate: null,
         };
-
-
-  // COUPON USAGE
-
-        if (appliedCoupon) {
-          try {
-            await couponService.increaseUsage(
-              appliedCoupon.$id,
-              appliedCoupon.usedCount
-            );
-          } catch (
-            couponError
-          ) {
-            console.error(
-              "Coupon usage update failed:",
-              couponError
-            );
-          }
-        }
-
-
-  // CLEAR CART
-
-        dispatch(
-          clearCart()
-        );
-
-
-  // SUCCESS MESSAGE
-
-        toast.success(
-          "Order placed successfully!"
-        );
-
 
   // PAYMENT NAVIGATION
 
         if (isCOD) {
-          if (finalWalletPaid > 0) {
-            try {
-              await walletService.deductMoney(
-                user.$id,
-                finalWalletPaid,
-                {
-                  source: "order",
-                  orderId:
-                    orderData.orderId ||
-                    savedOrderId ||
-                    "",
-                  transactionId: `${
-                    orderData.transactionId ||
-                    orderData.orderId ||
-                    Date.now()
-                  }-WALLET`,
-                  description: `Wallet Payment for Order ${
-                    orderData.orderId ||
-                    savedOrderId ||
-                    ""
-                  }`,
-                }
-              );
-            } catch (codWalletErr) {
-              console.warn(
-                "COD wallet deduction in Checkout warning:",
-                codWalletErr
-              );
-            }
-          }
-
-          navigate(
-            "/cod-payment",
-            {
-              state:
-                fullOrderState,
-              replace: true,
-            }
-          );
-
+          navigate("/cod-payment", {
+            state: fullOrderState,
+          });
           return;
         }
-
 
         if (isUPI) {
-          /*
-           * UPIPayment.jsx handles:
-           * - UPI payment
-           * - wallet deduction after successful payment
-           * - order paymentStatus = PAID
-           * - shipment creation
-           */
-
-          navigate(
-            "/upi-payment",
-            {
-              state:
-                fullOrderState,
-            }
-          );
-
+          navigate("/upi-payment", {
+            state: fullOrderState,
+          });
           return;
         }
-
 
         /*
          * CARD
          */
-
-        navigate(
-          "/card-payment",
-          {
-            state:
-              fullOrderState,
-          }
-        );
+        navigate("/card-payment", {
+          state: fullOrderState,
+        });
       } catch (error) {
         console.error(
           "Place order error:",
@@ -1716,12 +1434,13 @@ function Checkout() {
 
         toast.error(
           error?.message ||
-          "Failed to place order."
+          "Failed to proceed to payment."
         );
       } finally {
         setLoading(false);
       }
     };
+
 
 
   // UI
