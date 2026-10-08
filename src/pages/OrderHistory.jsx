@@ -534,7 +534,13 @@ function OrderHistory() {
   };
 
   // NAVIGATION TO ORDER DETAILS
-  const handleViewOrder = (order, item, returnRequest = null, itemIdx = 0) => {
+  const handleViewOrder = (
+    order,
+    item,
+    returnRequest = null,
+    itemIdx = 0,
+    fallbackReturnId = ""
+  ) => {
     const params = new URLSearchParams();
     params.set("orderId", order?.orderId || order?.$id || "");
     params.set("itemIdx", String(itemIdx));
@@ -542,8 +548,15 @@ function OrderHistory() {
     if (prodId) {
       params.set("itemId", String(prodId));
     }
-    if (returnRequest?.referenceId) {
-      params.set("returnId", returnRequest.referenceId);
+
+    const effectiveReturnId =
+      returnRequest?.referenceId ||
+      returnRequest?.$id ||
+      fallbackReturnId ||
+      "";
+
+    if (returnRequest && effectiveReturnId) {
+      params.set("returnId", String(effectiveReturnId));
     }
 
     navigate(`/order-details?${params.toString()}`, {
@@ -553,6 +566,11 @@ function OrderHistory() {
         singleProduct: item || null,
         itemIndex: itemIdx,
         returnRequest: returnRequest || null,
+        viewMode: returnRequest
+          ? String(returnRequest?.type || "").toUpperCase() === "EXCHANGE"
+            ? "EXCHANGE"
+            : "RETURN"
+          : "ORDER",
       },
     });
   };
@@ -923,7 +941,13 @@ function OrderHistory() {
                           key={`${entryKey}-${item?.id || item?.productId || itemIdx}`}
                           className="ajio-order-card bg-white rounded-4 border shadow-sm p-3 p-md-3 d-flex align-items-center justify-content-between cursor-pointer hover-lift"
                           onClick={() =>
-                            handleViewOrder(order, item, returnRequest, itemIdx)
+                            handleViewOrder(
+                              order,
+                              item,
+                              isReturnEntry || isExchangeEntry ? returnRequest : null,
+                              itemIdx,
+                              isReturnEntry || isExchangeEntry ? displayId : ""
+                            )
                           }
                         >
                           {/* LEFT: THUMBNAIL + OPTIONAL BADGE */}

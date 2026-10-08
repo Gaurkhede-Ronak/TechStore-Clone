@@ -305,6 +305,11 @@ class ReturnExchangeService {
             return request;
         }
 
+        const isCancelledReq =
+            String(request?.status || "")
+                .trim()
+                .toUpperCase() === "CANCELLED";
+
         const paymentRefund =
             await this.getPaymentRefund(
                 request.$id
@@ -316,42 +321,55 @@ class ReturnExchangeService {
                 paymentMethod:
                     request.paymentMethod ||
                     "",
-                paymentStatus:
-                    request.paymentStatus ||
-                    "",
-                refundStatus:
-                    request.refundStatus ||
-                    "",
-                refundAmount:
-                    Number(
-                        request.refundAmount ||
-                            0
-                    ),
+                paymentStatus: isCancelledReq
+                    ? "CANCELLED"
+                    : request.paymentStatus ||
+                      "",
+                refundStatus: isCancelledReq
+                    ? "NOT_REQUIRED"
+                    : request.refundStatus ||
+                      "",
+                refundAmount: isCancelledReq
+                    ? 0
+                    : Number(
+                          request.refundAmount ||
+                              0
+                      ),
             };
         }
 
         return {
             ...request,
 
-            paymentRefund,
+            paymentRefund: isCancelledReq
+                ? {
+                      ...paymentRefund,
+                      paymentStatus: "CANCELLED",
+                      refundStatus: "NOT_REQUIRED",
+                      refundAmount: 0,
+                  }
+                : paymentRefund,
 
             paymentMethod:
                 paymentRefund.paymentMethod ||
                 "",
 
-            paymentStatus:
-                paymentRefund.paymentStatus ||
-                "",
+            paymentStatus: isCancelledReq
+                ? "CANCELLED"
+                : paymentRefund.paymentStatus ||
+                  "",
 
-            refundStatus:
-                paymentRefund.refundStatus ||
-                "",
+            refundStatus: isCancelledReq
+                ? "NOT_REQUIRED"
+                : paymentRefund.refundStatus ||
+                  "",
 
-            refundAmount:
-                Number(
-                    paymentRefund.refundAmount ||
-                        0
-                ),
+            refundAmount: isCancelledReq
+                ? 0
+                : Number(
+                      paymentRefund.refundAmount ||
+                          0
+                  ),
         };
     }
 
@@ -659,12 +677,27 @@ class ReturnExchangeService {
     async cancelRequest(
         documentId
     ) {
-        return this.updateRequest(
+        const updated = await this.updateRequest(
             documentId,
             {
                 status: "CANCELLED",
             }
         );
+
+        try {
+            await this.updatePaymentRefund(
+                documentId,
+                {
+                    paymentStatus: "CANCELLED",
+                    refundStatus: "NOT_REQUIRED",
+                    refundAmount: 0,
+                }
+            );
+        } catch (err) {
+            console.warn("Cancel request refund reset warning:", err);
+        }
+
+        return this.attachPaymentRefund(updated);
     }
 
   // ASSIGN DELIVERY BOY

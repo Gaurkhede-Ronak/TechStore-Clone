@@ -13,7 +13,10 @@ import warehouseService from "../appwrite/warehouseService";
 import deliveryOtpService from "../appwrite/deliveryOtpService";
 import returnExchangeService from "../appwrite/returnExchangeService";
 import walletService from "../appwrite/walletService";
-import { doesRequestMatchItem } from "../utils/orderItemHelper";
+import {
+  doesRequestMatchItem,
+  extractCleanReason,
+} from "../utils/orderItemHelper";
 
 import {
   FaArrowLeft,
@@ -996,65 +999,50 @@ function OrderDetails() {
 
   const selectedReturnIdParam = useMemo(() => {
     const params = new URLSearchParams(location.search);
-    return (
-      params.get("returnId") ||
+    const paramReturnId = params.get("returnId");
+    if (paramReturnId) {
+      return String(paramReturnId).trim();
+    }
+    if (location.state?.viewMode === "ORDER") {
+      return "";
+    }
+    return String(
       location.state?.returnRequest?.referenceId ||
-      ""
-    );
+        location.state?.returnRequest?.$id ||
+        ""
+    ).trim();
   }, [location.search, location.state]);
 
   const focusedReturnRequest = useMemo(() => {
-    // If user clicked a specific product in "Other Products in this Order", match that item's request
-    if (selectedProductOverride) {
-      const matchedForOverride = returnRequests.find((r) =>
-        doesRequestMatchItem(r, activeProduct, activeProductIndex, order)
-      );
-      return matchedForOverride || null;
+    // STRICT VIEW SEPARATION:
+    // If the user clicked on the Delivered / Order card (no returnId), always return null
+    // so only the Delivered Order Details page opens.
+    // Only open Return / Exchange details when a specific returnId was clicked.
+    if (!selectedReturnIdParam) {
+      return null;
     }
 
-    if (selectedReturnIdParam) {
-      const matched = returnRequests.find(
-        (r) =>
-          String(r?.referenceId || "") === String(selectedReturnIdParam) ||
-          String(r?.$id || "") === String(selectedReturnIdParam)
-      );
-      if (
-        matched &&
-        doesRequestMatchItem(matched, activeProduct, activeProductIndex, order)
-      ) {
-        return matched;
-      }
-    }
-
-    // Also check if the currently viewed activeProduct has an active return/exchange request
-    const matchedForActiveItem = returnRequests.find((r) =>
-      doesRequestMatchItem(r, activeProduct, activeProductIndex, order)
+    const matched = returnRequests.find(
+      (r) =>
+        String(r?.referenceId || "") === String(selectedReturnIdParam) ||
+        String(r?.$id || "") === String(selectedReturnIdParam)
     );
-    if (matchedForActiveItem) {
-      return matchedForActiveItem;
+    if (matched) {
+      return matched;
     }
 
     if (
       location.state?.returnRequest &&
-      doesRequestMatchItem(
-        location.state.returnRequest,
-        activeProduct,
-        activeProductIndex,
-        order
-      )
+      (String(location.state.returnRequest?.referenceId || "") ===
+        String(selectedReturnIdParam) ||
+        String(location.state.returnRequest?.$id || "") ===
+          String(selectedReturnIdParam))
     ) {
       return location.state.returnRequest;
     }
+
     return null;
-  }, [
-    selectedProductOverride,
-    selectedReturnIdParam,
-    returnRequests,
-    location.state,
-    activeProduct,
-    activeProductIndex,
-    order,
-  ]);
+  }, [selectedReturnIdParam, returnRequests, location.state]);
 
   const isFocusedExchange =
     String(focusedReturnRequest?.type || "").toUpperCase() === "EXCHANGE";
@@ -1927,6 +1915,7 @@ function OrderDetails() {
           0
       );
       const isReturn = String(req?.type || "").toUpperCase() === "RETURN";
+      const cleanReason = extractCleanReason(req?.reason || "");
 
       const reqRawDate =
         req?.createdAt ||
@@ -1952,7 +1941,9 @@ function OrderDetails() {
             label: isReturn ? "Return Created" : "Exchange Created",
             description: `Your ${
               isReturn ? "return" : "exchange"
-            } request (${req?.referenceId || "Request"}) was registered.`,
+            } request (${req?.referenceId || "Request"}) was registered.${
+              cleanReason ? ` Reason: ${cleanReason}` : ""
+            }`,
             date: reqRawDate,
             isCompleted: true,
             isCurrent: false,
@@ -1960,9 +1951,13 @@ function OrderDetails() {
           {
             key: "REQ_CANCELLED",
             label: isReturn ? "Return Cancelled" : "Exchange Cancelled",
-            description: `Your ${
-              isReturn ? "return" : "exchange"
-            } request has been cancelled.`,
+            description: isReturn
+              ? `Your return request (${
+                  req?.referenceId || "Request"
+                }) was cancelled. Since the product remains delivered to you, no refund is applicable.`
+              : `Your exchange request (${
+                  req?.referenceId || "Request"
+                }) was cancelled. No replacement pickup or delivery will occur.`,
             date: reqUpdatedRawDate,
             isCompleted: false,
             isCurrent: false,
@@ -1971,7 +1966,7 @@ function OrderDetails() {
         ];
       }
 
-      /* EXCHANGE TIMELINE: — 1. Exchange Created — 2. Exchange Accepted — 3. Confirmed — 4. Packed — 5. Dispatched — 6. Out for Exchange — 7. Exchange Complete */
+      /* EXCHANGE TIMELINE: 1. Exchange Created -> 2. Exchange Accepted -> 3. Replacement Confirmed -> 4. Replacement Packed -> 5. Replacement Dispatched -> 6. Out for Exchange -> 7. Exchange Complete */
       if (!isReturn) {
         const exchangeStageMap = {
           REQUESTED: 0,
@@ -1999,7 +1994,7 @@ function OrderDetails() {
             description: `Your exchange request (${
               req?.referenceId || "Request"
             }) has been placed successfully.${
-              req?.reason ? ` Reason: ${req.reason}` : ""
+              cleanReason ? ` Reason: ${cleanReason}` : ""
             }`,
           },
           {
@@ -2012,23 +2007,23 @@ function OrderDetails() {
           },
           {
             key: "EX_CONFIRMED",
-            label: "Confirmed",
+            label: "Replacement Confirmed",
             description:
               stageIdx >= 2
-                ? "Your replacement product order has been confirmed."
+                ? "Your replacement product order has been confirmed at ₹0 extra cost."
                 : "Replacement order will be confirmed after approval.",
           },
           {
             key: "EX_PACKED",
-            label: "Packed",
+            label: "Replacement Packed",
             description:
               stageIdx >= 3
-                ? "Your replacement product has been packed and is ready for dispatch."
+                ? "Your replacement unit has been packed and quality-checked at the warehouse."
                 : "Replacement product is being prepared for packing.",
           },
           {
             key: "EX_DISPATCHED",
-            label: "Dispatched",
+            label: "Replacement Dispatched",
             description:
               stageIdx >= 4
                 ? "Your replacement product has been dispatched from the warehouse."
@@ -2039,14 +2034,14 @@ function OrderDetails() {
             label: "Out for Exchange",
             description:
               stageIdx >= 5
-                ? "Replacement product is out for exchange with our delivery partner."
-                : "Delivery partner will be assigned for exchange.",
+                ? "Delivery executive is out for doorstep exchange (old unit pickup + new replacement handover)."
+                : "Delivery partner will be assigned for doorstep exchange.",
           },
           {
             key: "EX_COMPLETE",
             label: "Exchange Complete",
             description: isAllExchangeDone
-              ? "Your exchange has been completed successfully."
+              ? "Your old item was picked up and your new replacement product has been delivered."
               : `Expected completion by ${formatDate(expectedCompleteDate)}.`,
           },
         ];
@@ -2072,87 +2067,100 @@ function OrderDetails() {
         });
       }
 
-      /* RETURN TIMELINE: — 1. Return Created — 2. Return Accepted — 3. Out for Pickup / Refund Initiated — 4. Return Complete */
-      const isStep2Done = [
-        "ACCEPTED",
-        "CONFIRMED",
-        "APPROVED",
-        "PICKUP_ASSIGNED",
-        "PICKED_UP",
-        "REFUND_INITIATED",
-        "REFUND_COMPLETED",
-        "REFUNDED",
-        "COMPLETED",
-      ].includes(requestStatus);
+      /* RETURN TIMELINE: 1. Return Created -> 2. Return Accepted -> 3. Out for Pickup -> 4. Picked Up & Refund Initiated -> 5. Return Complete */
+      const returnStageMap = {
+        REQUESTED: 0,
+        ACCEPTED: 1,
+        CONFIRMED: 1,
+        APPROVED: 1,
+        PICKUP_ASSIGNED: 2,
+        PICKED_UP: 3,
+        REFUND_INITIATED: 3,
+        REFUND_COMPLETED: 4,
+        REFUNDED: 4,
+        COMPLETED: 4,
+      };
 
-      const isStep3Done =
-        refundStatus === "INITIATED" ||
-        refundStatus === "COMPLETED" ||
-        [
-          "PICKUP_ASSIGNED",
-          "PICKED_UP",
-          "REFUND_INITIATED",
-          "REFUND_COMPLETED",
-          "REFUNDED",
-          "COMPLETED",
-        ].includes(requestStatus);
+      let returnStageIdx = returnStageMap[requestStatus] ?? 0;
+      if (refundStatus === "COMPLETED" || refundStatus === "REFUNDED") {
+        returnStageIdx = 4;
+      } else if (
+        (refundStatus === "INITIATED" || refundStatus === "REFUND_INITIATED") &&
+        returnStageIdx < 3
+      ) {
+        returnStageIdx = 3;
+      }
 
-      const isStep4Done =
-        refundStatus === "COMPLETED" ||
-        ["REFUND_COMPLETED", "REFUNDED", "COMPLETED"].includes(requestStatus);
+      const isAllReturnDone = returnStageIdx >= 4;
 
-      return [
+      const retDefinitions = [
         {
           key: "REQ_CREATED",
           label: "Return Created",
           description: `Your return request (${
             req?.referenceId || "Request"
           }) has been placed successfully.${
-            req?.reason ? ` Reason: ${req.reason}` : ""
+            cleanReason ? ` Reason: ${cleanReason}` : ""
           }`,
-          date: reqRawDate,
-          isCompleted: true,
-          isCurrent: !isStep2Done,
         },
         {
           key: "REQ_ACCEPTED",
           label: "Return Accepted",
-          description: isStep2Done
-            ? "Your return request has been approved by TechStore."
-            : "Awaiting approval and pickup confirmation from TechStore.",
-          date: isStep2Done ? reqUpdatedRawDate : "",
-          isCompleted: isStep2Done,
-          isCurrent: isStep2Done && !isStep3Done,
+          description:
+            returnStageIdx >= 1
+              ? "Your return request has been approved by TechStore. Doorstep pickup will be scheduled."
+              : "Awaiting approval and pickup confirmation from TechStore.",
         },
         {
-          key: "REQ_PROCESS",
-          label:
-            requestStatus === "PICKUP_ASSIGNED"
-              ? "Out for Pickup"
-              : "Refund Initiated",
+          key: "REQ_PICKUP",
+          label: "Out for Pickup",
           description:
-            requestStatus === "PICKUP_ASSIGNED"
-              ? "Our delivery partner is out to pick up your return item."
-              : refundAmount > 0
-              ? `Refund of ₹${formatMoney(
-                  refundAmount
-                )} initiated to original payment mode (credited in 7-10 business days).`
-              : "Refund will be initiated after pickup verification.",
-          date: isStep3Done ? reqUpdatedRawDate : "",
-          isCompleted: isStep3Done,
-          isCurrent: isStep3Done && !isStep4Done,
+            returnStageIdx >= 2
+              ? "Our courier partner has been assigned and is out to pick up your return item."
+              : "Courier partner will be assigned for doorstep pickup.",
+        },
+        {
+          key: "REQ_REFUND_INIT",
+          label: "Picked Up & Refund Initiated",
+          description:
+            returnStageIdx >= 3
+              ? refundAmount > 0
+                ? `Return item picked up & verified. Refund of ₹${formatMoney(
+                    refundAmount
+                  )} has been initiated to your payment mode.`
+                : "Return item picked up & verified. Refund has been initiated."
+              : "Refund will be initiated once the item is picked up and verified.",
         },
         {
           key: "REQ_COMPLETE",
           label: "Return Complete",
-          description: isStep4Done
-            ? "Your return and refund has been completed successfully."
+          description: isAllReturnDone
+            ? `Your return and refund${
+                refundAmount > 0 ? ` of ₹${formatMoney(refundAmount)}` : ""
+              } has been completed successfully.`
             : `Expected completion by ${formatDate(expectedCompleteDate)}.`,
-          date: isStep4Done ? expectedCompleteDate : "",
-          isCompleted: isStep4Done,
-          isCurrent: false,
         },
       ];
+
+      return retDefinitions.map((def, idx) => {
+        const isCompleted = returnStageIdx >= idx;
+        const isCurrent = returnStageIdx === idx && !isAllReturnDone;
+        const stepDate =
+          idx === 0
+            ? reqRawDate
+            : isCompleted
+            ? idx === 4
+              ? expectedCompleteDate
+              : reqUpdatedRawDate
+            : "";
+
+        return {
+          ...def,
+          date: stepDate,
+          isCompleted,
+          isCurrent,
+        };
+      });
     },
     [
       actualRefundAmount,
@@ -3297,7 +3305,11 @@ function OrderDetails() {
               <div className="d-flex align-items-center gap-2 mb-1 flex-wrap">
 
                 <h2 className="fw-bold mb-0 text-gradient fs-3">
-                  Order Details
+                  {focusedReturnRequest
+                    ? isFocusedExchange
+                      ? "Exchange Details"
+                      : "Return Details"
+                    : "Order Details"}
                 </h2>
 
                 <span
@@ -3337,8 +3349,11 @@ function OrderDetails() {
               </div>
 
               <small className="text-muted fw-medium">
-                Your complete order
-                summary
+                {focusedReturnRequest
+                  ? isFocusedExchange
+                    ? "Your complete exchange request & replacement summary"
+                    : "Your complete return request & status summary"
+                  : "Your complete order summary"}
               </small>
             </div>
           </div>
@@ -3851,8 +3866,10 @@ function OrderDetails() {
                                   {`Your ${
                                     isFocusedExchange ? "exchange" : "return"
                                   } request (${rxRefId}) was registered.${
-                                    focusedReturnRequest?.reason
-                                      ? ` Reason: ${focusedReturnRequest.reason}`
+                                    extractCleanReason(focusedReturnRequest?.reason || "")
+                                      ? ` Reason: ${extractCleanReason(
+                                          focusedReturnRequest.reason
+                                        )}`
                                       : ""
                                   }`}
                                 </p>
@@ -3951,9 +3968,9 @@ function OrderDetails() {
                                 </h5>
                                 <p className="shipment-progress-step-description mb-0">
                                   {isFinalRxCancelled
-                                    ? `Your ${
-                                        isFocusedExchange ? "exchange" : "return"
-                                      } request (${rxRefId}) has been cancelled by you.`
+                                    ? isFocusedExchange
+                                      ? `Your exchange request (${rxRefId}) has been cancelled by you. You will keep your delivered product and no replacement will be sent.`
+                                      : `Your return request (${rxRefId}) has been cancelled by you. Since the product remains delivered to you, no refund is applicable.`
                                     : "Waiting for cancellation confirmation..."}
                                 </p>
                               </div>
@@ -4555,21 +4572,55 @@ function OrderDetails() {
 
                   <button
                     type="button"
-                    className={`btn order-action-btn ${
-                      hasExistingReturnOrExchange
-                        ? "order-action-btn-disabled"
-                        : "order-action-btn-return"
-                    }`}
-                    onClick={handleReturnExchange}
-                    disabled={hasExistingReturnOrExchange}
+                    className="btn order-action-btn order-action-btn-return"
+                    onClick={() => {
+                      if (hasExistingReturnOrExchange && existingActiveRequest) {
+                        const params = new URLSearchParams();
+                        params.set("orderId", getOrderReference(order));
+                        params.set("itemIdx", String(activeProductIndex));
+                        const prodId = getProductId(activeProduct);
+                        if (prodId) {
+                          params.set("itemId", String(prodId));
+                        }
+                        if (
+                          existingActiveRequest.referenceId ||
+                          existingActiveRequest.$id
+                        ) {
+                          params.set(
+                            "returnId",
+                            String(
+                              existingActiveRequest.referenceId ||
+                                existingActiveRequest.$id
+                            )
+                          );
+                        }
+                        navigate(`/order-details?${params.toString()}`, {
+                          state: {
+                            order,
+                            shipment,
+                            singleProduct: activeProduct,
+                            itemIndex: activeProductIndex,
+                            returnRequest: existingActiveRequest,
+                            viewMode:
+                              String(
+                                existingActiveRequest?.type || ""
+                              ).toUpperCase() === "EXCHANGE"
+                                ? "EXCHANGE"
+                                : "RETURN",
+                          },
+                        });
+                      } else {
+                        handleReturnExchange();
+                      }
+                    }}
                   >
                     <FaExchangeAlt className="flex-shrink-0" />
                     <span>
                       {hasExistingReturnOrExchange
                         ? String(existingActiveRequest?.type || "").toUpperCase() ===
                           "EXCHANGE"
-                          ? "Exchange Requested"
-                          : "Return Requested"
+                          ? "View Exchange Status"
+                          : "View Return Status"
                         : "Return / Exchange"}
                     </span>
                   </button>
@@ -4658,171 +4709,263 @@ function OrderDetails() {
           </div>
         ) : null}
 
-        {/* REFUND */}
-
-        {((isCancelled && (cancelStepAnim === 0 || cancelStepAnim >= 3)) ||
-          isFocusedReturn) && (
+        {/* EXCHANGE REPLACEMENT PROCESS CARD (Shown only for Active Exchange requests) */}
+        {focusedReturnRequest && isFocusedExchange && !isFocusedReqCancelled && (
           <div className="pro-card p-4 p-md-5 mb-4 glass-card hover-lift order-refund-card animate-fade-in">
+            <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+              <h4 className="fw-bold mb-0 d-flex align-items-center gap-2">
+                <FaExchangeAlt className="text-primary" />
+                Exchange Replacement Process
+              </h4>
+              <span className="badge bg-primary text-white px-3 py-2 rounded-pill">
+                Free Doorstep Replacement • ₹0.00
+              </span>
+            </div>
 
-            {isPureCOD ? (
-              <div>
+            <p className="text-muted mb-4">
+              No refund or extra payment is involved in an exchange. Your
+              existing item will be picked up and replaced with a brand-new unit
+              at your doorstep.
+            </p>
 
-                <h4 className="fw-bold mb-3">
-                  Refund Details
-                </h4>
-
-                <p className="text-muted mb-0">
-                  No refund is involved
-                  as the order was a
-                  Cash on Delivery
-                  order.
-                </p>
-
+            <div className="d-flex flex-column gap-3">
+              <div className="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <span className="text-muted">1. Original Item Pickup</span>
+                <strong>Doorstep Verification & Handover</strong>
               </div>
-            ) : (
-              <div>
-
-                <div className="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
-
-                  <h4 className="fw-bold mb-0">
-                    Total Refund ₹
-                    {formatMoney(
-                      actualRefundAmount
-                    )}
-                  </h4>
-
-                  {refundToWallet > 0 && (
-                    <span className="badge bg-success text-white px-3 py-2 rounded-pill d-inline-flex align-items-center gap-2">
-                      <FaCheckCircle />
-                      ₹{formatMoney(refundToWallet)} Credited to Wallet
-                    </span>
-                  )}
-
-                </div>
-
-                {refundToWallet > 0 && refundToOnline <= 0 ? (
-                  <p className="text-success fw-semibold mb-4">
-                    ₹{formatMoney(refundToWallet)} has been refunded and credited back to your TechStore Wallet on{" "}
-                    {formatFullDayDate(cancelledRawDate)}.
-                  </p>
-                ) : (
-                  <p className="text-muted mb-4">
-                    Refund has been initiated on{" "}
-                    {formatFullDayDate(cancelledRawDate)}.
-                    {refundToWallet > 0
-                      ? ` ₹${formatMoney(refundToWallet)} has been credited directly to your TechStore Wallet.`
-                      : ""}{" "}
-                    {refundToOnline > 0
-                      ? "Online payment refund will be credited in 7-10 business days."
-                      : ""}
-                  </p>
-                )}
-
-                {refundToWallet > 0 && (
-                  <div
-                    className="p-3 rounded-4 mb-4 d-flex align-items-center justify-content-between flex-wrap gap-3"
-                    style={{
-                      background: "rgba(16, 185, 129, 0.1)",
-                      border: "1px solid rgba(16, 185, 129, 0.3)",
-                    }}
-                  >
-                    <div className="d-flex align-items-center gap-3">
-                      <div
-                        className="rounded-circle bg-success text-white d-flex align-items-center justify-content-center flex-shrink-0"
-                        style={{ width: 40, height: 40 }}
-                      >
-                        <FaWallet size={18} />
-                      </div>
-                      <div>
-                        <div className="fw-bold text-success">
-                          +₹{formatMoney(refundToWallet)} Credited to TechStore Wallet
-                        </div>
-                        <small className="text-muted">
-                          Your wallet balance has been restored for Cancelled Order #{getOrderReference(order)}
-                        </small>
-                      </div>
-                    </div>
-
-                    <button
-                      type="button"
-                      className="btn btn-sm btn-success rounded-pill px-3 fw-semibold"
-                      onClick={() => navigate("/profile?tab=wallet")}
-                    >
-                      Check Wallet Balance
-                    </button>
-                  </div>
-                )}
-
-                <h6 className="fw-bold mb-3">
-                  Refund Credit Mode
-                </h6>
-
-                {refundToWallet >
-                  0 && (
-                  <div className="d-flex justify-content-between mb-2">
-
-                    <span className="text-muted d-inline-flex align-items-center gap-2">
-                      <FaWallet className="text-primary" />
-                      TechStore Wallet (Credited)
-                    </span>
-
-                    <strong className="text-success">
-                      +₹
-                      {formatMoney(
-                        refundToWallet
-                      )}
-                    </strong>
-
-                  </div>
-                )}
-
-                {refundToOnline >
-                  0 && (
-                  <div className="d-flex justify-content-between mb-2">
-
-                    <span className="text-muted d-inline-flex align-items-center gap-2">
-                      {isUPI ? (
-                        <FaMobileAlt className="text-success" />
-                      ) : (
-                        <FaCreditCard className="text-primary" />
-                      )}
-                      {isUPI
-                        ? "BHIM UPI"
-                        : isCard
-                        ? "Debit / Credit Card"
-                        : "Original Payment Method"}
-                    </span>
-
-                    <strong>
-                      ₹
-                      {formatMoney(
-                        refundToOnline
-                      )}
-                    </strong>
-
-                  </div>
-                )}
-
-                <hr />
-
-                <div className="d-flex justify-content-between fw-bold fs-5">
-
-                  <span>Total</span>
-
-                  <span>
-                    ₹
-                    {formatMoney(
-                      actualRefundAmount
-                    )}
-                  </span>
-
-                </div>
-
+              <div className="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <span className="text-muted">2. Replacement Product</span>
+                <strong>
+                  {itemName} (x{itemQty})
+                </strong>
               </div>
-            )}
-
+              <div className="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <span className="text-muted">3. Exchange Fee / Extra Charge</span>
+                <strong className="text-success">₹0.00 (Free)</strong>
+              </div>
+            </div>
           </div>
         )}
+
+        {/* REFUND (Shown ONLY for Pre-Delivery Cancelled Orders OR Active Non-Cancelled Returns — NEVER for Return Cancelled!) */}
+
+        {((!focusedReturnRequest &&
+          isCancelled &&
+          (cancelStepAnim === 0 || cancelStepAnim >= 3)) ||
+          (isFocusedReturn && !isFocusedReqCancelled)) &&
+          (() => {
+            const rawRxSt = String(
+              focusedReturnRequest?.status || ""
+            ).toUpperCase();
+            const rawRefSt = String(
+              focusedReturnRequest?.refundStatus ||
+                focusedReturnRequest?.paymentRefund?.refundStatus ||
+                ""
+            ).toUpperCase();
+            const isReturnRefundInitiated =
+              !isFocusedReturn ||
+              [
+                "PICKED_UP",
+                "REFUND_INITIATED",
+                "REFUNDED",
+                "REFUND_COMPLETED",
+                "COMPLETED",
+              ].includes(rawRxSt) ||
+              [
+                "INITIATED",
+                "REFUND_INITIATED",
+                "COMPLETED",
+                "REFUNDED",
+              ].includes(rawRefSt);
+            const isReturnRefundCompleted =
+              isFocusedReturn &&
+              (["REFUNDED", "REFUND_COMPLETED", "COMPLETED"].includes(rawRxSt) ||
+                ["COMPLETED", "REFUNDED"].includes(rawRefSt));
+            const refundRefDate = isFocusedReturn
+              ? focusedReturnRequest?.updatedAt ||
+                focusedReturnRequest?.$updatedAt ||
+                focusedReturnRequest?.createdAt ||
+                focusedReturnRequest?.$createdAt ||
+                cancelledRawDate
+              : cancelledRawDate;
+
+            return (
+              <div className="pro-card p-4 p-md-5 mb-4 glass-card hover-lift order-refund-card animate-fade-in">
+                {isPureCOD ? (
+                  <div>
+                    <h4 className="fw-bold mb-3">
+                      {isFocusedReturn ? "Return Refund Details" : "Refund Details"}
+                    </h4>
+
+                    <p className="text-muted mb-0">
+                      {isFocusedReturn
+                        ? isReturnRefundInitiated
+                          ? `Refund of ₹${formatMoney(
+                              itemTotalPrice
+                            )} for your Cash on Delivery return has been initiated following pickup verification.`
+                          : `Estimated Refund: ₹${formatMoney(
+                              itemTotalPrice
+                            )}. Since this was a Cash on Delivery order, your refund will be processed once the return item is picked up and verified at your doorstep.`
+                        : "No refund is involved as the order was a Cash on Delivery order."}
+                    </p>
+                  </div>
+                ) : (
+                  <div>
+                    <div className="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+                      <h4 className="fw-bold mb-0">
+                        {isFocusedReturn && !isReturnRefundInitiated
+                          ? `Estimated Refund ₹${formatMoney(actualRefundAmount)}`
+                          : `Total Refund ₹${formatMoney(actualRefundAmount)}`}
+                      </h4>
+
+                      {isFocusedReturn ? (
+                        <span
+                          className={`badge px-3 py-2 rounded-pill d-inline-flex align-items-center gap-2 ${
+                            isReturnRefundCompleted
+                              ? "bg-success text-white"
+                              : isReturnRefundInitiated
+                              ? "bg-primary text-white"
+                              : "bg-warning text-dark"
+                          }`}
+                        >
+                          <FaCheckCircle />
+                          {isReturnRefundCompleted
+                            ? "Refund Completed"
+                            : isReturnRefundInitiated
+                            ? "Refund Initiated"
+                            : "Refund After Pickup Verification"}
+                        </span>
+                      ) : (
+                        refundToWallet > 0 && (
+                          <span className="badge bg-success text-white px-3 py-2 rounded-pill d-inline-flex align-items-center gap-2">
+                            <FaCheckCircle />
+                            ₹{formatMoney(refundToWallet)} Credited to Wallet
+                          </span>
+                        )
+                      )}
+                    </div>
+
+                    {isFocusedReturn && !isReturnRefundInitiated ? (
+                      <p className="text-muted mb-4">
+                        Your refund of{" "}
+                        <strong>₹{formatMoney(actualRefundAmount)}</strong> will
+                        be initiated automatically once our courier partner picks
+                        up the product from your address and completes quality
+                        verification.
+                      </p>
+                    ) : refundToWallet > 0 && refundToOnline <= 0 ? (
+                      <p className="text-success fw-semibold mb-4">
+                        ₹{formatMoney(refundToWallet)} has been refunded and
+                        credited back to your TechStore Wallet on{" "}
+                        {formatFullDayDate(refundRefDate)}.
+                      </p>
+                    ) : (
+                      <p className="text-muted mb-4">
+                        {isReturnRefundCompleted
+                          ? `Refund has been completed on ${formatFullDayDate(
+                              refundRefDate
+                            )}.`
+                          : `Refund has been initiated on ${formatFullDayDate(
+                              refundRefDate
+                            )}.`}
+                        {refundToWallet > 0
+                          ? ` ₹${formatMoney(
+                              refundToWallet
+                            )} has been credited directly to your TechStore Wallet.`
+                          : ""}{" "}
+                        {refundToOnline > 0 && !isReturnRefundCompleted
+                          ? "Online payment refund will be credited in 7-10 business days."
+                          : ""}
+                      </p>
+                    )}
+
+                    {refundToWallet > 0 && isReturnRefundInitiated && (
+                      <div
+                        className="p-3 rounded-4 mb-4 d-flex align-items-center justify-content-between flex-wrap gap-3"
+                        style={{
+                          background: "rgba(16, 185, 129, 0.1)",
+                          border: "1px solid rgba(16, 185, 129, 0.3)",
+                        }}
+                      >
+                        <div className="d-flex align-items-center gap-3">
+                          <div
+                            className="rounded-circle bg-success text-white d-flex align-items-center justify-content-center flex-shrink-0"
+                            style={{ width: 40, height: 40 }}
+                          >
+                            <FaWallet size={18} />
+                          </div>
+                          <div>
+                            <div className="fw-bold text-success">
+                              +₹{formatMoney(refundToWallet)} Credited to TechStore Wallet
+                            </div>
+                            <small className="text-muted">
+                              Your wallet balance has been restored for{" "}
+                              {isFocusedReturn
+                                ? `Return #${focusedReturnRequest?.referenceId || getOrderReference(order)}`
+                                : `Cancelled Order #${getOrderReference(order)}`}
+                            </small>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-success rounded-pill px-3 fw-semibold"
+                          onClick={() => navigate("/profile?tab=wallet")}
+                        >
+                          Check Wallet Balance
+                        </button>
+                      </div>
+                    )}
+
+                    <h6 className="fw-bold mb-3">
+                      Refund Credit Mode
+                    </h6>
+
+                    {refundToWallet > 0 && (
+                      <div className="d-flex justify-content-between mb-2">
+                        <span className="text-muted d-inline-flex align-items-center gap-2">
+                          <FaWallet className="text-primary" />
+                          TechStore Wallet{" "}
+                          {isReturnRefundInitiated ? "(Credited)" : "(After Pickup)"}
+                        </span>
+
+                        <strong className="text-success">
+                          +₹{formatMoney(refundToWallet)}
+                        </strong>
+                      </div>
+                    )}
+
+                    {refundToOnline > 0 && (
+                      <div className="d-flex justify-content-between mb-2">
+                        <span className="text-muted d-inline-flex align-items-center gap-2">
+                          {isUPI ? (
+                            <FaMobileAlt className="text-success" />
+                          ) : (
+                            <FaCreditCard className="text-primary" />
+                          )}
+                          {isUPI
+                            ? "BHIM UPI"
+                            : isCard
+                            ? "Debit / Credit Card"
+                            : "Original Payment Method"}
+                        </span>
+
+                        <strong>₹{formatMoney(refundToOnline)}</strong>
+                      </div>
+                    )}
+
+                    <hr />
+
+                    <div className="d-flex justify-content-between fw-bold fs-5">
+                      <span>Total</span>
+
+                      <span>₹{formatMoney(actualRefundAmount)}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
         {/* DELIVERY ADDRESS */}
 
@@ -4944,20 +5087,7 @@ function OrderDetails() {
                         } else {
                           params.delete("itemId");
                         }
-
-                        const itemMatchedReq = returnRequests.find((r) =>
-                          doesRequestMatchItem(
-                            r,
-                            item,
-                            clickedIdx >= 0 ? clickedIdx : 0,
-                            order
-                          )
-                        );
-                        if (itemMatchedReq?.referenceId) {
-                          params.set("returnId", itemMatchedReq.referenceId);
-                        } else {
-                          params.delete("returnId");
-                        }
+                        params.delete("returnId");
 
                         navigate(`/order-details?${params.toString()}`, {
                           replace: false,
@@ -4968,7 +5098,8 @@ function OrderDetails() {
                               : order,
                             singleProduct: item,
                             itemIndex: clickedIdx >= 0 ? clickedIdx : 0,
-                            returnRequest: itemMatchedReq || null,
+                            returnRequest: null,
+                            viewMode: "ORDER",
                           },
                         });
 
