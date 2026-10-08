@@ -19,10 +19,18 @@ function Wishlist() {
     const itemsPerPage = 8;
 
     // Calculate current items for pagination
-    const indexOfLastItem = currentPage * itemsPerPage;
+    const totalPages = Math.ceil(wishlist.length / itemsPerPage);
+
+    useEffect(() => {
+        if (totalPages > 0 && currentPage > totalPages) {
+            setCurrentPage(totalPages);
+        }
+    }, [wishlist.length, totalPages, currentPage]);
+
+    const safePage = totalPages > 0 ? Math.min(currentPage, totalPages) : 1;
+    const indexOfLastItem = safePage * itemsPerPage;
     const indexOfFirstItem = indexOfLastItem - itemsPerPage;
     const currentWishlist = wishlist.slice(indexOfFirstItem, indexOfLastItem);
-    const totalPages = Math.ceil(wishlist.length / itemsPerPage);
 
     if (wishlist.length === 0) {
         return (

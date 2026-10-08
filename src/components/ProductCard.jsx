@@ -43,7 +43,10 @@ function ProductCard({ product, isWishlistPage = false }) {
   const addCart = useCallback((e) => {
     e.stopPropagation(); // Card click event ko roko
     dispatch(addToCart(product));
-  }, [dispatch, product]);
+    if (isWishlistPage || isInWishlist) {
+      dispatch(removeWishlist(product.$id));
+    }
+  }, [dispatch, product, isWishlistPage, isInWishlist]);
 
   const handleDecrease = useCallback((e) => {
     e.stopPropagation();
@@ -162,7 +165,7 @@ function ProductCard({ product, isWishlistPage = false }) {
           )}
         </div>
 
-        {cartQty > 0 ? (
+        {!isWishlistPage && cartQty > 0 ? (
           <div
             className="cart-btn cart-btn-qty-mode"
             onClick={(e) => e.stopPropagation()}
@@ -189,13 +192,6 @@ function ProductCard({ product, isWishlistPage = false }) {
           <button className="cart-btn" onClick={addCart}>
             <FaShoppingCart />
             Add To Cart
-          </button>
-        )}
-
-        {isWishlistPage && (
-          <button className="remove-wishlist-btn" onClick={handleWishlistToggle}>
-            <FaHeart />
-            Remove Wishlist
           </button>
         )}
       </div>
