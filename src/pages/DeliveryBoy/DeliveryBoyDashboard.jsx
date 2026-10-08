@@ -335,6 +335,10 @@ function DeliveryBoyDashboard() {
             if (requestType === "EXCHANGE") {
                 setTimeout(async () => {
                     try {
+                        const latestReq = await returnExchangeService.getRequest(requestId);
+                        if (String(latestReq?.status || "").toUpperCase() === "CANCELLED") {
+                            return;
+                        }
                         await returnExchangeService.updateRequest(requestId, {
                             status: "EXCHANGE_COMPLETED",
                         });
@@ -353,16 +357,31 @@ function DeliveryBoyDashboard() {
                 return;
             }
 
+            const matchedOrderEntry = returnOrders.find(
+                (entry) => entry?.request?.$id === requestId
+            );
+            const rxItem = resolveReturnRequestItem(
+                request,
+                matchedOrderEntry?.order
+            );
+            const resolvedRefundAmount =
+                Number(request?.refundAmount || 0) ||
+                Number(request?.paymentRefund?.refundAmount || 0) ||
+                (rxItem?.itemPrice
+                    ? Number(rxItem.itemPrice) * Number(rxItem.itemQty || 1)
+                    : 0);
+
             // RETURN: PICKED_UP -> 15 sec -> REFUND_INITIATED -> 15 sec -> REFUND_COMPLETED
             setTimeout(async () => {
                 try {
-                    await returnExchangeService.updateRequest(requestId, {
-                        status: "REFUND_INITIATED",
-                    });
+                    const latestReq = await returnExchangeService.getRequest(requestId);
+                    if (String(latestReq?.status || "").toUpperCase() === "CANCELLED") {
+                        return;
+                    }
 
                     await returnExchangeService.initiateRefund(
                         requestId,
-                        Number(request?.refundAmount || 0) || 0
+                        resolvedRefundAmount
                     );
 
                     await loadReturnRequests();
@@ -370,15 +389,13 @@ function DeliveryBoyDashboard() {
 
                     setTimeout(async () => {
                         try {
+                            const checkReq = await returnExchangeService.getRequest(requestId);
+                            if (String(checkReq?.status || "").toUpperCase() === "CANCELLED") {
+                                return;
+                            }
+
                             await returnExchangeService.completeRefund(
                                 requestId
-                            );
-
-                            await returnExchangeService.updateRequest(
-                                requestId,
-                                {
-                                    status: "REFUND_COMPLETED",
-                                }
                             );
 
                             await loadReturnRequests();

@@ -262,32 +262,21 @@ function DeliveryShipmentDetails() {
             return;
         }
 
-        if (otp.length !== 6) {
-            toast.error("Please enter the 6-digit pickup OTP.");
-            return;
-        }
-
         try {
             setVerifying(true);
 
-            const result = await returnExchangeService.verifyPickupOtp(
-                request.$id,
-                otp
+            const updatedDoc = await returnExchangeService.markItemPickedUp(
+                request.$id
             );
 
-            if (!result?.success) {
-                toast.error(result?.message || "Invalid pickup OTP.");
-                return;
-            }
+            toast.success("Item marked as picked up successfully!");
 
-            toast.success("Pickup verified successfully!");
-
-            setRequest(result.document);
+            setRequest(updatedDoc);
             setOtp("");
         } catch (error) {
-            console.error("Pickup OTP error:", error);
+            console.error("Pickup confirmation error:", error);
 
-            toast.error(error?.message || "Pickup verification failed.");
+            toast.error(error?.message || "Pickup confirmation failed.");
         } finally {
             setVerifying(false);
         }
@@ -862,8 +851,8 @@ function DeliveryShipmentDetails() {
                                             : "Exchange Pickup"}
                                     </h2>
                                     <p>
-                                        Verify the customer pickup using the
-                                        assigned 6-digit OTP.
+                                        Confirm that you have inspected and picked up
+                                        the customer&apos;s item at the doorstep.
                                     </p>
                                 </div>
 
@@ -880,41 +869,24 @@ function DeliveryShipmentDetails() {
                                 )}
 
                                 {isAssigned && (
-                                    <>
-                                        <label className="delivery-otp-label">
-                                            Pickup OTP
-                                        </label>
-                                        <input
-                                            type="text"
-                                            inputMode="numeric"
-                                            maxLength={6}
-                                            value={otp}
-                                            onChange={handleOtpChange}
-                                            className="delivery-otp-input"
-                                            placeholder="000000"
-                                            aria-label="Pickup OTP"
-                                        />
-                                        <button
-                                            type="button"
-                                            className="delivery-verify-btn"
-                                            onClick={handlePickupOtp}
-                                            disabled={
-                                                verifying || otp.length !== 6
-                                            }
-                                        >
-                                            {verifying ? (
-                                                <>
-                                                    <span className="delivery-mini-loader" />
-                                                    Verifying...
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <FaCheckCircle />
-                                                    Verify Pickup OTP
-                                                </>
-                                            )}
-                                        </button>
-                                    </>
+                                    <button
+                                        type="button"
+                                        className="delivery-verify-btn"
+                                        onClick={handlePickupOtp}
+                                        disabled={verifying}
+                                    >
+                                        {verifying ? (
+                                            <>
+                                                <span className="delivery-mini-loader" />
+                                                Updating...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <FaCheckCircle />
+                                                Confirm Item Picked Up
+                                            </>
+                                        )}
+                                    </button>
                                 )}
 
                                 {isPickedUp && (
