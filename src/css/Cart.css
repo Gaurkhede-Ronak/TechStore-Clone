@@ -1245,3 +1245,209 @@ body.dark .coupon-option-main small {
         padding: 3px 6px !important;
     }
 }
+
+/* =========================================================
+   CART DELETE / ADD TO WISHLIST CONFIRMATION MODAL
+   ========================================================= */
+.cart-delete-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.65);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+    padding: 16px;
+    animation: cartModalFadeIn 0.2s ease-out;
+}
+
+.cart-delete-modal-card {
+    position: relative;
+    width: 100%;
+    max-width: 440px;
+    background: #ffffff;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 22px;
+    padding: 26px 24px 24px;
+    box-shadow: 0 25px 60px rgba(15, 23, 42, 0.25);
+    color: #0f172a;
+    animation: cartModalPopIn 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.cart-delete-modal-close {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: 1px solid #e2e8f0;
+    background: #f8fafc;
+    color: #64748b;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.cart-delete-modal-close:hover {
+    background: #fee2e2;
+    color: #dc2626;
+    border-color: #fecaca;
+}
+
+.cart-delete-modal-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 18px;
+    padding-right: 28px;
+}
+
+.cart-delete-modal-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 14px;
+    background: rgba(239, 68, 68, 0.12);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.cart-delete-modal-product {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 14px;
+    border-radius: 14px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    margin-bottom: 20px;
+}
+
+.cart-delete-modal-img-box {
+    width: 56px;
+    height: 56px;
+    border-radius: 10px;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px;
+    flex-shrink: 0;
+}
+
+.cart-delete-modal-img-box img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+}
+
+.cart-delete-modal-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.cart-modal-btn {
+    height: 46px;
+    border-radius: 12px;
+    font-weight: 700;
+    font-size: 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.2s ease;
+    border: none;
+    white-space: nowrap;
+}
+
+.cart-modal-btn-wishlist {
+    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+    color: #ffffff;
+    box-shadow: 0 6px 16px rgba(37, 99, 235, 0.28);
+}
+
+.cart-modal-btn-wishlist:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 22px rgba(37, 99, 235, 0.38);
+}
+
+.cart-modal-btn-delete {
+    background: rgba(239, 68, 68, 0.12);
+    color: #dc2626;
+    border: 1.5px solid rgba(239, 68, 68, 0.35);
+}
+
+.cart-modal-btn-delete:hover {
+    background: #dc2626;
+    color: #ffffff;
+    border-color: #dc2626;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(220, 38, 38, 0.3);
+}
+
+/* Dark Mode for Cart Delete Modal */
+body.dark .cart-delete-modal-card {
+    background: #111827;
+    border-color: rgba(255, 255, 255, 0.12);
+    color: #f8fafc;
+    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.6);
+}
+
+body.dark .cart-delete-modal-close {
+    background: #1e293b;
+    border-color: rgba(255, 255, 255, 0.1);
+    color: #94a3b8;
+}
+
+body.dark .cart-delete-modal-close:hover {
+    background: rgba(239, 68, 68, 0.2);
+    color: #f87171;
+    border-color: rgba(239, 68, 68, 0.4);
+}
+
+body.dark .cart-delete-modal-product {
+    background: #1e293b;
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+body.dark .cart-delete-modal-product h6 {
+    color: #f8fafc;
+}
+
+body.dark .cart-modal-btn-delete {
+    background: rgba(239, 68, 68, 0.15);
+    color: #f87171;
+    border-color: rgba(239, 68, 68, 0.4);
+}
+
+body.dark .cart-modal-btn-delete:hover {
+    background: #dc2626;
+    color: #ffffff;
+    border-color: #dc2626;
+}
+
+@keyframes cartModalFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes cartModalPopIn {
+    from { opacity: 0; transform: translateY(16px) scale(0.96); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (max-width: 480px) {
+    .cart-delete-modal-actions {
+        grid-template-columns: 1fr;
+    }
+}
+
