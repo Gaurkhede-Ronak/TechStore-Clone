@@ -14,7 +14,7 @@
     transition: background 0.35s ease, color 0.35s ease;
 }
 
-.floating-circle {
+.payment-success-page .floating-circle {
     position: absolute;
     border-radius: 50%;
     filter: blur(90px);
@@ -23,7 +23,7 @@
     pointer-events: none;
 }
 
-.circle1 {
+.payment-success-page .circle1 {
     width: 320px;
     height: 320px;
     background: #60a5fa;
@@ -31,7 +31,7 @@
     left: -120px;
 }
 
-.circle2 {
+.payment-success-page .circle2 {
     width: 260px;
     height: 260px;
     background: #22c55e;
@@ -39,7 +39,7 @@
     top: 80px;
 }
 
-.circle3 {
+.payment-success-page .circle3 {
     width: 220px;
     height: 220px;
     background: #06b6d4;
@@ -47,7 +47,7 @@
     left: 35%;
 }
 
-.glass-card {
+.payment-success-page .glass-card {
     width: 100%;
     max-width: 650px;
     padding: 45px;
@@ -64,13 +64,13 @@
     z-index: 5;
 }
 
-.animation-box {
+.payment-success-page .animation-box {
     display: flex;
     justify-content: center;
     margin-bottom: 18px;
 }
 
-.success-check {
+.payment-success-page .success-check {
     width: 130px;
     height: 130px;
     border-radius: 50%;
@@ -83,12 +83,12 @@
     box-shadow: 0 14px 32px rgba(22, 163, 74, 0.16);
 }
 
-.success-animation {
+.payment-success-page .success-animation {
     font-size: 74px;
     color: #16a34a;
 }
 
-.success-badge {
+.payment-success-page .success-badge {
     display: block;
     width: max-content;
     margin: auto;
@@ -102,7 +102,7 @@
     letter-spacing: 1px;
 }
 
-.glass-card h1 {
+.payment-success-page .glass-card h1 {
     text-align: center;
     margin-top: 18px;
     font-size: 36px;
@@ -110,14 +110,14 @@
     color: #0f172a;
 }
 
-.glass-card p {
+.payment-success-page .glass-card > p {
     text-align: center;
     color: #475569;
     margin-top: 12px;
     line-height: 1.75;
 }
 
-.payment-info {
+.payment-success-page .payment-info {
     margin-top: 28px;
     border-radius: 20px;
     overflow: hidden;
@@ -126,7 +126,7 @@
     box-shadow: 0 10px 25px rgba(15, 23, 42, 0.04);
 }
 
-.payment-info-row {
+.payment-success-page .payment-info-row {
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -134,35 +134,35 @@
     border-bottom: 1px solid #e2e8f0;
 }
 
-.payment-info-row:last-child {
+.payment-success-page .payment-info-row:last-child {
     border-bottom: none;
 }
 
-.payment-info-row span {
+.payment-success-page .payment-info-row span {
     color: #475569;
     font-weight: 600;
     font-size: 14.5px;
 }
 
-.payment-info-row strong {
+.payment-success-page .payment-info-row strong {
     color: #0f172a;
     font-weight: 700;
     font-size: 15px;
 }
 
-.payment-info-row strong.amount-paid {
+.payment-success-page .payment-info-row strong.amount-paid {
     color: #16a34a !important;
     font-size: 22px;
     font-weight: 800;
 }
 
-.secure-box {
+.payment-success-page .secure-box {
     display: flex;
     gap: 16px;
     margin-top: 28px;
 }
 
-.secure-item {
+.payment-success-page .secure-item {
     flex: 1;
     text-align: center;
     padding: 18px 14px;
@@ -173,32 +173,32 @@
     transition: all 0.3s ease;
 }
 
-.secure-item:hover {
+.payment-success-page .secure-item:hover {
     transform: translateY(-4px);
     box-shadow: 0 14px 28px rgba(15, 23, 42, 0.08);
 }
 
-.secure-item svg {
+.payment-success-page .secure-item svg {
     font-size: 24px;
     color: #2563eb;
     margin-bottom: 10px;
 }
 
-.secure-item span {
+.payment-success-page .secure-item span {
     display: block;
     font-weight: 700;
     font-size: 13.5px;
     color: #334155;
 }
 
-.countdown-wrapper {
+.payment-success-page .countdown-wrapper {
     margin-top: 36px;
     display: flex;
     flex-direction: column;
     align-items: center;
 }
 
-.progress-circle {
+.payment-success-page .progress-circle {
     width: 146px;
     height: 146px;
     border-radius: 50%;
@@ -210,7 +210,7 @@
     transition: 0.4s;
 }
 
-.progress-inner {
+.payment-success-page .progress-inner {
     width: 124px;
     height: 124px;
     border-radius: 50%;
@@ -221,36 +221,37 @@
     box-shadow: inset 0 5px 15px rgba(15, 23, 42, 0.08);
 }
 
-.progress-inner span {
+.payment-success-page .progress-inner span {
     font-size: 40px;
     font-weight: 800;
     color: #16a34a;
 }
 
-.redirect-section {
+.payment-success-page .redirect-section {
     width: 100%;
     margin-top: 26px;
     text-align: center;
 }
 
-.redirect-section h4 {
+.payment-success-page .redirect-section h4 {
     font-size: 23px;
     font-weight: 800;
     color: #0f172a;
     margin-bottom: 8px;
 }
 
-.redirect-section p {
+.payment-success-page .redirect-section p {
+    text-align: center;
     color: #475569;
     margin-bottom: 18px;
 }
 
-.redirect-section strong {
+.payment-success-page .redirect-section strong {
     color: #16a34a;
     font-weight: 800;
 }
 
-.loading-line {
+.payment-success-page .loading-line {
     width: 100%;
     height: 8px;
     background: #e2e8f0;
@@ -258,7 +259,7 @@
     overflow: hidden;
 }
 
-.loading-fill {
+.payment-success-page .loading-fill {
     height: 100%;
     background: linear-gradient(90deg, #22c55e, #16a34a);
     border-radius: 30px;
@@ -266,7 +267,7 @@
     animation: loadingGlow 1.5s infinite linear;
 }
 
-.payment-status {
+.payment-success-page .payment-status {
     width: 100%;
     margin-top: 32px;
     display: flex;
@@ -274,7 +275,7 @@
     gap: 16px;
 }
 
-.status-item {
+.payment-success-page .status-item {
     display: flex;
     align-items: center;
     gap: 16px;
@@ -286,12 +287,12 @@
     transition: all 0.3s ease;
 }
 
-.status-item:hover {
+.payment-success-page .status-item:hover {
     transform: translateX(6px);
     box-shadow: 0 14px 28px rgba(15, 23, 42, 0.08);
 }
 
-.status-icon {
+.payment-success-page .status-icon {
     width: 48px;
     height: 48px;
     border-radius: 50%;
@@ -304,37 +305,38 @@
     flex-shrink: 0;
 }
 
-.status-icon.success {
+.payment-success-page .status-icon.success {
     background: linear-gradient(135deg, #22c55e, #16a34a);
     box-shadow: 0 8px 18px rgba(22, 163, 74, 0.25);
 }
 
-.status-icon.active {
+.payment-success-page .status-icon.active {
     background: linear-gradient(135deg, #3b82f6, #2563eb);
     animation: pulse 1.5s infinite;
 }
 
-.status-item h6 {
+.payment-success-page .status-item h6 {
     margin: 0;
     font-size: 16px;
     font-weight: 700;
     color: #0f172a;
 }
 
-.status-item small {
+.payment-success-page .status-item small {
     display: block;
     margin-top: 4px;
     color: #64748b;
     line-height: 1.5;
 }
 
-.bottom-text {
+.payment-success-page .bottom-text {
     margin-top: 28px;
     text-align: center;
 }
 
-.bottom-text p {
+.payment-success-page .bottom-text p {
     margin: 0;
+    text-align: center;
     color: #64748b;
     font-size: 14px;
     font-style: italic;
@@ -371,7 +373,7 @@
     100% { filter: brightness(1); }
 }
 
-.glass-card:hover {
+.payment-success-page .glass-card:hover {
     transform: translateY(-4px);
     transition: 0.35s ease;
 }
@@ -388,11 +390,11 @@ body.dark .payment-success-page {
         linear-gradient(135deg, #060b16, #0b1324, #060b16) !important;
 }
 
-body.dark .floating-circle {
+body.dark .payment-success-page .floating-circle {
     opacity: 0.25;
 }
 
-body.dark .glass-card {
+body.dark .payment-success-page .glass-card {
     background: rgba(15, 23, 42, 0.9) !important;
     border: 1px solid rgba(255, 255, 255, 0.12) !important;
     box-shadow:
@@ -402,121 +404,121 @@ body.dark .glass-card {
     color: #f8fafc !important;
 }
 
-body.dark .success-check {
+body.dark .payment-success-page .success-check {
     background: rgba(34, 197, 94, 0.14) !important;
     border: 2px solid rgba(34, 197, 94, 0.38) !important;
     box-shadow: 0 0 35px rgba(34, 197, 94, 0.22) !important;
 }
 
-body.dark .success-animation {
+body.dark .payment-success-page .success-animation {
     color: #4ade80 !important;
 }
 
-body.dark .success-badge {
+body.dark .payment-success-page .success-badge {
     background: rgba(34, 197, 94, 0.16) !important;
     border: 1px solid rgba(34, 197, 94, 0.38) !important;
     color: #4ade80 !important;
 }
 
-body.dark .glass-card h1 {
+body.dark .payment-success-page .glass-card h1 {
     color: #f8fafc !important;
 }
 
-body.dark .glass-card p {
+body.dark .payment-success-page .glass-card > p {
     color: #94a3b8 !important;
 }
 
-body.dark .payment-info {
+body.dark .payment-success-page .payment-info {
     background: rgba(11, 17, 32, 0.92) !important;
     border: 1px solid rgba(255, 255, 255, 0.12) !important;
     box-shadow: 0 16px 36px rgba(0, 0, 0, 0.5) !important;
 }
 
-body.dark .payment-info-row {
+body.dark .payment-success-page .payment-info-row {
     border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
 }
 
-body.dark .payment-info-row:last-child {
+body.dark .payment-success-page .payment-info-row:last-child {
     border-bottom: none !important;
 }
 
-body.dark .payment-info-row span {
+body.dark .payment-success-page .payment-info-row span {
     color: #94a3b8 !important;
 }
 
-body.dark .payment-info-row span.text-success {
+body.dark .payment-success-page .payment-info-row span.text-success {
     color: #4ade80 !important;
 }
 
-body.dark .payment-info-row strong {
+body.dark .payment-success-page .payment-info-row strong {
     color: #f8fafc !important;
 }
 
-body.dark .payment-info-row strong.amount-paid,
-body.dark .payment-info-row strong.text-success {
+body.dark .payment-success-page .payment-info-row strong.amount-paid,
+body.dark .payment-success-page .payment-info-row strong.text-success {
     color: #4ade80 !important;
 }
 
-body.dark .secure-item {
+body.dark .payment-success-page .secure-item {
     background: rgba(11, 17, 32, 0.9) !important;
     border: 1px solid rgba(255, 255, 255, 0.1) !important;
     box-shadow: 0 12px 28px rgba(0, 0, 0, 0.4) !important;
 }
 
-body.dark .secure-item svg {
+body.dark .payment-success-page .secure-item svg {
     color: #60a5fa !important;
 }
 
-body.dark .secure-item span {
+body.dark .payment-success-page .secure-item span {
     color: #e2e8f0 !important;
 }
 
-body.dark .progress-inner {
+body.dark .payment-success-page .progress-inner {
     background: #0b1120 !important;
     box-shadow: inset 0 5px 15px rgba(0, 0, 0, 0.65) !important;
 }
 
-body.dark .progress-inner span {
+body.dark .payment-success-page .progress-inner span {
     color: #4ade80 !important;
 }
 
-body.dark .redirect-section h4 {
+body.dark .payment-success-page .redirect-section h4 {
     color: #f8fafc !important;
 }
 
-body.dark .redirect-section p {
+body.dark .payment-success-page .redirect-section p {
     color: #94a3b8 !important;
 }
 
-body.dark .redirect-section strong {
+body.dark .payment-success-page .redirect-section strong {
     color: #4ade80 !important;
 }
 
-body.dark .loading-line {
+body.dark .payment-success-page .loading-line {
     background: rgba(255, 255, 255, 0.12) !important;
 }
 
-body.dark .status-item {
+body.dark .payment-success-page .status-item {
     background: rgba(11, 17, 32, 0.9) !important;
     border: 1px solid rgba(255, 255, 255, 0.1) !important;
     box-shadow: 0 12px 28px rgba(0, 0, 0, 0.4) !important;
 }
 
-body.dark .status-item h6 {
+body.dark .payment-success-page .status-item h6 {
     color: #f8fafc !important;
 }
 
-body.dark .status-item small {
+body.dark .payment-success-page .status-item small {
     color: #94a3b8 !important;
 }
 
-body.dark .bottom-text p {
+body.dark .payment-success-page .bottom-text p {
     color: #94a3b8 !important;
 }
 
 /* RESPONSIVE */
 @media (max-width: 992px) {
-    .glass-card {
+    .payment-success-page .glass-card {
         max-width: 560px;
         padding: 35px;
     }
@@ -526,42 +528,42 @@ body.dark .bottom-text p {
     .payment-success-page {
         padding: 20px;
     }
-    .glass-card {
+    .payment-success-page .glass-card {
         padding: 28px 22px;
         border-radius: 24px;
     }
-    .glass-card h1 {
+    .payment-success-page .glass-card h1 {
         font-size: 30px;
     }
-    .glass-card p {
+    .payment-success-page .glass-card > p {
         font-size: 14px;
     }
-    .payment-info-row {
+    .payment-success-page .payment-info-row {
         padding: 14px 16px;
     }
-    .payment-info-row strong {
+    .payment-success-page .payment-info-row strong {
         font-size: 14px;
         text-align: right;
     }
-    .secure-box {
+    .payment-success-page .secure-box {
         flex-direction: column;
     }
-    .progress-circle {
+    .payment-success-page .progress-circle {
         width: 130px;
         height: 130px;
     }
-    .progress-inner {
+    .payment-success-page .progress-inner {
         width: 112px;
         height: 112px;
     }
-    .progress-inner span {
+    .payment-success-page .progress-inner span {
         font-size: 36px;
     }
-    .status-item {
+    .payment-success-page .status-item {
         padding: 15px;
         gap: 14px;
     }
-    .status-icon {
+    .payment-success-page .status-icon {
         width: 44px;
         height: 44px;
         font-size: 18px;
@@ -569,29 +571,29 @@ body.dark .bottom-text p {
 }
 
 @media (max-width: 480px) {
-    .glass-card {
+    .payment-success-page .glass-card {
         padding: 22px 16px;
     }
-    .glass-card h1 {
+    .payment-success-page .glass-card h1 {
         font-size: 26px;
     }
-    .success-badge {
+    .payment-success-page .success-badge {
         font-size: 11px;
         padding: 7px 16px;
     }
-    .success-check {
+    .payment-success-page .success-check {
         width: 110px;
         height: 110px;
     }
-    .success-animation {
+    .payment-success-page .success-animation {
         font-size: 62px;
     }
-    .payment-info-row {
+    .payment-success-page .payment-info-row {
         flex-direction: column;
         align-items: flex-start;
         gap: 6px;
     }
-    .payment-info-row strong {
+    .payment-success-page .payment-info-row strong {
         text-align: left;
     }
 }

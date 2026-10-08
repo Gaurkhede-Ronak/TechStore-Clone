@@ -278,6 +278,8 @@ function OrderDetails() {
 
   const [cancelPhase, setCancelPhase] =
     useState("none");
+  const [cancelStepAnim, setCancelStepAnim] =
+    useState(0);
 
   /* DELIVERY OTP */
 
@@ -1067,14 +1069,30 @@ function OrderDetails() {
       order?.status
     );
 
+  const isItemCancelled =
+    Boolean(activeProduct?.isCancelled) ||
+    normalizeStatus(activeProduct?.status) === "CANCELLED";
+
+  const isCancellingNow =
+    cancelPhase === "submitting" ||
+    cancelPhase === "cancelling";
+
+  const isCancelled =
+    isItemCancelled ||
+    orderDatabaseStatus === "CANCELLED" ||
+    shipmentStatus === "CANCELLED" ||
+    cancelPhase === "cancelled";
+
   /*
     IMPORTANT:
-    Shipment status ALWAYS wins.
+    If the order or selected item is cancelled, CANCELLED status takes priority.
+    Otherwise Shipment status wins over database status.
   */
-  const currentStatus =
-    shipmentStatus ||
-    orderDatabaseStatus ||
-    "PLACED";
+  const currentStatus = isCancelled
+    ? "CANCELLED"
+    : shipmentStatus ||
+      orderDatabaseStatus ||
+      "PLACED";
 
   const [showFeeInfo, setShowFeeInfo] = useState(false);
 
@@ -1086,36 +1104,59 @@ function OrderDetails() {
     "Confirmed";
 
   const isDelivered =
-    currentStatus ===
-    "DELIVERED";
+    !isCancelled &&
+    !isCancellingNow &&
+    currentStatus === "DELIVERED";
 
-  const isItemCancelled =
-    Boolean(activeProduct?.isCancelled) ||
-    normalizeStatus(activeProduct?.status) === "CANCELLED";
-
-  const isCancelled =
-    isItemCancelled ||
-    currentStatus === "CANCELLED" ||
-    cancelPhase === "cancelled";
-
-  const isDeliveryUnsuccessful = [
-    "EXCEPTION",
-    "DELIVERY_UNSUCCESSFUL",
-    "UNDELIVERED",
-    "FAILED",
-    "RTO",
-  ].includes(currentStatus);
+  const isDeliveryUnsuccessful =
+    !isCancelled &&
+    !isCancellingNow &&
+    [
+      "EXCEPTION",
+      "DELIVERY_UNSUCCESSFUL",
+      "UNDELIVERED",
+      "FAILED",
+      "RTO",
+    ].includes(currentStatus);
 
   const isOutForDelivery =
-    currentStatus ===
-    "OUT_FOR_DELIVERY";
+    !isCancelled &&
+    !isCancellingNow &&
+    currentStatus === "OUT_FOR_DELIVERY";
 
-  const isDispatchedStage = [
-    "DISPATCHED",
-    "IN_TRANSIT",
-    "REACHED_HUB",
-    "OUT_FOR_DELIVERY",
-  ].includes(currentStatus);
+  const isDispatchedStage =
+    !isCancelled &&
+    !isCancellingNow &&
+    [
+      "DISPATCHED",
+      "IN_TRANSIT",
+      "REACHED_HUB",
+      "OUT_FOR_DELIVERY",
+    ].includes(currentStatus);
+
+  /* Animated step-by-step progression (Confirmed -> Cancellation requested -> Cancelled) */
+  useEffect(() => {
+    if (isCancellingNow) return;
+    if (!isCancelled) {
+      setCancelStepAnim(0);
+      return;
+    }
+    if (cancelPhase === "cancelled") {
+      setCancelStepAnim(3);
+      return;
+    }
+    setCancelStepAnim(1);
+    const t1 = setTimeout(() => {
+      setCancelStepAnim(2);
+    }, 480);
+    const t2 = setTimeout(() => {
+      setCancelStepAnim(3);
+    }, 1050);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, [isCancelled, isCancellingNow, cancelPhase, activeProductIndex]);
 
   const existingActiveRequest = useMemo(() => {
     return (
@@ -1133,6 +1174,7 @@ function OrderDetails() {
   const canCancel =
     !isDelivered &&
     !isCancelled &&
+    !isCancellingNow &&
     !isDeliveryUnsuccessful &&
     (currentStatus === "PLACED" ||
       currentStatus === "ORDER_PLACED" ||
@@ -2703,17 +2745,25 @@ function OrderDetails() {
       }
 
       try {
-        setCancelPhase(
-          "submitting"
-        );
+        setCancelPhase("submitting");
+        setCancelStepAnim(1);
+
+        // Smoothly scroll to Shipment Progress card so the user sees the step-by-step animation
+        setTimeout(() => {
+          const progressEl = document.getElementById("shipment-progress-section");
+          if (progressEl) {
+            progressEl.scrollIntoView({ behavior: "smooth", block: "center" });
+          }
+        }, 80);
 
         toast.loading(
-          "Processing cancellation request...",
+          "Submitting cancellation request...",
           {
             id: "cancelToast",
           }
         );
 
+        const stageOneStart = Date.now();
         const cancelTimeISO =
           new Date().toISOString();
 
@@ -2791,8 +2841,6 @@ function OrderDetails() {
             : order?.cancelledDate,
         };
 
-        setOrder(mergedCancelledOrder);
-
         // Refund wallet amount for the cancelled order / item
         let walletRefundResult = null;
         if (walletPaidVal > 0) {
@@ -2820,45 +2868,49 @@ function OrderDetails() {
           }
         }
 
-        // Only cancel the whole shipment if all items in the order are cancelled
-        if (allItemsCancelled && shipment?.$id) {
+        // Cancel the shipment if all items in the order are cancelled
+        if (allItemsCancelled) {
           try {
-            await shipmentHelper.updateShipmentStatus(
-              shipment.$id,
-              "CANCELLED",
-              {
-                orderId:
-                  shipment.orderId ||
-                  order?.orderId ||
-                  orderDocumentId,
+            let targetShipment = shipment;
+            if (!targetShipment?.$id) {
+              const fetchedShipments = await shipmentService.getShipmentsByOrderId(
+                String(getOrderReference(order))
+              );
+              const sList = Array.isArray(fetchedShipments)
+                ? fetchedShipments
+                : fetchedShipments?.documents || [];
+              targetShipment = sList[0] || null;
+            }
 
-                trackingId:
-                  shipment.trackingId,
+            if (targetShipment?.$id) {
+              await shipmentHelper.updateShipmentStatus(
+                targetShipment.$id,
+                "CANCELLED",
+                {
+                  orderId:
+                    targetShipment.orderId ||
+                    order?.orderId ||
+                    orderDocumentId,
+                  trackingId:
+                    targetShipment.trackingId,
+                  title:
+                    "Shipment Cancelled",
+                  description:
+                    "This shipment was cancelled by the customer.",
+                  city:
+                    targetShipment.destinationCity ||
+                    order?.city ||
+                    "",
+                  state:
+                    targetShipment.destinationState ||
+                    order?.state ||
+                    "",
+                }
+              );
 
-                title:
-                  "Shipment Cancelled",
-
-                description:
-                  "This shipment was cancelled by the customer.",
-
-                city:
-                  shipment.destinationCity ||
-                  order?.city ||
-                  "",
-
-                state:
-                  shipment.destinationState ||
-                  order?.state ||
-                  "",
-              }
-            );
-
-            await loadShipmentFromAppwrite(
-              false
-            );
-          } catch (
-            shipmentError
-          ) {
+              await loadShipmentFromAppwrite(false);
+            }
+          } catch (shipmentError) {
             console.error(
               "Shipment cancellation error:",
               shipmentError
@@ -2866,9 +2918,24 @@ function OrderDetails() {
           }
         }
 
-        setCancelPhase(
-          "cancelled"
-        );
+        // Ensure Stage 1 ("Cancellation requested" active pulse) is visible for at least 1100ms
+        const elapsedStageOne = Date.now() - stageOneStart;
+        if (elapsedStageOne < 1100) {
+          await new Promise((resolve) =>
+            setTimeout(resolve, 1100 - elapsedStageOne)
+          );
+        }
+
+        // Stage 2: Complete "Cancellation requested" and animate connector line to "Cancelled"
+        setCancelPhase("cancelling");
+        setCancelStepAnim(2);
+
+        await new Promise((resolve) => setTimeout(resolve, 650));
+
+        // Stage 3: Final "Cancelled" state
+        setOrder(mergedCancelledOrder);
+        setCancelStepAnim(3);
+        setCancelPhase("cancelled");
 
         const creditedWalletAmt = Number(
           walletRefundResult?.amount ||
@@ -2892,6 +2959,7 @@ function OrderDetails() {
           error
         );
 
+        setCancelStepAnim(0);
         setCancelPhase(
           "none"
         );
@@ -3096,11 +3164,10 @@ function OrderDetails() {
                         : isFocusedExchange
                         ? "bg-primary text-white"
                         : "bg-warning text-dark"
+                      : isCancellingNow || (isCancelled && cancelStepAnim > 0 && cancelStepAnim < 3)
+                      ? "bg-warning text-dark"
                       : isCancelled
                       ? "bg-danger text-white"
-                      : cancelPhase ===
-                        "submitting"
-                      ? "bg-warning text-dark"
                       : isDelivered
                       ? "bg-success text-white"
                       : isOutForDelivery
@@ -3116,9 +3183,8 @@ function OrderDetails() {
                       : isFocusedExchange
                       ? "Exchanged"
                       : "Returned"
-                    : cancelPhase ===
-                      "submitting"
-                    ? "Cancellation requested"
+                    : isCancellingNow || (isCancelled && cancelStepAnim > 0 && cancelStepAnim < 3)
+                    ? "Cancellation Requested"
                     : isCancelled
                     ? "Cancelled"
                     : orderStatus}
@@ -3289,6 +3355,11 @@ function OrderDetails() {
                     ? "Exchanged"
                     : "Returned"}
                 </span>
+              ) : isCancellingNow || (isCancelled && cancelStepAnim > 0 && cancelStepAnim < 3) ? (
+                <span className="badge bg-warning text-dark rounded-pill px-3 py-2 d-inline-flex align-items-center gap-2">
+                  <FaSpinner className="fa-spin" size={11} />
+                  Cancellation Requested
+                </span>
               ) : isCancelled ? (
                 <span className="badge bg-danger rounded-pill px-3 py-2">
                   Cancelled
@@ -3301,6 +3372,10 @@ function OrderDetails() {
                 <span className="badge bg-success rounded-pill px-3 py-2">
                   <FaCheckCircle className="me-1" />
                   Delivered
+                </span>
+              ) : isOutForDelivery ? (
+                <span className="badge bg-warning text-dark rounded-pill px-3 py-2">
+                  Arriving Today
                 </span>
               ) : shipment?.estimatedDeliveryDate ? (
                 <span className="badge bg-light text-dark border rounded-pill px-3 py-2">
@@ -3354,7 +3429,7 @@ function OrderDetails() {
             <div className="flex-grow-1 order-product-info-col">
 
               <span
-                className="badge bg-light text-primary border mb-2"
+                className="badge bg-light text-primary border mb-2 order-brand-badge"
                 style={{
                   fontSize: "10px",
                 }}
@@ -3407,7 +3482,7 @@ function OrderDetails() {
                     )}
                   </span>
 
-                  <span className="badge bg-danger-subtle text-danger">
+                  <span className="badge bg-danger-subtle text-danger order-discount-badge">
                     {
                       activeItemDiscountPercent
                     }
@@ -3446,7 +3521,10 @@ function OrderDetails() {
 
         {/* SHIPMENT / RETURN / EXCHANGE / CANCELLATION PROGRESS — All rendered in the EXACT Shipment Progress UI (Image 2) */}
 
-        <section className="shipment-progress-section mb-4">
+        <section
+          id="shipment-progress-section"
+          className="shipment-progress-section mb-4"
+        >
           <div className="shipment-progress-card glass-card hover-lift">
             {focusedReturnRequest ? (
               (() => {
@@ -3647,115 +3725,165 @@ function OrderDetails() {
                   </>
                 );
               })()
-            ) : isCancelled || cancelPhase === "submitting" ? (
-              <>
-                <div className="shipment-progress-head">
-                  <div className="shipment-progress-head-left">
-                    <h4 className="shipment-progress-title mb-1">
-                      Shipment Progress
-                    </h4>
+            ) : isCancelled || isCancellingNow ? (
+              (() => {
+                const effectiveCancelStage =
+                  cancelStepAnim > 0 ? cancelStepAnim : 3;
+                const isFinalCancelled = effectiveCancelStage >= 3;
 
-                    <p className="shipment-progress-subtitle mb-0">
-                      {shipment?.trackingId
-                        ? `Live tracking • ${shipment.trackingId}`
-                        : `Cancelled by you on ${cancelledFormattedDate}`}
-                    </p>
-                  </div>
+                return (
+                  <>
+                    <div className="shipment-progress-head">
+                      <div className="shipment-progress-head-left">
+                        <h4 className="shipment-progress-title mb-1">
+                          Shipment Progress
+                        </h4>
 
-                  <div className="shipment-progress-head-actions">
-                    <span className="shipment-progress-status-pill danger">
-                      <span className="shipment-progress-status-dot" />
-                      {cancelPhase === "submitting" ? "Cancelling..." : "Cancelled"}
-                    </span>
-                  </div>
-                </div>
+                        <p className="shipment-progress-subtitle mb-0">
+                          {!isFinalCancelled
+                            ? "Processing your cancellation request..."
+                            : `Cancelled by you on ${cancelledFormattedDate}`}
+                        </p>
+                      </div>
 
-                <div className="shipment-progress-timeline">
-                  {/* Step 1: Confirmed */}
-                  <div className="shipment-progress-step completed">
-                    <div className="shipment-progress-marker-column">
-                      <span className="shipment-progress-marker">
-                        <FaCheck />
-                      </span>
-                      <span className="shipment-progress-line completed" />
+                      <div className="shipment-progress-head-actions">
+                        <span
+                          className={`shipment-progress-status-pill ${
+                            isFinalCancelled ? "danger" : "warning"
+                          }`}
+                        >
+                          <span className="shipment-progress-status-dot" />
+                          {isFinalCancelled
+                            ? "Cancelled"
+                            : "Cancellation Requested"}
+                        </span>
+                      </div>
                     </div>
 
-                    <div className="shipment-progress-step-content">
-                      <div className="shipment-progress-step-top">
-                        <div>
-                          <h5 className="shipment-progress-step-title mb-1">
-                            Confirmed
-                          </h5>
-                          <p className="shipment-progress-step-description mb-0">
-                            Your order has been placed successfully and shipment processing has started.
-                          </p>
+                    <div className="shipment-progress-timeline">
+                      {/* Step 1: Confirmed */}
+                      <div className="shipment-progress-step completed">
+                        <div className="shipment-progress-marker-column">
+                          <span className="shipment-progress-marker">
+                            <FaCheck />
+                          </span>
+                          <span className="shipment-progress-line completed cancel-line-anim-1" />
                         </div>
 
-                        <div className="shipment-progress-date">
-                          <strong>{originalPlacedDate}</strong>
-                          <span>{originalPlacedTime}</span>
+                        <div className="shipment-progress-step-content">
+                          <div className="shipment-progress-step-top">
+                            <div>
+                              <h5 className="shipment-progress-step-title mb-1">
+                                Confirmed
+                              </h5>
+                              <p className="shipment-progress-step-description mb-0">
+                                Your order has been placed successfully and shipment processing has started.
+                              </p>
+                            </div>
+
+                            <div className="shipment-progress-date">
+                              <strong>{originalPlacedDate}</strong>
+                              <span>{originalPlacedTime}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Step 2: Cancellation requested */}
+                      <div
+                        className={`shipment-progress-step ${
+                          effectiveCancelStage >= 2
+                            ? "completed"
+                            : "requesting-step current"
+                        }`}
+                      >
+                        <div className="shipment-progress-marker-column">
+                          <span
+                            className={`shipment-progress-marker ${
+                              effectiveCancelStage < 2 ? "requesting" : ""
+                            }`}
+                          >
+                            {effectiveCancelStage >= 2 ? (
+                              <FaCheck />
+                            ) : (
+                              <FaSpinner className="fa-spin" size={8} />
+                            )}
+                          </span>
+                          <span
+                            className={`shipment-progress-line ${
+                              effectiveCancelStage >= 2
+                                ? "cancelled-line cancel-line-anim-2"
+                                : ""
+                            }`}
+                          />
+                        </div>
+
+                        <div className="shipment-progress-step-content">
+                          <div className="shipment-progress-step-top">
+                            <div>
+                              <h5 className="shipment-progress-step-title mb-1">
+                                Cancellation requested
+                              </h5>
+                              <p className="shipment-progress-step-description mb-0">
+                                {effectiveCancelStage < 2 && isCancellingNow
+                                  ? "Submitting and verifying your cancellation request..."
+                                  : "You requested to cancel this order."}
+                              </p>
+                            </div>
+
+                            <div className="shipment-progress-date">
+                              <strong>{cancelledFormattedDate}</strong>
+                              <span>{cancelledFormattedTime}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Step 3: Cancelled */}
+                      <div
+                        className={`shipment-progress-step ${
+                          isFinalCancelled
+                            ? "cancelled-step current cancel-step-pop"
+                            : "pending"
+                        }`}
+                      >
+                        <div className="shipment-progress-marker-column">
+                          <span
+                            className={`shipment-progress-marker ${
+                              isFinalCancelled ? "cancelled" : ""
+                            }`}
+                          >
+                            {isFinalCancelled ? <FaTimes /> : null}
+                          </span>
+                        </div>
+
+                        <div className="shipment-progress-step-content">
+                          <div className="shipment-progress-step-top">
+                            <div>
+                              <h5 className="shipment-progress-step-title mb-1">
+                                Cancelled
+                              </h5>
+                              <p className="shipment-progress-step-description mb-0">
+                                {isFinalCancelled
+                                  ? cancellationTrackingEvent?.description ||
+                                    `This shipment was cancelled by the customer.`
+                                  : "Waiting for cancellation confirmation..."}
+                              </p>
+                            </div>
+
+                            {isFinalCancelled && (
+                              <div className="shipment-progress-date">
+                                <strong>{cancelledFormattedDate}</strong>
+                                <span>{cancelledFormattedTime}</span>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-
-                  {/* Step 2: Cancellation requested */}
-                  <div className="shipment-progress-step completed">
-                    <div className="shipment-progress-marker-column">
-                      <span className="shipment-progress-marker">
-                        <FaCheck />
-                      </span>
-                      <span className="shipment-progress-line cancelled-line" />
-                    </div>
-
-                    <div className="shipment-progress-step-content">
-                      <div className="shipment-progress-step-top">
-                        <div>
-                          <h5 className="shipment-progress-step-title mb-1">
-                            Cancellation requested
-                          </h5>
-                          <p className="shipment-progress-step-description mb-0">
-                            You requested to cancel this order.
-                          </p>
-                        </div>
-
-                        <div className="shipment-progress-date">
-                          <strong>{cancelledFormattedDate}</strong>
-                          <span>{cancelledFormattedTime}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Step 3: Cancelled */}
-                  <div className="shipment-progress-step cancelled-step current">
-                    <div className="shipment-progress-marker-column">
-                      <span className="shipment-progress-marker cancelled">
-                        <FaTimes />
-                      </span>
-                    </div>
-
-                    <div className="shipment-progress-step-content">
-                      <div className="shipment-progress-step-top">
-                        <div>
-                          <h5 className="shipment-progress-step-title mb-1">
-                            Cancelled
-                          </h5>
-                          <p className="shipment-progress-step-description mb-0">
-                            {cancellationTrackingEvent?.description ||
-                              `Cancelled by you on ${cancelledFormattedDate}.`}
-                          </p>
-                        </div>
-
-                        <div className="shipment-progress-date">
-                          <strong>{cancelledFormattedDate}</strong>
-                          <span>{cancelledFormattedTime}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </>
+                  </>
+                );
+              })()
             ) : (
               <>
                 <div
@@ -4127,7 +4255,7 @@ function OrderDetails() {
                 <button
                   type="button"
                   className={`btn order-action-btn w-100 ${
-                    canCancel
+                    canCancel || isCancellingNow
                       ? "order-action-btn-cancel"
                       : "order-action-btn-disabled"
                   }`}
@@ -4137,10 +4265,14 @@ function OrderDetails() {
                     cancelPhase !== "none"
                   }
                 >
-                  {cancelPhase === "submitting" ? (
+                  {isCancellingNow ? (
                     <>
                       <FaSpinner className="fa-spin flex-shrink-0" />
-                      <span>Cancelling Product...</span>
+                      <span>
+                        {cancelPhase === "submitting"
+                          ? "Cancellation Requested..."
+                          : "Finalizing Cancellation..."}
+                      </span>
                     </>
                   ) : canCancel ? (
                     <span>Cancel Product</span>
@@ -4156,8 +4288,9 @@ function OrderDetails() {
 
         {/* REFUND */}
 
-        {(isCancelled || isFocusedReturn) && (
-          <div className="pro-card p-4 p-md-5 mb-4 glass-card hover-lift order-refund-card">
+        {((isCancelled && (cancelStepAnim === 0 || cancelStepAnim >= 3)) ||
+          isFocusedReturn) && (
+          <div className="pro-card p-4 p-md-5 mb-4 glass-card hover-lift order-refund-card animate-fade-in">
 
             {isPureCOD ? (
               <div>

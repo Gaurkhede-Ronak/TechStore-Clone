@@ -3562,3 +3562,183 @@ body.dark .od-review-success-icon {
     width: 100%;
   }
 }
+
+/* ==========================================================================
+   FULL-WIDTH CARD PROTECTION, LEFT-ALIGNED TIMELINE & ANIMATED CANCELLATION
+   ========================================================================== */
+.order-details-wrapper .glass-card {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+.order-details-wrapper .glass-card p,
+.order-details-wrapper .shipment-progress-subtitle,
+.order-details-wrapper .shipment-progress-step-description,
+.order-details-wrapper .shipment-progress-step-title {
+  text-align: left !important;
+}
+
+.order-details-wrapper .shipment-progress-subtitle {
+  margin-top: 2px !important;
+}
+
+.order-details-wrapper .shipment-progress-step-description {
+  margin-top: 3px !important;
+}
+
+/* Completed green timeline line & markers in Dark Mode */
+body.dark .shipment-progress-line.completed,
+body.dark-mode .shipment-progress-line.completed,
+html.dark .shipment-progress-line.completed {
+  background: #10b981 !important;
+}
+
+body.dark .shipment-progress-step.completed .shipment-progress-marker,
+body.dark-mode .shipment-progress-step.completed .shipment-progress-marker,
+html.dark .shipment-progress-step.completed .shipment-progress-marker {
+  background: #10b981 !important;
+  border-color: #10b981 !important;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.25) !important;
+  color: #ffffff !important;
+}
+
+body.dark .shipment-progress-step.current:not(.cancelled-step):not(.requesting-step) .shipment-progress-marker,
+body.dark-mode .shipment-progress-step.current:not(.cancelled-step):not(.requesting-step) .shipment-progress-marker,
+html.dark .shipment-progress-step.current:not(.cancelled-step):not(.requesting-step) .shipment-progress-marker {
+  background: #10b981 !important;
+  border-color: #0f172a !important;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.35), 0 0 15px rgba(16, 185, 129, 0.35) !important;
+  color: #ffffff !important;
+}
+
+/* Dark Mode Shipment Progress Header Status Pills */
+body.dark .shipment-progress-status-pill.primary,
+body.dark-mode .shipment-progress-status-pill.primary,
+html.dark .shipment-progress-status-pill.primary {
+  background: rgba(37, 99, 235, 0.16) !important;
+  border-color: rgba(59, 130, 246, 0.38) !important;
+  color: #60a5fa !important;
+}
+
+body.dark .shipment-progress-status-pill.success,
+body.dark-mode .shipment-progress-status-pill.success,
+html.dark .shipment-progress-status-pill.success {
+  background: rgba(16, 185, 129, 0.16) !important;
+  border-color: rgba(16, 185, 129, 0.38) !important;
+  color: #34d399 !important;
+}
+
+body.dark .shipment-progress-status-pill.warning,
+body.dark-mode .shipment-progress-status-pill.warning,
+html.dark .shipment-progress-status-pill.warning {
+  background: rgba(245, 158, 11, 0.16) !important;
+  border-color: rgba(245, 158, 11, 0.4) !important;
+  color: #fbbf24 !important;
+}
+
+body.dark .shipment-progress-status-pill.danger,
+body.dark-mode .shipment-progress-status-pill.danger,
+html.dark .shipment-progress-status-pill.danger {
+  background: rgba(239, 68, 68, 0.16) !important;
+  border-color: rgba(239, 68, 68, 0.4) !important;
+  color: #f87171 !important;
+}
+
+/* Dark Mode Brand & Discount Badges in Ordered Item Card */
+body.dark .order-brand-badge,
+body.dark-mode .order-brand-badge,
+html.dark .order-brand-badge {
+  background: rgba(37, 99, 235, 0.15) !important;
+  border-color: rgba(59, 130, 246, 0.35) !important;
+  color: #60a5fa !important;
+}
+
+body.dark .order-discount-badge,
+body.dark-mode .order-discount-badge,
+html.dark .order-discount-badge {
+  background: rgba(239, 68, 68, 0.18) !important;
+  border: 1px solid rgba(239, 68, 68, 0.35) !important;
+  color: #f87171 !important;
+}
+
+/* Animated Cancellation Timeline Steps (Confirmed -> Cancellation requested -> Cancelled) */
+.shipment-progress-line.cancel-line-anim-1 {
+  transform-origin: top center;
+  animation: cancelLineGrow 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.shipment-progress-line.cancel-line-anim-2 {
+  transform-origin: top center;
+  animation: cancelLineGrow 0.55s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes cancelLineGrow {
+  0% {
+    transform: scaleY(0);
+    opacity: 0.4;
+  }
+  100% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+
+.shipment-progress-step.requesting-step .shipment-progress-marker.requesting {
+  width: 20px;
+  height: 20px;
+  margin-top: 2px;
+  background: #f59e0b !important;
+  border-color: #ffffff !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.25), 0 0 16px rgba(245, 158, 11, 0.45) !important;
+  animation: cancelRequestPulse 1.2s ease-in-out infinite;
+}
+
+body.dark .shipment-progress-step.requesting-step .shipment-progress-marker.requesting {
+  border-color: #0f172a !important;
+}
+
+@keyframes cancelRequestPulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.25), 0 0 14px rgba(245, 158, 11, 0.4);
+  }
+  50% {
+    transform: scale(1.12);
+    box-shadow: 0 0 0 7px rgba(245, 158, 11, 0.15), 0 0 22px rgba(245, 158, 11, 0.65);
+  }
+}
+
+.shipment-progress-step.cancel-step-pop .shipment-progress-marker.cancelled {
+  animation: cancelledMarkerPop 0.48s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.shipment-progress-step.cancel-step-pop .shipment-progress-step-content {
+  animation: cancelledContentFadeIn 0.4s ease-out forwards;
+}
+
+@keyframes cancelledMarkerPop {
+  0% {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+  70% {
+    transform: scale(1.18);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes cancelledContentFadeIn {
+  0% {
+    opacity: 0.35;
+    transform: translateY(4px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
