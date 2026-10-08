@@ -711,8 +711,8 @@ function CardPayment() {
                 </div>
               )}
 
-              <div className="payment-row mt-3 pt-3 border-top">
-                <span className="fw-semibold">
+              <div className="payment-row payment-total-row">
+                <span className="fw-bold">
                   Total Paid
                 </span>
 
@@ -737,7 +737,7 @@ function CardPayment() {
 
           <div className="col-lg-7">
             <div className="payment-card shadow-lg border-0">
-              <h4 className="fw-bold mb-4 payment-section-title border-bottom pb-3">
+              <h4 className="fw-bold mb-4 payment-section-title payment-section-divider pb-3">
                 Enter Card Details
               </h4>
 
@@ -878,16 +878,18 @@ function CardPayment() {
 
               {/* PAYMENT INFORMATION */}
 
-              <div className="alert alert-light border small mb-4">
-                <div className="d-flex align-items-start gap-2">
-                  <FaShieldAlt className="text-success mt-1" />
+              <div className="payment-security-box small mb-4">
+                <div className="d-flex align-items-start gap-3">
+                  <div className="payment-security-icon">
+                    <FaShieldAlt size={16} />
+                  </div>
 
                   <div>
-                    <strong>
+                    <strong className="payment-security-title d-block">
                       Secure Payment
                     </strong>
 
-                    <div className="text-muted mt-1">
+                    <div className="payment-security-desc mt-1">
                       Your card details are
                       used only for this
                       payment session and
@@ -946,7 +948,7 @@ function CardPayment() {
               {!processing && (
                 <button
                   type="button"
-                  className="btn btn-light w-100 mt-3 fw-semibold d-flex align-items-center justify-content-center gap-2"
+                  className="btn payment-back-btn w-100 mt-3 fw-semibold d-flex align-items-center justify-content-center gap-2"
                   onClick={() => navigate(-1)}
                 >
                   <FaArrowLeft />

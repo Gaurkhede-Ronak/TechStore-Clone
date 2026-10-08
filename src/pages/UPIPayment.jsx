@@ -979,7 +979,7 @@ function UPIPayment() {
                         {walletPaid > 0 && (
 
                             <div
-                                className="mt-3 p-3 rounded-3 bg-light"
+                                className="mt-3 p-3 rounded-3 payment-breakdown-subbox"
                             >
 
                                 <div
@@ -1045,7 +1045,7 @@ function UPIPayment() {
 
 
                                     <strong
-                                        className="text-dark"
+                                        className="payment-breakdown-total"
                                     >
                                         ₹
                                         {(
@@ -1066,7 +1066,7 @@ function UPIPayment() {
                     {/* PAYMENT INFORMATION */}
 
                     <div
-                        className="alert alert-primary border-0 rounded-3 small mb-4"
+                        className="payment-howto-box rounded-3 small mb-4"
                     >
 
                         <div
@@ -1172,7 +1172,7 @@ function UPIPayment() {
 
                         <button
                             type="button"
-                            className="btn btn-light w-100 mt-3 fw-semibold d-flex align-items-center justify-content-center gap-2"
+                            className="btn payment-back-btn w-100 mt-3 fw-semibold d-flex align-items-center justify-content-center gap-2"
                             onClick={
                                 handleBack
                             }

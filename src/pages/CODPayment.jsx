@@ -410,28 +410,29 @@ function CODPayment() {
   // UI
 
   return (
-    <div className="container py-5">
-      <div className="payment-card">
+    <div className="card-payment-wrapper py-5">
+      <div className="container py-3">
+        <div className="payment-card">
 
-        {/* HEADER */}
+          {/* HEADER */}
 
-        <div className="text-center">
-          <FaMoneyBillWave
-            size={70}
-            className="payment-icon"
-          />
+          <div className="text-center">
+            <FaMoneyBillWave
+              size={70}
+              className="payment-icon text-success"
+            />
 
-          <h2 className="mt-3">
-            Cash On Delivery
-          </h2>
+            <h2 className="mt-3 payment-main-title">
+              Cash On Delivery
+            </h2>
 
-          <p className="text-muted">
-            Pay when your order reaches
-            your doorstep.
-          </p>
-        </div>
+            <p className="text-muted">
+              Pay when your order reaches
+              your doorstep.
+            </p>
+          </div>
 
-        <hr />
+          <hr />
 
         {/* ORDER ID */}
 
@@ -627,7 +628,7 @@ function CODPayment() {
         {!processing && (
           <button
             type="button"
-            className="btn btn-light w-100 mt-3 fw-semibold d-flex align-items-center justify-content-center gap-2"
+            className="btn payment-back-btn w-100 mt-3 fw-semibold d-flex align-items-center justify-content-center gap-2"
             onClick={() => navigate(-1)}
           >
             <FaArrowLeft />
@@ -641,6 +642,7 @@ function CODPayment() {
           <FaShieldAlt className="text-success" />
 
           Secure Order Confirmation
+        </div>
         </div>
       </div>
     </div>

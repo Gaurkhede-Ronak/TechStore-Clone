@@ -1,4 +1,4 @@
-/* ULTRA-LUXURY FINTECH THEME (100% PERFECT) */
+/* ULTRA-LUXURY FINTECH THEME (100% PERFECT LIGHT & DARK MODE) */
 .card-payment-wrapper {
     min-height: 90vh;
     font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
@@ -17,14 +17,26 @@ body.dark .card-payment-wrapper {
     background: #ffffff !important;
     padding: 40px !important;
     border-radius: 28px !important;
-    box-shadow: 0 20px 40px rgba(15, 23, 42, 0.08);
-    border: 1px solid rgba(226, 232, 240, 0.8);
+    box-shadow: 0 20px 45px rgba(15, 23, 42, 0.08) !important;
+    border: 1.5px solid #e2e8f0 !important;
+    color: #0f172a;
 }
 
 body.dark .payment-card {
     background: #0b1120 !important;
-    border: 1px solid rgba(255, 255, 255, 0.1) !important;
-    box-shadow: 0 30px 60px rgba(0, 0, 0, 0.9) !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    box-shadow: 0 30px 60px rgba(0, 0, 0, 0.85) !important;
+    color: #f8fafc;
+}
+
+.payment-card hr {
+    border-color: #cbd5e1;
+    opacity: 0.5;
+}
+
+body.dark .payment-card hr {
+    border-color: rgba(255, 255, 255, 0.14);
+    opacity: 1;
 }
 
 .payment-main-title {
@@ -43,7 +55,14 @@ body.dark .payment-main-title {
 
 body.dark .payment-section-title {
     color: #ffffff !important;
-    border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+.payment-section-divider {
+    border-bottom: 1.5px solid #e2e8f0 !important;
+}
+
+body.dark .payment-section-divider {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12) !important;
 }
 
 .payment-row {
@@ -51,15 +70,21 @@ body.dark .payment-section-title {
     justify-content: space-between;
     align-items: center;
     padding: 14px 0;
-    border-bottom: 1px solid #e5e7eb;
+    border-bottom: 1px solid #e2e8f0;
+    color: #0f172a;
 }
 
-.payment-row:last-child {
-    border-bottom: none;
+.payment-row:last-child,
+.payment-total-row {
+    border-bottom: none !important;
+}
+
+.payment-total-row {
+    padding-top: 16px;
 }
 
 body.dark .payment-row {
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.09);
     color: #f8fafc;
 }
 
@@ -72,12 +97,12 @@ body.dark .payment-row {
     background: #f8fafc;
     border-radius: 16px;
     margin-top: 20px;
-    border: 1.5px solid #e2e8f0;
+    border: 1.5px solid #cbd5e1;
 }
 
 body.dark .upi-box {
-    background: rgba(15, 23, 42, 0.6) !important;
-    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    background: rgba(15, 23, 42, 0.75) !important;
+    border: 1px solid rgba(255, 255, 255, 0.14) !important;
 }
 
 .upi-box span,
@@ -137,7 +162,7 @@ body.dark .qr-container {
     color: white;
     position: relative;
     overflow: hidden;
-    box-shadow: 0 25px 50px -12px rgba(37, 99, 235, 0.4), 
+    box-shadow: 0 25px 50px -12px rgba(37, 99, 235, 0.4),
                 0 0 0 1px rgba(255, 255, 255, 0.1) inset;
     transition: transform 0.5s ease, box-shadow 0.5s ease;
 }
@@ -210,12 +235,12 @@ body.dark .qr-container {
     text-transform: uppercase;
 }
 
-/* INPUTS & FORMS (FIXED VISIBILITY) */
+/* INPUTS & FORMS (LIGHT & DARK MODE) */
 .payment-card label,
 .payment-card .form-label {
     font-weight: 700;
     margin-bottom: 8px;
-    color: #374151;
+    color: #334155;
     font-size: 13px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -230,15 +255,16 @@ body.dark .payment-card .form-label {
     height: 56px;
     border-radius: 14px;
     border: 1.5px solid #cbd5e1;
-    background: #f8fafc;
+    background-color: #f8fafc;
     font-size: 15px;
+    font-weight: 500;
     color: #0f172a;
-    transition: all 0.3s ease;
+    transition: all 0.25s ease;
 }
 
 body.dark .payment-card .form-control {
-    background: #020617 !important;
-    border: 1.5px solid #334155 !important;
+    background-color: #0f172a !important;
+    border: 1.5px solid rgba(255, 255, 255, 0.14) !important;
     color: #ffffff !important;
 }
 
@@ -251,15 +277,143 @@ body.dark .payment-card .form-control::placeholder {
 }
 
 .payment-card .form-control:focus {
-    background: #ffffff;
+    background-color: #ffffff;
+    color: #0f172a;
     border-color: #2563eb;
     box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.15);
 }
 
 body.dark .payment-card .form-control:focus {
-    background: #020617 !important;
+    background-color: #020617 !important;
+    color: #ffffff !important;
     border-color: #3b82f6 !important;
-    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.3);
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.25);
+}
+
+/* SECURE PAYMENT INFO BOX (CARD PAGE) */
+.payment-security-box {
+    background: linear-gradient(135deg, #f0fdf4 0%, #f8fafc 100%);
+    border: 1.5px solid #bbf7d0;
+    border-radius: 16px;
+    padding: 15px 18px;
+    transition: all 0.25s ease;
+}
+
+.payment-security-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 11px;
+    background: rgba(16, 185, 129, 0.14);
+    color: #059669;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.payment-security-title {
+    color: #065f46;
+    font-size: 13.5px;
+    font-weight: 700;
+}
+
+.payment-security-desc {
+    color: #475569;
+    font-size: 12.5px;
+    line-height: 1.5;
+}
+
+body.dark .payment-security-box {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, rgba(15, 23, 42, 0.85) 100%) !important;
+    border: 1px solid rgba(16, 185, 129, 0.28) !important;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+body.dark .payment-security-icon {
+    background: rgba(16, 185, 129, 0.18) !important;
+    color: #34d399 !important;
+}
+
+body.dark .payment-security-title {
+    color: #34d399 !important;
+}
+
+body.dark .payment-security-desc {
+    color: #cbd5e1 !important;
+}
+
+/* UPI BREAKDOWN & HOW-TO-PAY BOXES */
+.payment-breakdown-subbox {
+    background: #f1f5f9;
+    border: 1px solid #cbd5e1;
+}
+
+.payment-breakdown-total {
+    color: #0f172a;
+}
+
+body.dark .payment-breakdown-subbox {
+    background: rgba(15, 23, 42, 0.85) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+body.dark .payment-breakdown-total {
+    color: #f8fafc !important;
+}
+
+.payment-howto-box {
+    background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+    border: 1.5px solid #bfdbfe;
+    color: #1e3a8a;
+    padding: 16px 18px;
+}
+
+body.dark .payment-howto-box {
+    background: linear-gradient(135deg, rgba(37, 99, 235, 0.16) 0%, rgba(15, 23, 42, 0.88) 100%) !important;
+    border: 1px solid rgba(59, 130, 246, 0.3) !important;
+    color: #e2e8f0 !important;
+}
+
+body.dark .payment-howto-box strong {
+    color: #93c5fd !important;
+}
+
+/* COD ADDRESS BOX */
+.address-box {
+    margin-top: 22px;
+    padding: 18px 20px;
+    border-radius: 16px;
+    background: #f8fafc;
+    border: 1.5px solid #e2e8f0;
+}
+
+.address-box h5 {
+    font-size: 15px;
+    font-weight: 700;
+    color: #0f172a;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.address-box p {
+    margin-bottom: 4px;
+    font-size: 13.5px;
+    color: #475569;
+}
+
+body.dark .address-box {
+    background: rgba(15, 23, 42, 0.7) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+body.dark .address-box h5 {
+    color: #f8fafc !important;
+}
+
+body.dark .address-box p {
+    color: #cbd5e1 !important;
 }
 
 /* BUTTONS & SUMMARY BOXES */
@@ -280,6 +434,35 @@ body.dark .payment-card .form-control:focus {
     box-shadow: 0 15px 30px rgba(37, 99, 235, 0.5);
 }
 
+.payment-back-btn {
+    height: 48px;
+    border-radius: 14px;
+    background: #f1f5f9 !important;
+    border: 1.5px solid #cbd5e1 !important;
+    color: #334155 !important;
+    font-size: 14.5px;
+    transition: all 0.25s ease;
+}
+
+.payment-back-btn:hover {
+    background: #e2e8f0 !important;
+    border-color: #94a3b8 !important;
+    color: #0f172a !important;
+    transform: translateY(-1px);
+}
+
+body.dark .payment-back-btn {
+    background: rgba(255, 255, 255, 0.06) !important;
+    border: 1px solid rgba(255, 255, 255, 0.14) !important;
+    color: #e2e8f0 !important;
+}
+
+body.dark .payment-back-btn:hover {
+    background: rgba(255, 255, 255, 0.12) !important;
+    border-color: rgba(255, 255, 255, 0.25) !important;
+    color: #ffffff !important;
+}
+
 .payment-total-price {
     color: #2563eb;
     font-weight: 800;
@@ -298,18 +481,20 @@ body.dark .payment-total-price {
 
 .order-summary-box {
     margin-top: 25px;
-    padding: 20px;
-    background: #f8fafc;
-    border-radius: 16px;
+    padding: 22px 24px;
+    background: #ffffff;
+    border-radius: 20px;
     border: 1.5px solid #e2e8f0;
+    box-shadow: 0 14px 32px rgba(15, 23, 42, 0.06) !important;
 }
 
 body.dark .order-summary-box {
-    background: rgba(15, 23, 42, 0.6) !important;
-    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    background: #0b1120 !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    box-shadow: 0 22px 45px rgba(0, 0, 0, 0.75) !important;
 }
 
-body.dark .text-muted {
+body.dark .card-payment-wrapper .text-muted {
     color: #94a3b8 !important;
 }
 
