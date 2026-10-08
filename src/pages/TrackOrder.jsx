@@ -1027,6 +1027,44 @@ function TrackOrder() {
     return idx >= 0 ? idx : 0;
   }, [returnSteps, normalizedReturnStatus]);
 
+  /* SEQUENTIAL STEP-BY-STEP ANIMATION FOR TRACK ORDER STEPPERS */
+  const [animStepIdx, setAnimStepIdx] = useState(0);
+  const [animReturnStepIdx, setAnimReturnStepIdx] = useState(0);
+
+  useEffect(() => {
+    setAnimStepIdx(0);
+  }, [shipment?.$id, shipment?.trackingId]);
+
+  useEffect(() => {
+    if (loading) return;
+    if (animStepIdx < currentStepIndex) {
+      const timer = setTimeout(() => {
+        setAnimStepIdx((prev) => Math.min(prev + 1, currentStepIndex));
+      }, 360);
+      return () => clearTimeout(timer);
+    }
+    if (animStepIdx > currentStepIndex) {
+      setAnimStepIdx(currentStepIndex);
+    }
+  }, [animStepIdx, currentStepIndex, loading]);
+
+  useEffect(() => {
+    setAnimReturnStepIdx(0);
+  }, [returnRequest?.$id, returnRequest?.referenceId]);
+
+  useEffect(() => {
+    if (!returnRequest) return;
+    if (animReturnStepIdx < returnStepIndex) {
+      const timer = setTimeout(() => {
+        setAnimReturnStepIdx((prev) => Math.min(prev + 1, returnStepIndex));
+      }, 360);
+      return () => clearTimeout(timer);
+    }
+    if (animReturnStepIdx > returnStepIndex) {
+      setAnimReturnStepIdx(returnStepIndex);
+    }
+  }, [animReturnStepIdx, returnStepIndex, returnRequest]);
+
   /* STAGE-ACCURATE SCAN TIMELINE (IMAGE 3 FIX) — Every checkpoint shows its true, non-repeating location & hub code! */
 
   const buildStageScanDetails = useCallback(
@@ -1292,9 +1330,13 @@ function TrackOrder() {
       <div className="cp-milestones-track">
         {STATUS_ORDER.map((st, idx) => {
           const isCompleted =
-            currentStepIndex > idx || currentStatus === "DELIVERED";
+            animStepIdx > idx ||
+            (animStepIdx === idx &&
+              currentStepIndex === idx &&
+              currentStatus === "DELIVERED");
           const isActive =
-            currentStepIndex === idx && currentStatus !== "DELIVERED";
+            animStepIdx === idx &&
+            (animStepIdx < currentStepIndex || currentStatus !== "DELIVERED");
 
           return (
             <div
@@ -1306,7 +1348,7 @@ function TrackOrder() {
               {idx < STATUS_ORDER.length - 1 && (
                 <div
                   className={`cp-milestone-line ${
-                    currentStepIndex > idx ? "completed" : ""
+                    animStepIdx > idx ? "completed" : ""
                   }`}
                 />
               )}
@@ -1333,6 +1375,10 @@ function TrackOrder() {
 
   const renderReturnExchangeSection = () => {
     if (!returnRequest) return null;
+
+    const isAllRxDone =
+      normalizedReturnStatus === "EXCHANGE_COMPLETED" ||
+      normalizedReturnStatus === "REFUND_COMPLETED";
 
     return (
       <section className="cp-live-position-card">
@@ -1367,8 +1413,14 @@ function TrackOrder() {
             }}
           >
             {returnSteps.map((step, idx) => {
-              const isCompleted = returnStepIndex > idx;
-              const isActive = returnStepIndex === idx;
+              const isCompleted =
+                animReturnStepIdx > idx ||
+                (animReturnStepIdx === idx &&
+                  returnStepIndex === idx &&
+                  isAllRxDone);
+              const isActive =
+                animReturnStepIdx === idx &&
+                (animReturnStepIdx < returnStepIndex || !isAllRxDone);
 
               return (
                 <div
@@ -1380,7 +1432,7 @@ function TrackOrder() {
                   {idx < returnSteps.length - 1 && (
                     <div
                       className={`cp-milestone-line ${
-                        returnStepIndex > idx ? "completed" : ""
+                        animReturnStepIdx > idx ? "completed" : ""
                       }`}
                     />
                   )}

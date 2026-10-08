@@ -1415,3 +1415,100 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* =========================================================================
+   SEQUENTIAL STEPPER & SCAN TIMELINE ANIMATIONS IN TRACK ORDER
+========================================================================= */
+
+.cp-milestone-step.completed .cp-milestone-dot,
+.cp-milestone-step.active .cp-milestone-dot {
+  animation: cpDotPopIn 0.44s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes cpDotPopIn {
+  0% {
+    transform: scale(0.35);
+    opacity: 0.2;
+  }
+  70% {
+    transform: scale(1.16);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.cp-milestone-line.completed {
+  transform-origin: left center;
+  animation: cpLineGrowRight 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes cpLineGrowRight {
+  0% {
+    transform: scaleX(0);
+    opacity: 0.4;
+  }
+  100% {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+}
+
+.cp-milestone-step.active .cp-milestone-line:not(.completed) {
+  overflow: hidden;
+}
+
+.cp-milestone-step.active .cp-milestone-line:not(.completed)::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 55%;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    var(--cp-primary) 0%,
+    rgba(16, 185, 129, 0.75) 55%,
+    transparent 100%
+  );
+  animation: cpHorizontalFlowBeam 1.65s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@keyframes cpHorizontalFlowBeam {
+  0% {
+    transform: translateX(-100%);
+    opacity: 0.9;
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(190%);
+    opacity: 0.15;
+  }
+}
+
+.cp-scan-item {
+  animation: cpScanItemFadeSlide 0.42s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.cp-scan-item:nth-child(1) { animation-delay: 0.05s; }
+.cp-scan-item:nth-child(2) { animation-delay: 0.14s; }
+.cp-scan-item:nth-child(3) { animation-delay: 0.23s; }
+.cp-scan-item:nth-child(4) { animation-delay: 0.32s; }
+.cp-scan-item:nth-child(5) { animation-delay: 0.41s; }
+.cp-scan-item:nth-child(6) { animation-delay: 0.50s; }
+.cp-scan-item:nth-child(7) { animation-delay: 0.59s; }
+
+@keyframes cpScanItemFadeSlide {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

@@ -274,11 +274,19 @@ function OrderDetails() {
   const [returnRequestLoading, setReturnRequestLoading] =
     useState(false);
 
-  /* CANCEL */
+  /* CANCEL & TIMELINE ANIMATION STATES */
 
   const [cancelPhase, setCancelPhase] =
     useState("none");
   const [cancelStepAnim, setCancelStepAnim] =
+    useState(0);
+  const [cancelReturnPhase, setCancelReturnPhase] =
+    useState("none");
+  const [rxCancelStepAnim, setRxCancelStepAnim] =
+    useState(0);
+  const [orderAnimIndex, setOrderAnimIndex] =
+    useState(0);
+  const [rxAnimIndex, setRxAnimIndex] =
     useState(0);
 
   /* DELIVERY OTP */
@@ -1052,8 +1060,12 @@ function OrderDetails() {
     String(focusedReturnRequest?.type || "").toUpperCase() === "EXCHANGE";
   const isFocusedReturn =
     String(focusedReturnRequest?.type || "").toUpperCase() === "RETURN";
+  const isCancellingReturnNow =
+    cancelReturnPhase === "submitting" ||
+    cancelReturnPhase === "cancelling";
   const isFocusedReqCancelled =
-    String(focusedReturnRequest?.status || "").toUpperCase() === "CANCELLED";
+    String(focusedReturnRequest?.status || "").toUpperCase() === "CANCELLED" ||
+    cancelReturnPhase === "cancelled";
 
 
 
@@ -1157,6 +1169,37 @@ function OrderDetails() {
       clearTimeout(t2);
     };
   }, [isCancelled, isCancellingNow, cancelPhase, activeProductIndex]);
+
+  /* Animated step-by-step progression for Return / Exchange cancellation */
+  useEffect(() => {
+    if (isCancellingReturnNow) return;
+    if (!isFocusedReqCancelled) {
+      setRxCancelStepAnim(0);
+      setCancelReturnPhase("none");
+      return;
+    }
+    if (cancelReturnPhase === "cancelled") {
+      setRxCancelStepAnim(3);
+      return;
+    }
+    setRxCancelStepAnim(1);
+    const t1 = setTimeout(() => {
+      setRxCancelStepAnim(2);
+    }, 480);
+    const t2 = setTimeout(() => {
+      setRxCancelStepAnim(3);
+    }, 1050);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, [
+    isFocusedReqCancelled,
+    isCancellingReturnNow,
+    cancelReturnPhase,
+    focusedReturnRequest?.$id,
+    activeProductIndex,
+  ]);
 
   const existingActiveRequest = useMemo(() => {
     return (
@@ -2118,6 +2161,85 @@ function OrderDetails() {
     ]
   );
 
+  /* SEQUENTIAL STEP-BY-STEP ANIMATION FOR ORDER PLACED -> DELIVERED */
+  const targetOrderStageIndex = useMemo(() => {
+    let lastCompleted = 0;
+    trackingMilestones.forEach((step, idx) => {
+      if (step.isCompleted || step.isUnsuccessful) {
+        lastCompleted = idx;
+      }
+    });
+    return lastCompleted;
+  }, [trackingMilestones]);
+
+  useEffect(() => {
+    setOrderAnimIndex(0);
+  }, [order?.$id, order?.orderId, activeProductIndex]);
+
+  useEffect(() => {
+    if (shipmentLoading && !shipment) return;
+    if (orderAnimIndex < targetOrderStageIndex) {
+      const timer = setTimeout(() => {
+        setOrderAnimIndex((prev) =>
+          Math.min(prev + 1, targetOrderStageIndex)
+        );
+      }, 420);
+      return () => clearTimeout(timer);
+    }
+    if (orderAnimIndex > targetOrderStageIndex) {
+      setOrderAnimIndex(targetOrderStageIndex);
+    }
+  }, [orderAnimIndex, targetOrderStageIndex, shipmentLoading, shipment]);
+
+  /* SEQUENTIAL STEP-BY-STEP ANIMATION FOR RETURN & EXCHANGE */
+  const allFocusedRxSteps = useMemo(
+    () => buildReturnExchangeSteps(focusedReturnRequest),
+    [buildReturnExchangeSteps, focusedReturnRequest]
+  );
+
+  const targetRxStageIndex = useMemo(() => {
+    let lastIdx = 0;
+    allFocusedRxSteps.forEach((s, idx) => {
+      if (s.isCompleted || s.isCancelledStep) {
+        lastIdx = idx;
+      }
+    });
+    return lastIdx;
+  }, [allFocusedRxSteps]);
+
+  useEffect(() => {
+    setRxAnimIndex(0);
+  }, [
+    focusedReturnRequest?.$id,
+    focusedReturnRequest?.referenceId,
+    activeProductIndex,
+  ]);
+
+  useEffect(() => {
+    if (
+      !focusedReturnRequest ||
+      isFocusedReqCancelled ||
+      isCancellingReturnNow
+    ) {
+      return;
+    }
+    if (rxAnimIndex < targetRxStageIndex) {
+      const timer = setTimeout(() => {
+        setRxAnimIndex((prev) => Math.min(prev + 1, targetRxStageIndex));
+      }, 420);
+      return () => clearTimeout(timer);
+    }
+    if (rxAnimIndex > targetRxStageIndex) {
+      setRxAnimIndex(targetRxStageIndex);
+    }
+  }, [
+    rxAnimIndex,
+    targetRxStageIndex,
+    focusedReturnRequest,
+    isFocusedReqCancelled,
+    isCancellingReturnNow,
+  ]);
+
   const scrollToPaymentBreakup = () => {
     const el = document.getElementById("order-payment-section");
     if (el) {
@@ -2983,12 +3105,34 @@ function OrderDetails() {
     }
     try {
       setCancelReturnLoading(true);
-      await returnExchangeService.cancelRequest(focusedReturnRequest.$id);
+      const progressSection = document.getElementById("shipment-progress-section");
+      if (progressSection) {
+        progressSection.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+      // Stage 1: Requesting cancellation
+      setCancelReturnPhase("submitting");
+      setRxCancelStepAnim(1);
+
+      await Promise.all([
+        returnExchangeService.cancelRequest(focusedReturnRequest.$id),
+        new Promise((resolve) => setTimeout(resolve, 650)),
+      ]);
+
+      // Stage 2: Request verified, connector line animates down to Cancelled
+      setRxCancelStepAnim(2);
+      setCancelReturnPhase("cancelling");
+      await new Promise((resolve) => setTimeout(resolve, 600));
+
+      // Stage 3: Final Cancelled state
+      setRxCancelStepAnim(3);
+      setCancelReturnPhase("cancelled");
       await loadReturnExchangeRequests();
       toast.success(
         `${isFocusedExchange ? "Exchange" : "Return"} request cancelled successfully.`
       );
     } catch (err) {
+      setRxCancelStepAnim(0);
+      setCancelReturnPhase("none");
       toast.error(err?.message || "Unable to cancel request.");
     } finally {
       setCancelReturnLoading(false);
@@ -3532,9 +3676,26 @@ function OrderDetails() {
                 const rxRefId =
                   focusedReturnRequest.referenceId ||
                   `${isFocusedExchange ? "EX" : "RE"}-${getOrderReference(order)}-01`;
-                const rxStatus = String(
+                const rawRxStatus = String(
                   focusedReturnRequest?.status || "REQUESTED"
                 ).toUpperCase();
+                const rxStatus =
+                  isFocusedReqCancelled || isCancellingReturnNow
+                    ? "CANCELLED"
+                    : rawRxStatus;
+                const effectiveRxCancelStage =
+                  rxCancelStepAnim > 0 ? rxCancelStepAnim : 3;
+                const isFinalRxCancelled = effectiveRxCancelStage >= 3;
+                const rxCreatedDate =
+                  focusedReturnRequest?.createdAt ||
+                  focusedReturnRequest?.$createdAt ||
+                  order?.orderDate ||
+                  order?.$createdAt;
+                const rxUpdatedDate =
+                  focusedReturnRequest?.updatedAt ||
+                  focusedReturnRequest?.$updatedAt ||
+                  rxCreatedDate;
+
                 const showRxCourier = [
                   "DISPATCHED",
                   "IN_TRANSIT",
@@ -3563,7 +3724,13 @@ function OrderDetails() {
                         </h4>
 
                         <p className="shipment-progress-subtitle mb-0">
-                          {`Live tracking • ${rxRefId}`}
+                          {rxStatus === "CANCELLED"
+                            ? !isFinalRxCancelled
+                              ? `Processing your ${
+                                  isFocusedExchange ? "exchange" : "return"
+                                } cancellation...`
+                              : `Cancelled by you on ${formatDate(rxUpdatedDate)}`
+                            : `Live tracking • ${rxRefId}`}
                         </p>
                       </div>
 
@@ -3590,7 +3757,9 @@ function OrderDetails() {
                         <span
                           className={`shipment-progress-status-pill ${
                             rxStatus === "CANCELLED"
-                              ? "danger"
+                              ? isFinalRxCancelled
+                                ? "danger"
+                                : "warning"
                               : [
                                   "ACCEPTED",
                                   "CONFIRMED",
@@ -3608,7 +3777,9 @@ function OrderDetails() {
                         >
                           <span className="shipment-progress-status-dot" />
                           {rxStatus === "CANCELLED"
-                            ? isFocusedExchange
+                            ? !isFinalRxCancelled
+                              ? "Cancellation Requested"
+                              : isFocusedExchange
                               ? "Exchange Cancelled"
                               : "Return Cancelled"
                             : rxStatus === "ACCEPTED"
@@ -3644,84 +3815,242 @@ function OrderDetails() {
                             : "Return Requested"}
                         </span>
 
-                        <button
-                          type="button"
-                          className="shipment-progress-track-btn"
-                          onClick={() => handleTrackReturn(focusedReturnRequest)}
-                        >
-                          <FaRoute className="me-1" />
-                          Track
-                        </button>
+                        {rxStatus !== "CANCELLED" && (
+                          <button
+                            type="button"
+                            className="shipment-progress-track-btn"
+                            onClick={() => handleTrackReturn(focusedReturnRequest)}
+                          >
+                            <FaRoute className="me-1" />
+                            Track
+                          </button>
+                        )}
                       </div>
                     </div>
 
-                    <div className="shipment-progress-timeline">
-                      {rxSteps.map((step, index) => {
-                        const nextStep = rxSteps[index + 1];
-                        const isLastStep = index === rxSteps.length - 1;
-                        return (
-                          <div
-                            className={`shipment-progress-step ${
-                              step.isCancelledStep
-                                ? "cancelled-step current"
-                                : step.isCompleted
-                                ? "completed"
-                                : "pending"
-                            } ${step.isCurrent ? "current" : ""}`}
-                            key={step.key}
-                          >
-                            <div className="shipment-progress-marker-column">
-                              <span
-                                className={`shipment-progress-marker ${
-                                  step.isCancelledStep ? "cancelled" : ""
-                                }`}
-                              >
-                                {step.isCancelledStep ? (
-                                  <FaTimes />
-                                ) : step.isCompleted ? (
-                                  <FaCheck />
-                                ) : null}
-                              </span>
+                    {rxStatus === "CANCELLED" ? (
+                      <div className="shipment-progress-timeline">
+                        {/* Step 1: Return / Exchange Created */}
+                        <div className="shipment-progress-step completed">
+                          <div className="shipment-progress-marker-column">
+                            <span className="shipment-progress-marker step-marker-pop">
+                              <FaCheck />
+                            </span>
+                            <span className="shipment-progress-line completed cancel-line-anim-1" />
+                          </div>
 
-                              {!isLastStep && (
-                                <span
-                                  className={`shipment-progress-line ${
-                                    nextStep?.isCancelledStep
-                                      ? "cancelled-line"
-                                      : nextStep?.isCompleted
-                                      ? "completed"
+                          <div className="shipment-progress-step-content step-content-reveal">
+                            <div className="shipment-progress-step-top">
+                              <div>
+                                <h5 className="shipment-progress-step-title mb-1">
+                                  {isFocusedExchange
+                                    ? "Exchange Created"
+                                    : "Return Created"}
+                                </h5>
+                                <p className="shipment-progress-step-description mb-0">
+                                  {`Your ${
+                                    isFocusedExchange ? "exchange" : "return"
+                                  } request (${rxRefId}) was registered.${
+                                    focusedReturnRequest?.reason
+                                      ? ` Reason: ${focusedReturnRequest.reason}`
                                       : ""
                                   }`}
-                                />
-                              )}
-                            </div>
+                                </p>
+                              </div>
 
-                            <div className="shipment-progress-step-content">
-                              <div className="shipment-progress-step-top">
-                                <div>
-                                  <h5 className="shipment-progress-step-title mb-1">
-                                    {step.label}
-                                  </h5>
-
-                                  {!isLastStep && step.description ? (
-                                    <p className="shipment-progress-step-description mb-0">
-                                      {step.description}
-                                    </p>
-                                  ) : null}
-                                </div>
-
-                                {step.date ? (
-                                  <div className="shipment-progress-date">
-                                    <strong>{formatDate(step.date)}</strong>
-                                    <span>{formatTime(step.date)}</span>
-                                  </div>
-                                ) : null}
+                              <div className="shipment-progress-date">
+                                <strong>{formatDate(rxCreatedDate)}</strong>
+                                <span>{formatTime(rxCreatedDate)}</span>
                               </div>
                             </div>
                           </div>
-                        );
-                      })}
-                    </div>
+                        </div>
+
+                        {/* Step 2: Cancellation requested */}
+                        <div
+                          className={`shipment-progress-step ${
+                            effectiveRxCancelStage >= 2
+                              ? "completed"
+                              : "requesting-step current"
+                          }`}
+                        >
+                          <div className="shipment-progress-marker-column">
+                            <span
+                              className={`shipment-progress-marker ${
+                                effectiveRxCancelStage < 2
+                                  ? "requesting"
+                                  : "step-marker-pop"
+                              }`}
+                            >
+                              {effectiveRxCancelStage >= 2 ? (
+                                <FaCheck />
+                              ) : (
+                                <FaSpinner className="fa-spin" size={8} />
+                              )}
+                            </span>
+                            <span
+                              className={`shipment-progress-line ${
+                                effectiveRxCancelStage >= 2
+                                  ? "cancelled-line cancel-line-anim-2"
+                                  : ""
+                              }`}
+                            />
+                          </div>
+
+                          <div className="shipment-progress-step-content step-content-reveal">
+                            <div className="shipment-progress-step-top">
+                              <div>
+                                <h5 className="shipment-progress-step-title mb-1">
+                                  Cancellation requested
+                                </h5>
+                                <p className="shipment-progress-step-description mb-0">
+                                  {effectiveRxCancelStage < 2 &&
+                                  isCancellingReturnNow
+                                    ? `Submitting and verifying your ${
+                                        isFocusedExchange ? "exchange" : "return"
+                                      } cancellation...`
+                                    : `You requested to cancel this ${
+                                        isFocusedExchange ? "exchange" : "return"
+                                      } request.`}
+                                </p>
+                              </div>
+
+                              <div className="shipment-progress-date">
+                                <strong>{formatDate(rxUpdatedDate)}</strong>
+                                <span>{formatTime(rxUpdatedDate)}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Step 3: Return Cancelled / Exchange Cancelled */}
+                        <div
+                          className={`shipment-progress-step ${
+                            isFinalRxCancelled
+                              ? "cancelled-step current cancel-step-pop"
+                              : "pending"
+                          }`}
+                        >
+                          <div className="shipment-progress-marker-column">
+                            <span
+                              className={`shipment-progress-marker ${
+                                isFinalRxCancelled ? "cancelled" : ""
+                              }`}
+                            >
+                              {isFinalRxCancelled ? <FaTimes /> : null}
+                            </span>
+                          </div>
+
+                          <div className="shipment-progress-step-content">
+                            <div className="shipment-progress-step-top">
+                              <div>
+                                <h5 className="shipment-progress-step-title mb-1">
+                                  {isFocusedExchange
+                                    ? "Exchange Cancelled"
+                                    : "Return Cancelled"}
+                                </h5>
+                                <p className="shipment-progress-step-description mb-0">
+                                  {isFinalRxCancelled
+                                    ? `Your ${
+                                        isFocusedExchange ? "exchange" : "return"
+                                      } request (${rxRefId}) has been cancelled by you.`
+                                    : "Waiting for cancellation confirmation..."}
+                                </p>
+                              </div>
+
+                              {isFinalRxCancelled && (
+                                <div className="shipment-progress-date">
+                                  <strong>{formatDate(rxUpdatedDate)}</strong>
+                                  <span>{formatTime(rxUpdatedDate)}</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="shipment-progress-timeline">
+                        {rxSteps.map((step, index) => {
+                          const nextStep = rxSteps[index + 1];
+                          const isLastStep = index === rxSteps.length - 1;
+                          const isStepReached =
+                            step.isCompleted && index <= rxAnimIndex;
+                          const isNextReached =
+                            Boolean(nextStep?.isCompleted) &&
+                            index + 1 <= rxAnimIndex;
+                          const isAnimCurrent =
+                            isStepReached &&
+                            index === rxAnimIndex &&
+                            (rxAnimIndex < targetRxStageIndex || step.isCurrent);
+                          const isOutgoingFlowing =
+                            isStepReached &&
+                            !isNextReached &&
+                            index === rxAnimIndex &&
+                            step.isCurrent &&
+                            !isLastStep;
+
+                          return (
+                            <div
+                              className={`shipment-progress-step ${
+                                isStepReached ? "completed" : "pending"
+                              } ${isAnimCurrent ? "current" : ""}`}
+                              key={step.key}
+                            >
+                              <div className="shipment-progress-marker-column">
+                                <span
+                                  className={`shipment-progress-marker ${
+                                    isStepReached ? "step-marker-pop" : ""
+                                  } ${isAnimCurrent ? "live-active-marker" : ""}`}
+                                >
+                                  {isStepReached ? <FaCheck /> : null}
+                                </span>
+
+                                {!isLastStep && (
+                                  <span
+                                    className={`shipment-progress-line ${
+                                      isNextReached
+                                        ? "completed step-line-grow"
+                                        : isOutgoingFlowing
+                                        ? "line-progress-flow"
+                                        : ""
+                                    }`}
+                                  />
+                                )}
+                              </div>
+
+                              <div
+                                className={`shipment-progress-step-content ${
+                                  isStepReached ? "step-content-reveal" : ""
+                                }`}
+                              >
+                                <div className="shipment-progress-step-top">
+                                  <div>
+                                    <h5 className="shipment-progress-step-title mb-1">
+                                      {step.label}
+                                    </h5>
+
+                                    {(isStepReached ||
+                                      index <= rxAnimIndex + 1) &&
+                                    step.description ? (
+                                      <p className="shipment-progress-step-description mb-0">
+                                        {step.description}
+                                      </p>
+                                    ) : null}
+                                  </div>
+
+                                  {isStepReached && step.date ? (
+                                    <div className="shipment-progress-date">
+                                      <strong>{formatDate(step.date)}</strong>
+                                      <span>{formatTime(step.date)}</span>
+                                    </div>
+                                  ) : null}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </>
                 );
               })()
@@ -4042,61 +4371,104 @@ function OrderDetails() {
 
                     {trackingMilestones.map((step, index) => {
                       const nextStep = trackingMilestones[index + 1];
-                      const isWarningStep = Boolean(step.isUnsuccessful);
-                      const isNextWarning = Boolean(nextStep?.isUnsuccessful);
+                      const isLastStep = index === trackingMilestones.length - 1;
+                      const isWarningReached =
+                        Boolean(step.isUnsuccessful) &&
+                        index <= orderAnimIndex;
+                      const isNextWarningReached =
+                        Boolean(nextStep?.isUnsuccessful) &&
+                        Boolean(nextStep?.isCompleted) &&
+                        index + 1 <= orderAnimIndex;
+                      const isStepReached =
+                        step.isCompleted && index <= orderAnimIndex;
+                      const isNextReached =
+                        Boolean(nextStep?.isCompleted) &&
+                        index + 1 <= orderAnimIndex;
+                      const isAnimCurrent =
+                        isStepReached &&
+                        index === orderAnimIndex &&
+                        (orderAnimIndex < targetOrderStageIndex ||
+                          step.isCurrent);
+                      const isOutgoingFlowing =
+                        isStepReached &&
+                        !isNextReached &&
+                        !isNextWarningReached &&
+                        index === orderAnimIndex &&
+                        !isDelivered &&
+                        !isDeliveryUnsuccessful &&
+                        !isLastStep;
 
                       return (
                         <div
                           className={`shipment-progress-step ${
-                            isWarningStep
-                              ? "cancelled-step current"
-                              : step.isCompleted
+                            isWarningReached
+                              ? "cancelled-step current cancel-step-pop"
+                              : isStepReached
                               ? "completed"
                               : "pending"
-                          } ${step.isCurrent ? "current" : ""}`}
+                          } ${isAnimCurrent ? "current" : ""}`}
                           key={step.key}
                         >
                           <div className="shipment-progress-marker-column">
                             <span
                               className={`shipment-progress-marker ${
-                                isWarningStep ? "cancelled" : ""
+                                isWarningReached
+                                  ? "cancelled"
+                                  : isStepReached
+                                  ? "step-marker-pop"
+                                  : ""
+                              } ${
+                                isAnimCurrent && !isWarningReached
+                                  ? "live-active-marker"
+                                  : ""
                               }`}
                             >
-                              {isWarningStep ? (
+                              {isWarningReached ? (
                                 <FaExclamationTriangle size={8} />
-                              ) : step.isCompleted ? (
+                              ) : isStepReached ? (
                                 <FaCheck />
                               ) : null}
                             </span>
 
-                            {index < trackingMilestones.length - 1 && (
+                            {!isLastStep && (
                               <span
                                 className={`shipment-progress-line ${
-                                  isNextWarning && nextStep?.isCompleted
-                                    ? "cancelled-line"
-                                    : nextStep?.isCompleted
-                                    ? "completed"
+                                  isNextWarningReached
+                                    ? "cancelled-line step-line-grow"
+                                    : isNextReached
+                                    ? "completed step-line-grow"
+                                    : isOutgoingFlowing
+                                    ? "line-progress-flow"
                                     : ""
                                 }`}
                               />
                             )}
                           </div>
 
-                          <div className="shipment-progress-step-content">
+                          <div
+                            className={`shipment-progress-step-content ${
+                              isStepReached || isWarningReached
+                                ? "step-content-reveal"
+                                : ""
+                            }`}
+                          >
                             <div className="shipment-progress-step-top">
                               <div>
                                 <h5 className="shipment-progress-step-title mb-1">
                                   {step.label}
                                 </h5>
 
-                                {step.description ? (
-                                  <p className="shipment-progress-step-description mb-0">
-                                    {step.description}
-                                  </p>
+                                {isStepReached || isWarningReached ? (
+                                  step.description ? (
+                                    <p className="shipment-progress-step-description mb-0">
+                                      {step.description}
+                                    </p>
+                                  ) : null
                                 ) : null}
                               </div>
 
-                              {step.date ? (
+                              {(isStepReached || isWarningReached) &&
+                              step.date ? (
                                 <div className="shipment-progress-date">
                                   <strong>{formatDate(step.date)}</strong>
                                   <span>{formatTime(step.date)}</span>
