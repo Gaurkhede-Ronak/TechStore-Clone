@@ -170,7 +170,36 @@ class NotificationService {
         );
 
 
-      return response;
+      const rawDocs = response?.documents || [];
+      const seenNotifKeys = new Set();
+      const cleanedDocs = [];
+
+      for (const doc of rawDocs) {
+        const typeKey = String(doc?.type || "").toUpperCase();
+        const ordKey = String(doc?.orderId || "").trim();
+        const titleKey = String(doc?.title || "").trim();
+
+        if (ordKey && (typeKey === "WALLET_REFUND" || typeKey === "OUT_FOR_DELIVERY" || typeKey === "DELIVERED" || typeKey === "CANCELLED")) {
+          const sig = `${typeKey}::${ordKey}::${titleKey}`;
+          if (seenNotifKeys.has(sig)) {
+            if (doc?.$id) {
+              databases
+                .deleteDocument(DATABASE_ID, NOTIFICATIONS_COLLECTION_ID, doc.$id)
+                .catch(() => {});
+            }
+            continue;
+          }
+          seenNotifKeys.add(sig);
+        }
+
+        cleanedDocs.push(doc);
+      }
+
+      return {
+        ...response,
+        documents: cleanedDocs,
+        total: cleanedDocs.length,
+      };
 
     } catch (error) {
 

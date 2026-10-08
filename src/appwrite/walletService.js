@@ -119,6 +119,77 @@ const getWallet = async (userId) => {
     return response.documents?.[0] || null;
 };
 
+  // DEDUPLICATE TRANSACTIONS (CLEANS UP ANY DUPLICATE REFUND OR SYNTHETIC DEBIT ENTRIES)
+
+const deduplicateWalletTransactions = (rawDocs = []) => {
+    const seenRefundByOrderAndAmount = new Set();
+    const seenSyntheticDebitByOrder = new Set();
+
+    // First check which orderIds already have real debits from deductMoney
+    const ordersWithRealDebits = new Set();
+    for (const tx of rawDocs) {
+        if (
+            String(tx?.type || "").toLowerCase() === "debit" &&
+            !String(tx?.transactionId || "").startsWith("ORDER-DEBIT-")
+        ) {
+            const ordKey = String(tx?.orderId || "").trim();
+            if (ordKey) ordersWithRealDebits.add(ordKey);
+        }
+    }
+
+    const cleaned = [];
+
+    for (const tx of rawDocs) {
+        const type = String(tx?.type || "").toLowerCase();
+        const source = String(tx?.source || "").toLowerCase();
+        const ordKey = String(tx?.orderId || "").trim();
+        const amt = roundMoney(Number(tx?.amount || 0));
+        const txnId = String(tx?.transactionId || "");
+
+        // 1. Deduplicate refund credits for the same orderId + amount
+        if (type === "credit" && source === "refund" && ordKey) {
+            const refundSig = `${ordKey}::${amt}`;
+            if (seenRefundByOrderAndAmount.has(refundSig)) {
+                if (tx?.$id) {
+                    databases
+                        .deleteDocument(
+                            DATABASE_ID,
+                            WALLET_TRANSACTIONS_COLLECTION_ID,
+                            tx.$id
+                        )
+                        .catch(() => {});
+                }
+                continue;
+            }
+            seenRefundByOrderAndAmount.add(refundSig);
+        }
+
+        // 2. Deduplicate synthetic ORDER-DEBIT entries (or drop if real debits exist)
+        if (type === "debit" && txnId.startsWith("ORDER-DEBIT-") && ordKey) {
+            if (
+                ordersWithRealDebits.has(ordKey) ||
+                seenSyntheticDebitByOrder.has(ordKey)
+            ) {
+                if (tx?.$id) {
+                    databases
+                        .deleteDocument(
+                            DATABASE_ID,
+                            WALLET_TRANSACTIONS_COLLECTION_ID,
+                            tx.$id
+                        )
+                        .catch(() => {});
+                }
+                continue;
+            }
+            seenSyntheticDebitByOrder.add(ordKey);
+        }
+
+        cleaned.push(tx);
+    }
+
+    return cleaned;
+};
+
   // GET TRANSACTIONS
 
 const getTransactions = async (userId) => {
@@ -134,7 +205,7 @@ const getTransactions = async (userId) => {
         ]
     );
 
-    return response.documents || [];
+    return deduplicateWalletTransactions(response.documents || []);
 };
 
   // COMPUTE REFUND OFFSET MAP BY DEBIT TRANSACTION ID
@@ -143,20 +214,9 @@ const getTransactions = async (userId) => {
 
 const getEffectiveDebitAmountsMap = async (userId, preloadedTransactions = null) => {
     const cleanId = cleanUserId(userId);
-    const allTx = preloadedTransactions || (await getTransactions(cleanId));
-
-    const refundByOrderKey = new Map();
-    for (const tx of allTx) {
-        if (
-            String(tx?.type || "").toLowerCase() === "credit" &&
-            String(tx?.source || "").toLowerCase() === "refund"
-        ) {
-            const key = String(tx?.orderId || "").trim();
-            if (!key) continue;
-            const prev = refundByOrderKey.get(key) || 0;
-            refundByOrderKey.set(key, roundMoney(prev + Number(tx?.amount || 0)));
-        }
-    }
+    const allTx = preloadedTransactions
+        ? deduplicateWalletTransactions(preloadedTransactions)
+        : await getTransactions(cleanId);
 
     // Group order debits by orderId
     const debitsByOrderKey = new Map();
@@ -168,6 +228,29 @@ const getEffectiveDebitAmountsMap = async (userId, preloadedTransactions = null)
                 debitsByOrderKey.set(key, []);
             }
             debitsByOrderKey.get(key).push(tx);
+        }
+    }
+
+    const refundByOrderKey = new Map();
+    for (const tx of allTx) {
+        if (
+            String(tx?.type || "").toLowerCase() === "credit" &&
+            String(tx?.source || "").toLowerCase() === "refund"
+        ) {
+            const key = String(tx?.orderId || "").trim();
+            if (!key) continue;
+            const prev = refundByOrderKey.get(key) || 0;
+            const orderDebits = debitsByOrderKey.get(key) || [];
+            const maxOrderDebitSum = roundMoney(
+                orderDebits.reduce((s, d) => s + Number(d?.amount || 0), 0)
+            );
+            const nextSum = roundMoney(prev + Number(tx?.amount || 0));
+            refundByOrderKey.set(
+                key,
+                maxOrderDebitSum > 0
+                    ? roundMoney(Math.min(maxOrderDebitSum, nextSum))
+                    : nextSum
+            );
         }
     }
 
@@ -923,19 +1006,18 @@ const getAvailableUserMoney = async (
             );
     }
 
-    // Also include any standalone refund credits that exceeded recorded debits for their orderId
-    for (const [orderKey, refundTotal] of offsetData.refundByOrderKey.entries()) {
-        const orderDebits = offsetData.debitsByOrderKey.get(orderKey) || [];
-        const debitsSum = roundMoney(
-            orderDebits.reduce((s, d) => s + Number(d?.amount || 0), 0)
-        );
-        const excessRefund = roundMoney(Math.max(0, refundTotal - debitsSum));
-        if (excessRefund > 0) {
-            totalAvailable = roundMoney(totalAvailable + excessRefund);
-        }
-    }
-
     return totalAvailable;
+};
+
+const activeOrderRefundLocks = new Map();
+const activeUserSyncLocks = new Map();
+
+const buildDeterministicDocId = (prefix, orderKey, amount) => {
+    const cleanOrd = String(orderKey || "")
+        .replace(/[^a-zA-Z0-9]/g, "")
+        .slice(-20);
+    const cleanAmt = Math.round(Number(amount || 0));
+    return `${prefix}_${cleanOrd}_${cleanAmt}`.slice(0, 36);
 };
 
   // RECONCILE WALLET BALANCE WITH ACTUAL CREDITS & REFUNDED DEBITS
@@ -999,311 +1081,367 @@ const reconcileWalletState = async (userId, walletDoc = null) => {
   // REFUND ORDER WALLET (IDEMPOTENT FOR FULL OR PARTIAL CANCELLATION)
 
 const refundOrderWallet = async (orderOrId, options = {}) => {
-    try {
-        let order =
-            orderOrId && typeof orderOrId === "object" ? orderOrId : null;
+    const lockHint =
+        typeof orderOrId === "object"
+            ? String(orderOrId?.orderId || orderOrId?.$id || "").trim()
+            : String(orderOrId || "").trim();
 
-        if (!order && orderOrId) {
-            const cleanRef = String(orderOrId).trim();
-            if (/^ORD/i.test(cleanRef)) {
-                const res = await databases.listDocuments(
-                    DATABASE_ID,
-                    ORDERS_COLLECTION_ID,
-                    [Query.equal("orderId", cleanRef), Query.limit(1)]
-                );
-                order = res?.documents?.[0] || null;
-            } else {
-                try {
-                    order = await databases.getDocument(
-                        DATABASE_ID,
-                        ORDERS_COLLECTION_ID,
-                        cleanRef
-                    );
-                } catch {
+    if (lockHint && activeOrderRefundLocks.has(lockHint)) {
+        return await activeOrderRefundLocks.get(lockHint);
+    }
+
+    const taskPromise = (async () => {
+        try {
+            let order =
+                orderOrId && typeof orderOrId === "object" ? orderOrId : null;
+
+            if (!order && orderOrId) {
+                const cleanRef = String(orderOrId).trim();
+                if (/^ORD/i.test(cleanRef)) {
                     const res = await databases.listDocuments(
                         DATABASE_ID,
                         ORDERS_COLLECTION_ID,
                         [Query.equal("orderId", cleanRef), Query.limit(1)]
                     );
                     order = res?.documents?.[0] || null;
+                } else {
+                    try {
+                        order = await databases.getDocument(
+                            DATABASE_ID,
+                            ORDERS_COLLECTION_ID,
+                            cleanRef
+                        );
+                    } catch {
+                        const res = await databases.listDocuments(
+                            DATABASE_ID,
+                            ORDERS_COLLECTION_ID,
+                            [Query.equal("orderId", cleanRef), Query.limit(1)]
+                        );
+                        order = res?.documents?.[0] || null;
+                    }
                 }
             }
-        }
 
-        if (!order) {
-            return { refunded: false, amount: 0 };
-        }
+            if (!order) {
+                return { refunded: false, amount: 0 };
+            }
 
-        const userId = String(order.userId || options.userId || "").trim();
-        if (!userId) {
-            return { refunded: false, amount: 0 };
-        }
+            const userId = String(order.userId || options.userId || "").trim();
+            if (!userId) {
+                return { refunded: false, amount: 0 };
+            }
 
-        const orderIdStr = String(order.orderId || order.$id || "").trim();
-        const orderDocIdStr = String(order.$id || "").trim();
-        const matchKeys = new Set(
-            [orderIdStr, orderDocIdStr].filter(Boolean)
-        );
-
-        let wallet = await getWallet(userId);
-        if (!wallet) {
-            wallet = await createWallet(userId);
-        }
-
-        const allTx = await getTransactions(userId);
-
-        // Find all order debits for this order
-        const orderDebits = allTx.filter(
-            (tx) =>
-                String(tx?.type || "").toLowerCase() === "debit" &&
-                matchKeys.has(String(tx?.orderId || "").trim())
-        );
-
-        const debitsTotal = roundMoney(
-            orderDebits.reduce((sum, tx) => sum + Number(tx?.amount || 0), 0)
-        );
-
-        // Find all existing refund credits for this order
-        const existingRefunds = allTx.filter(
-            (tx) =>
-                String(tx?.type || "").toLowerCase() === "credit" &&
-                String(tx?.source || "").toLowerCase() === "refund" &&
-                matchKeys.has(String(tx?.orderId || "").trim())
-        );
-
-        const alreadyRefunded = roundMoney(
-            existingRefunds.reduce(
-                (sum, tx) => sum + Number(tx?.amount || 0),
-                0
-            )
-        );
-
-        const storedWalletPaid = roundMoney(Number(order.walletPaid || 0));
-        const totalWalletPaidForOrder = roundMoney(
-            Math.max(storedWalletPaid, debitsTotal)
-        );
-
-        if (totalWalletPaidForOrder <= 0) {
-            return { refunded: false, amount: 0, alreadyRefunded };
-        }
-
-        // Determine if order is fully or partially cancelled
-        const items = parseOrderItemsSafe(order.items);
-        const cancelledItems = items.filter(isOrderItemCancelled);
-        const orderStatusUpper = String(order.status || "")
-            .trim()
-            .toUpperCase();
-
-        const isFullOrderCancelled =
-            Boolean(options.fullOrder) ||
-            orderStatusUpper === "CANCELLED" ||
-            orderStatusUpper === "CANCELED" ||
-            (items.length > 0 && cancelledItems.length === items.length);
-
-        let targetWalletRefund = 0;
-
-        if (Number(options.refundAmount) > 0) {
-            targetWalletRefund = roundMoney(
-                Math.min(
-                    totalWalletPaidForOrder,
-                    alreadyRefunded + Number(options.refundAmount)
-                )
+            const orderIdStr = String(order.orderId || order.$id || "").trim();
+            const orderDocIdStr = String(order.$id || "").trim();
+            const matchKeys = new Set(
+                [orderIdStr, orderDocIdStr].filter(Boolean)
             );
-        } else if (isFullOrderCancelled) {
-            targetWalletRefund = totalWalletPaidForOrder;
-        } else if (cancelledItems.length > 0) {
-            const cancelledSellingSum = roundMoney(
-                cancelledItems.reduce(
-                    (sum, item) => sum + computeItemSellingTotal(item),
+
+            let wallet = await getWallet(userId);
+            if (!wallet) {
+                wallet = await createWallet(userId);
+            }
+
+            const allTx = await getTransactions(userId);
+
+            // Find all order debits for this order
+            const orderDebits = allTx.filter(
+                (tx) =>
+                    String(tx?.type || "").toLowerCase() === "debit" &&
+                    matchKeys.has(String(tx?.orderId || "").trim())
+            );
+
+            const debitsTotal = roundMoney(
+                orderDebits.reduce((sum, tx) => sum + Number(tx?.amount || 0), 0)
+            );
+
+            // Find all existing refund credits for this order
+            const existingRefunds = allTx.filter(
+                (tx) =>
+                    String(tx?.type || "").toLowerCase() === "credit" &&
+                    String(tx?.source || "").toLowerCase() === "refund" &&
+                    matchKeys.has(String(tx?.orderId || "").trim())
+            );
+
+            const alreadyRefunded = roundMoney(
+                existingRefunds.reduce(
+                    (sum, tx) => sum + Number(tx?.amount || 0),
                     0
                 )
             );
-            targetWalletRefund = roundMoney(
-                Math.min(totalWalletPaidForOrder, cancelledSellingSum)
+
+            const storedWalletPaid = roundMoney(Number(order.walletPaid || 0));
+            const totalWalletPaidForOrder = roundMoney(
+                storedWalletPaid > 0 ? storedWalletPaid : debitsTotal
             );
-        }
 
-        const amountToRefundNow = roundMoney(
-            Math.max(0, targetWalletRefund - alreadyRefunded)
-        );
-
-        if (amountToRefundNow <= 0) {
-            return {
-                refunded: false,
-                amount: 0,
-                alreadyRefunded,
-                totalRefunded: alreadyRefunded,
-            };
-        }
-
-        const canonicalOrderKey =
-            orderDebits[0]?.orderId || orderIdStr || orderDocIdStr;
-
-        // If this order had walletPaid > 0 on the order document, but deductMoney was never recorded
-        // in walletTransactions (debitsTotal === 0), record the order debit first so the ledger
-        // has the matching debit + refund credit pair without double-counting the wallet balance.
-        if (debitsTotal <= 0 && storedWalletPaid > 0) {
-            const currentBal = roundMoney(wallet.balance || 0);
-            const afterDebitBal = roundMoney(
-                Math.max(0, currentBal - amountToRefundNow)
-            );
-            await databases.createDocument(
-                DATABASE_ID,
-                WALLET_TRANSACTIONS_COLLECTION_ID,
-                ID.unique(),
-                {
-                    userId,
-                    type: "debit",
-                    amount: amountToRefundNow,
-                    balanceBefore: currentBal,
-                    balanceAfter: afterDebitBal,
-                    description: `Wallet Payment for Order #${canonicalOrderKey}`,
-                    source: "order",
-                    promotionType:
-                        Number(order.walletWelcomePromotionUsed || 0) >=
-                        amountToRefundNow
-                            ? "welcome"
-                            : Number(order.walletMonthlyPromotionUsed || 0) > 0
-                            ? "monthly"
-                            : "welcome",
-                    expiresAt: "",
-                    orderId: canonicalOrderKey,
-                    transactionId: `ORDER-DEBIT-${canonicalOrderKey}`,
-                    referenceTransactionId: "",
-                    createdAt: order.orderDate || order.$createdAt || isoNow(),
-                }
-            );
-        }
-
-        const balanceBeforeRefund =
-            debitsTotal <= 0
-                ? roundMoney(
-                      Math.max(0, Number(wallet.balance || 0) - amountToRefundNow)
-                  )
-                : roundMoney(wallet.balance || 0);
-
-        const balanceAfterRefund = roundMoney(
-            balanceBeforeRefund + amountToRefundNow
-        );
-
-        const refundDescription =
-            options.description ||
-            `₹${amountToRefundNow.toFixed(2)} Credited to Wallet — Refund for Cancelled Order #${canonicalOrderKey}`;
-
-        await databases.createDocument(
-            DATABASE_ID,
-            WALLET_TRANSACTIONS_COLLECTION_ID,
-            ID.unique(),
-            {
-                userId,
-                type: "credit",
-                amount: amountToRefundNow,
-                balanceBefore: balanceBeforeRefund,
-                balanceAfter: balanceAfterRefund,
-                description: refundDescription,
-                source: "refund",
-                promotionType: "",
-                expiresAt: "",
-                orderId: canonicalOrderKey,
-                transactionId: `REFUND-${canonicalOrderKey}-${Date.now()}`,
-                referenceTransactionId: orderDebits[0]?.$id || "",
-                createdAt: isoNow(),
+            if (totalWalletPaidForOrder <= 0) {
+                return { refunded: false, amount: 0, alreadyRefunded };
             }
-        );
 
-        wallet = await reconcileWalletState(userId, wallet);
+            // Determine if order is fully or partially cancelled
+            const items = parseOrderItemsSafe(order.items);
+            const cancelledItems = items.filter(isOrderItemCancelled);
+            const orderStatusUpper = String(order.status || "")
+                .trim()
+                .toUpperCase();
 
-        // Send customer notification confirming wallet refund credit
-        try {
-            await notificationService.createUserNotification({
-                userId,
-                type: "WALLET_REFUND",
-                title: `₹${amountToRefundNow.toFixed(0)} Credited to Wallet 💰`,
-                message: `₹${amountToRefundNow.toFixed(2)} has been refunded and credited back to your TechStore Wallet for cancelled Order #${canonicalOrderKey}. Available Wallet Balance: ₹${roundMoney(wallet?.balance || balanceAfterRefund).toFixed(2)}.`,
-                orderId: canonicalOrderKey,
-                shipmentId: String(options.shipmentId || ""),
-                trackingId: String(options.trackingId || ""),
-            });
-        } catch (notifErr) {
-            console.warn("Wallet refund notification warning:", notifErr);
+            const isFullOrderCancelled =
+                Boolean(options.fullOrder) ||
+                orderStatusUpper === "CANCELLED" ||
+                orderStatusUpper === "CANCELED" ||
+                (items.length > 0 && cancelledItems.length === items.length);
+
+            let targetWalletRefund = 0;
+
+            if (Number(options.refundAmount) > 0) {
+                targetWalletRefund = roundMoney(
+                    Math.min(
+                        totalWalletPaidForOrder,
+                        alreadyRefunded + Number(options.refundAmount)
+                    )
+                );
+            } else if (isFullOrderCancelled) {
+                targetWalletRefund = totalWalletPaidForOrder;
+            } else if (cancelledItems.length > 0) {
+                const cancelledSellingSum = roundMoney(
+                    cancelledItems.reduce(
+                        (sum, item) => sum + computeItemSellingTotal(item),
+                        0
+                    )
+                );
+                targetWalletRefund = roundMoney(
+                    Math.min(totalWalletPaidForOrder, cancelledSellingSum)
+                );
+            }
+
+            const amountToRefundNow = roundMoney(
+                Math.max(0, targetWalletRefund - alreadyRefunded)
+            );
+
+            if (amountToRefundNow <= 0) {
+                return {
+                    refunded: false,
+                    amount: 0,
+                    alreadyRefunded,
+                    totalRefunded: alreadyRefunded,
+                };
+            }
+
+            const canonicalOrderKey =
+                orderDebits[0]?.orderId || orderIdStr || orderDocIdStr;
+
+            // If this order had walletPaid > 0 on the order document, but deductMoney was never recorded
+            // in walletTransactions (debitsTotal === 0), record the order debit first so the ledger
+            // has the matching debit + refund credit pair without double-counting the wallet balance.
+            if (debitsTotal <= 0 && storedWalletPaid > 0) {
+                const currentBal = roundMoney(wallet.balance || 0);
+                const afterDebitBal = roundMoney(
+                    Math.max(0, currentBal - amountToRefundNow)
+                );
+                const debitDocId = buildDeterministicDocId(
+                    "db",
+                    canonicalOrderKey,
+                    amountToRefundNow
+                );
+                try {
+                    await databases.createDocument(
+                        DATABASE_ID,
+                        WALLET_TRANSACTIONS_COLLECTION_ID,
+                        debitDocId,
+                        {
+                            userId,
+                            type: "debit",
+                            amount: amountToRefundNow,
+                            balanceBefore: currentBal,
+                            balanceAfter: afterDebitBal,
+                            description: `Wallet Payment for Order #${canonicalOrderKey}`,
+                            source: "order",
+                            promotionType:
+                                Number(order.walletWelcomePromotionUsed || 0) >=
+                                amountToRefundNow
+                                    ? "welcome"
+                                    : Number(order.walletMonthlyPromotionUsed || 0) > 0
+                                    ? "monthly"
+                                    : "welcome",
+                            expiresAt: "",
+                            orderId: canonicalOrderKey,
+                            transactionId: `ORDER-DEBIT-${canonicalOrderKey}`,
+                            referenceTransactionId: "",
+                            createdAt: order.orderDate || order.$createdAt || isoNow(),
+                        }
+                    );
+                } catch {
+                    // Document with deterministic ID already exists
+                }
+            }
+
+            const balanceBeforeRefund =
+                debitsTotal <= 0
+                    ? roundMoney(
+                          Math.max(0, Number(wallet.balance || 0) - amountToRefundNow)
+                      )
+                    : roundMoney(wallet.balance || 0);
+
+            const balanceAfterRefund = roundMoney(
+                balanceBeforeRefund + amountToRefundNow
+            );
+
+            const refundDescription =
+                options.description ||
+                `₹${amountToRefundNow.toFixed(2)} Credited to Wallet — Refund for Cancelled Order #${canonicalOrderKey}`;
+
+            const refundDocId = buildDeterministicDocId(
+                "rf",
+                canonicalOrderKey,
+                targetWalletRefund
+            );
+
+            let createdNewRefundDoc = false;
+            try {
+                await databases.createDocument(
+                    DATABASE_ID,
+                    WALLET_TRANSACTIONS_COLLECTION_ID,
+                    refundDocId,
+                    {
+                        userId,
+                        type: "credit",
+                        amount: amountToRefundNow,
+                        balanceBefore: balanceBeforeRefund,
+                        balanceAfter: balanceAfterRefund,
+                        description: refundDescription,
+                        source: "refund",
+                        promotionType: "",
+                        expiresAt: "",
+                        orderId: canonicalOrderKey,
+                        transactionId: `REFUND-${canonicalOrderKey}`,
+                        referenceTransactionId: orderDebits[0]?.$id || "",
+                        createdAt: isoNow(),
+                    }
+                );
+                createdNewRefundDoc = true;
+            } catch {
+                // Refund document with deterministic ID already exists
+                createdNewRefundDoc = false;
+            }
+
+            wallet = await reconcileWalletState(userId, wallet);
+
+            // Send customer notification confirming wallet refund credit (only once)
+            if (createdNewRefundDoc) {
+                try {
+                    await notificationService.createUserNotification({
+                        userId,
+                        type: "WALLET_REFUND",
+                        title: `₹${amountToRefundNow.toFixed(0)} Credited to Wallet 💰`,
+                        message: `₹${amountToRefundNow.toFixed(2)} has been refunded and credited back to your TechStore Wallet for cancelled Order #${canonicalOrderKey}. Available Wallet Balance: ₹${roundMoney(wallet?.balance || balanceAfterRefund).toFixed(2)}.`,
+                        orderId: canonicalOrderKey,
+                        shipmentId: String(options.shipmentId || ""),
+                        trackingId: String(options.trackingId || ""),
+                    });
+                } catch (notifErr) {
+                    console.warn("Wallet refund notification warning:", notifErr);
+                }
+            }
+
+            return {
+                refunded: createdNewRefundDoc,
+                amount: amountToRefundNow,
+                totalRefunded: roundMoney(alreadyRefunded + amountToRefundNow),
+                wallet,
+            };
+        } catch (error) {
+            console.error("refundOrderWallet error:", error);
+            return { refunded: false, amount: 0, error: error?.message };
+        } finally {
+            if (lockHint) {
+                activeOrderRefundLocks.delete(lockHint);
+            }
         }
+    })();
 
-        return {
-            refunded: true,
-            amount: amountToRefundNow,
-            totalRefunded: roundMoney(alreadyRefunded + amountToRefundNow),
-            wallet,
-        };
-    } catch (error) {
-        console.error("refundOrderWallet error:", error);
-        return { refunded: false, amount: 0, error: error?.message };
+    if (lockHint) {
+        activeOrderRefundLocks.set(lockHint, taskPromise);
     }
+
+    return await taskPromise;
 };
 
   // AUTOMATICALLY SYNC REFUNDS FOR ANY CANCELLED ORDERS OF USER
 
 const syncCancelledOrderRefunds = async (userId) => {
-    try {
-        const cleanId = cleanUserId(userId);
+    const cleanId = cleanUserId(userId);
 
-        const [ordersRes, shipmentsRes] = await Promise.all([
-            databases
-                .listDocuments(DATABASE_ID, ORDERS_COLLECTION_ID, [
-                    Query.equal("userId", cleanId),
-                    Query.orderDesc("$createdAt"),
-                    Query.limit(100),
-                ])
-                .catch(() => ({ documents: [] })),
-            databases
-                .listDocuments(DATABASE_ID, SHIPMENTS_COLLECTION_ID, [
-                    Query.equal("userId", cleanId),
-                    Query.limit(100),
-                ])
-                .catch(() => ({ documents: [] })),
-        ]);
+    if (activeUserSyncLocks.has(cleanId)) {
+        return await activeUserSyncLocks.get(cleanId);
+    }
 
-        const orders = ordersRes?.documents || [];
-        const shipments = shipmentsRes?.documents || [];
+    const syncPromise = (async () => {
+        try {
+            const [ordersRes, shipmentsRes] = await Promise.all([
+                databases
+                    .listDocuments(DATABASE_ID, ORDERS_COLLECTION_ID, [
+                        Query.equal("userId", cleanId),
+                        Query.orderDesc("$createdAt"),
+                        Query.limit(100),
+                    ])
+                    .catch(() => ({ documents: [] })),
+                databases
+                    .listDocuments(DATABASE_ID, SHIPMENTS_COLLECTION_ID, [
+                        Query.equal("userId", cleanId),
+                        Query.limit(100),
+                    ])
+                    .catch(() => ({ documents: [] })),
+            ]);
 
-        const cancelledShipmentOrderIds = new Set();
-        for (const sh of shipments) {
-            const st = String(sh?.status || "").trim().toUpperCase();
-            if (st === "CANCELLED" || st === "CANCELED") {
-                if (sh.orderId) {
-                    cancelledShipmentOrderIds.add(String(sh.orderId).trim());
+            const orders = ordersRes?.documents || [];
+            const shipments = shipmentsRes?.documents || [];
+
+            const cancelledShipmentOrderIds = new Set();
+            for (const sh of shipments) {
+                const st = String(sh?.status || "").trim().toUpperCase();
+                if (st === "CANCELLED" || st === "CANCELED") {
+                    if (sh.orderId) {
+                        cancelledShipmentOrderIds.add(String(sh.orderId).trim());
+                    }
                 }
             }
-        }
 
-        for (const order of orders) {
-            const orderIdStr = String(order.orderId || "").trim();
-            const docIdStr = String(order.$id || "").trim();
-            const statusUpper = String(order.status || "").trim().toUpperCase();
-            const isShipmentCancelled =
-                cancelledShipmentOrderIds.has(orderIdStr) ||
-                cancelledShipmentOrderIds.has(docIdStr);
+            for (const order of orders) {
+                const orderIdStr = String(order.orderId || "").trim();
+                const docIdStr = String(order.$id || "").trim();
+                const statusUpper = String(order.status || "").trim().toUpperCase();
+                const isShipmentCancelled =
+                    cancelledShipmentOrderIds.has(orderIdStr) ||
+                    cancelledShipmentOrderIds.has(docIdStr);
 
-            const items = parseOrderItemsSafe(order.items);
-            const hasCancelledItem = items.some(isOrderItemCancelled);
+                const items = parseOrderItemsSafe(order.items);
+                const hasCancelledItem = items.some(isOrderItemCancelled);
 
-            if (
-                statusUpper === "CANCELLED" ||
-                statusUpper === "CANCELED" ||
-                isShipmentCancelled ||
-                hasCancelledItem
-            ) {
-                await refundOrderWallet(order, {
-                    userId: cleanId,
-                    fullOrder:
-                        statusUpper === "CANCELLED" ||
-                        statusUpper === "CANCELED" ||
-                        isShipmentCancelled,
-                });
+                if (
+                    statusUpper === "CANCELLED" ||
+                    statusUpper === "CANCELED" ||
+                    isShipmentCancelled ||
+                    hasCancelledItem
+                ) {
+                    await refundOrderWallet(order, {
+                        userId: cleanId,
+                        fullOrder:
+                            statusUpper === "CANCELLED" ||
+                            statusUpper === "CANCELED" ||
+                            isShipmentCancelled,
+                    });
+                }
             }
+        } catch (err) {
+            console.warn("syncCancelledOrderRefunds warning:", err);
+        } finally {
+            activeUserSyncLocks.delete(cleanId);
         }
-    } catch (err) {
-        console.warn("syncCancelledOrderRefunds warning:", err);
-    }
+    })();
+
+    activeUserSyncLocks.set(cleanId, syncPromise);
+    return await syncPromise;
 };
 
   // GET OR CREATE WALLET

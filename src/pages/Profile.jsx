@@ -1198,17 +1198,25 @@ function Profile() {
 
                                         {/* CANCELLED ORDER REFUND CREDITED BANNER */}
                                         {(() => {
+                                            const seenOrderRefunds = new Set();
                                             const refundTxns = (transactions || []).filter(
-                                                (t) =>
-                                                    String(t?.source || "").toLowerCase() ===
-                                                        "refund" && isCredit(t)
+                                                (t) => {
+                                                    if (
+                                                        String(t?.source || "").toLowerCase() !==
+                                                            "refund" ||
+                                                        !isCredit(t)
+                                                    ) {
+                                                        return false;
+                                                    }
+                                                    const sig = `${String(t?.orderId || "").trim()}::${Number(t?.amount || 0)}`;
+                                                    if (seenOrderRefunds.has(sig)) return false;
+                                                    seenOrderRefunds.add(sig);
+                                                    return true;
+                                                }
                                             );
                                             if (refundTxns.length === 0) return null;
-                                            const totalRefundedAmt = refundTxns.reduce(
-                                                (sum, t) => sum + Number(t?.amount || 0),
-                                                0
-                                            );
                                             const latestRefund = refundTxns[0];
+                                            const latestRefundAmt = Number(latestRefund?.amount || 0);
                                             return (
                                                 <div
                                                     className="p-4 rounded-4 mb-4"
@@ -1231,7 +1239,7 @@ function Profile() {
                                                                     Order Cancelled Refund Credited
                                                                 </span>
                                                                 <h5 className="fw-bold text-success mb-1">
-                                                                    +₹{formatMoney(totalRefundedAmt)} Credited to Your Wallet
+                                                                    +₹{formatMoney(latestRefundAmt)} Credited to Your Wallet
                                                                 </h5>
                                                                 <small className="text-muted d-block">
                                                                     {latestRefund?.orderId
