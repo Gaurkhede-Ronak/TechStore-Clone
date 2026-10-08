@@ -250,42 +250,111 @@ const Wallet = () => {
             transaction?.promotionType || ""
         ).toLowerCase();
 
-        if (
-            source === "promotion" &&
-            promotionType === "welcome"
-        ) {
-            return "Welcome Promotion";
-        }
-
-        if (
-            source === "promotion" &&
-            promotionType === "monthly"
-        ) {
-            return "Monthly Promotion";
-        }
-
-        if (
-            source === "promotion_expiry"
-        ) {
-            return "Promotion Expired";
-        }
-
-        if (source === "order") {
-            return "Order Payment";
-        }
+        const amtStr = formatCurrency(
+            transaction?.amount || 0
+        );
+        const ordId = transaction?.orderId
+            ? ` #${transaction.orderId}`
+            : "";
+        const credit = isCredit(transaction);
 
         if (source === "refund") {
-            return "Order Refund";
+            return `${amtStr} Credited to Wallet — Refund for Cancelled Order${ordId}`;
+        }
+
+        if (
+            source === "order" ||
+            (!credit && transaction?.orderId)
+        ) {
+            if (promotionType === "welcome") {
+                return `${amtStr} Debited from Wallet — Welcome Promotion Used for Order${ordId}`;
+            }
+            if (promotionType === "monthly") {
+                return `${amtStr} Debited from Wallet — Monthly Promotion Used for Order${ordId}`;
+            }
+            return `${amtStr} Debited from Wallet — Payment for Order${ordId}`;
+        }
+
+        if (source === "promotion") {
+            if (promotionType === "welcome") {
+                return `${amtStr} Credited to Wallet — Welcome Promotion ₹1,000`;
+            }
+            if (promotionType === "monthly") {
+                return `${amtStr} Credited to Wallet — Monthly Promotion ₹500`;
+            }
+            return `${amtStr} Credited to Wallet — Promotion Reward`;
+        }
+
+        if (source === "promotion_expiry") {
+            return `${amtStr} Debited from Wallet — Unused Promotion Expired`;
         }
 
         if (source === "wallet_add") {
-            return "Money Added";
+            return `${amtStr} Credited to Wallet — ${transaction?.description || "Added Money to Wallet"}`;
+        }
+
+        if (credit) {
+            return (
+                transaction?.description ||
+                `${amtStr} Credited to Wallet`
+            );
         }
 
         return (
             transaction?.description ||
-            "Wallet Transaction"
+            `${amtStr} Debited from Wallet`
         );
+    };
+
+    const getTransactionBadge = (
+        transaction
+    ) => {
+        const source = String(
+            transaction?.source || ""
+        ).toLowerCase();
+        const promotionType = String(
+            transaction?.promotionType || ""
+        ).toLowerCase();
+        const credit = isCredit(transaction);
+
+        if (source === "refund") {
+            return "Order Refund Credited";
+        }
+
+        if (
+            source === "order" ||
+            (!credit && transaction?.orderId)
+        ) {
+            if (promotionType === "welcome") {
+                return "Order Payment Debited • Welcome Promo";
+            }
+            if (promotionType === "monthly") {
+                return "Order Payment Debited • Monthly Promo";
+            }
+            return "Order Payment Debited";
+        }
+
+        if (source === "promotion") {
+            if (promotionType === "monthly") {
+                return "Monthly Promotion Credited";
+            }
+            if (promotionType === "welcome") {
+                return "Welcome Promotion Credited";
+            }
+            return "Promotion Credited";
+        }
+
+        if (source === "promotion_expiry") {
+            return "Promotion Expired Debited";
+        }
+
+        if (source === "wallet_add") {
+            return "Wallet Money Credited";
+        }
+
+        return credit
+            ? "Wallet Credited"
+            : "Wallet Debited";
     };
 
   // TRANSACTION DESCRIPTION
@@ -953,9 +1022,27 @@ const Wallet = () => {
                                             source ===
                                             "promotion_expiry";
 
+                                        const badgeLabel =
+                                            getTransactionBadge(
+                                                transaction
+                                            );
+
                                         return (
                                             <div
                                                 className="wallet-transaction"
+                                                style={
+                                                    credit
+                                                        ? {
+                                                              background:
+                                                                  "rgba(16, 185, 129, 0.08)",
+                                                              border: "1px solid rgba(16, 185, 129, 0.35)",
+                                                          }
+                                                        : {
+                                                              background:
+                                                                  "rgba(239, 68, 68, 0.07)",
+                                                              border: "1px solid rgba(239, 68, 68, 0.35)",
+                                                          }
+                                                }
                                                 key={
                                                     transaction.$id
                                                 }
@@ -965,41 +1052,75 @@ const Wallet = () => {
                                                 )}
 
                                                 <div className="flex-grow-1 min-w-0">
-                                                    <div className="d-flex flex-column flex-sm-row justify-content-between gap-1">
-                                                        <h6 className="fw-bold mb-0">
-                                                            {getTransactionTitle(
-                                                                transaction
-                                                            )}
-                                                        </h6>
+                                                    <div className="d-flex flex-column flex-sm-row justify-content-between align-items-sm-start gap-2">
+                                                        <div className="min-w-0">
+                                                            <h6 className="fw-bold mb-1">
+                                                                {getTransactionTitle(
+                                                                    transaction
+                                                                )}
+                                                            </h6>
 
-                                                        <strong
-                                                            className={
-                                                                credit
-                                                                    ? "text-success"
-                                                                    : "text-danger"
-                                                            }
+                                                            <div className="mb-1">
+                                                                <span
+                                                                    className={`badge rounded-pill ${
+                                                                        credit
+                                                                            ? "bg-success"
+                                                                            : "bg-danger"
+                                                                    }`}
+                                                                >
+                                                                    {badgeLabel}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+
+                                                        <div
+                                                            className="text-sm-end flex-shrink-0"
+                                                            style={{
+                                                                whiteSpace:
+                                                                    "nowrap",
+                                                            }}
                                                         >
-                                                            {credit
-                                                                ? "+"
-                                                                : "-"}
-                                                            {formatCurrency(
-                                                                transaction?.amount
-                                                            )}
-                                                        </strong>
+                                                            <strong
+                                                                className={`d-block fs-6 ${
+                                                                    credit
+                                                                        ? "text-success"
+                                                                        : "text-danger"
+                                                                }`}
+                                                            >
+                                                                {credit
+                                                                    ? "+"
+                                                                    : "-"}
+                                                                {formatCurrency(
+                                                                    transaction?.amount
+                                                                )}
+                                                            </strong>
+                                                            <small
+                                                                className={`fw-semibold d-block ${
+                                                                    credit
+                                                                        ? "text-success"
+                                                                        : "text-danger"
+                                                                }`}
+                                                            >
+                                                                {credit
+                                                                    ? "Credited"
+                                                                    : "Debited"}
+                                                            </small>
+                                                        </div>
                                                     </div>
 
-                                                    <p className="text-muted small mb-1">
-                                                        {getTransactionDescription(
-                                                            transaction
-                                                        )}
-                                                    </p>
-
-                                                    <div className="d-flex flex-wrap gap-2 align-items-center">
+                                                    <div className="d-flex flex-wrap gap-2 align-items-center mt-1">
                                                         <small className="text-muted">
                                                             {formatDateTime(
                                                                 transaction?.createdAt ||
                                                                     transaction?.$createdAt
                                                             )}
+                                                            {transaction?.orderId
+                                                                ? ` • Order #${transaction.orderId}`
+                                                                : ""}
+                                                            {" • ID: "}
+                                                            {transaction?.transactionId ||
+                                                                transaction?.$id ||
+                                                                "N/A"}
                                                         </small>
 
                                                         {transaction?.source ===
@@ -1028,21 +1149,27 @@ const Wallet = () => {
                                                                 </span>
                                                             )}
 
-                                                        {transaction?.orderId && (
-                                                            <span className="wallet-order-tag">
-                                                                Order #
-                                                                {
-                                                                    transaction.orderId
-                                                                }
-                                                            </span>
-                                                        )}
-
                                                         {expired && (
                                                             <span className="wallet-expired-tag">
                                                                 Expired
                                                             </span>
                                                         )}
                                                     </div>
+
+                                                    {transaction?.promotionType && (
+                                                        <small
+                                                            className={`d-block fw-semibold mt-1 ${
+                                                                credit
+                                                                    ? "text-success"
+                                                                    : "text-danger"
+                                                            }`}
+                                                        >
+                                                            Promotion Type:{" "}
+                                                            {
+                                                                transaction.promotionType
+                                                            }
+                                                        </small>
+                                                    )}
                                                 </div>
 
                                                 <div className="wallet-transaction-balance d-none d-md-block">

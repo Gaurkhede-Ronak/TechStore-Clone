@@ -712,74 +712,89 @@ function Profile() {
   // TRANSACTION HELPERS
 
     const getTransactionTitle = (txn) => {
-        if (
-            txn?.source ===
-            "promotion"
-        ) {
-            if (
-                txn?.promotionType ===
-                "monthly"
-            ) {
-                return "Promotion - Monthly ₹500";
+        const source = String(txn?.source || "").toLowerCase();
+        const promoType = String(txn?.promotionType || "").toLowerCase();
+        const amtStr = `₹${formatMoney(txn?.amount || 0)}`;
+        const ordId = txn?.orderId ? ` #${txn.orderId}` : "";
+        const credit = isCredit(txn);
+
+        if (source === "refund") {
+            return `₹${formatMoney(txn?.amount || 0)} Credited to Wallet — Refund for Cancelled Order${ordId}`;
+        }
+
+        if (source === "order" || (!credit && txn?.orderId)) {
+            if (promoType === "welcome") {
+                return `${amtStr} Debited from Wallet — Welcome Promotion Used for Order${ordId}`;
             }
-
-            if (
-                txn?.promotionType ===
-                "welcome"
-            ) {
-                return "Promotion - Welcome ₹1000";
+            if (promoType === "monthly") {
+                return `${amtStr} Debited from Wallet — Monthly Promotion Used for Order${ordId}`;
             }
-
-            return (
-                txn?.description ||
-                "Promotion"
-            );
+            return `${amtStr} Debited from Wallet — Payment for Order${ordId}`;
         }
 
-        if (
-            txn?.source ===
-            "promotion_expiry"
-        ) {
-            return (
-                txn?.description ||
-                "Promotion Expired"
-            );
+        if (source === "promotion") {
+            if (promoType === "monthly") {
+                return `${amtStr} Credited to Wallet — Monthly Promotion ₹500`;
+            }
+            if (promoType === "welcome") {
+                return `${amtStr} Credited to Wallet — Welcome Promotion ₹1,000`;
+            }
+            return `${amtStr} Credited to Wallet — ${txn?.description || "Promotion Reward"}`;
         }
 
-        if (
-            txn?.source ===
-            "wallet_add"
-        ) {
-            return (
-                txn?.description ||
-                "Added Money to Wallet"
-            );
+        if (source === "promotion_expiry") {
+            return `${amtStr} Debited from Wallet — Unused Promotion Expired`;
         }
 
-        if (
-            txn?.source ===
-            "refund"
-        ) {
-            return (
-                txn?.description ||
-                "Refund Added to Wallet"
-            );
+        if (source === "wallet_add") {
+            return `${amtStr} Credited to Wallet — ${txn?.description || "Added Money to Wallet"}`;
         }
 
-        if (
-            txn?.source ===
-            "order"
-        ) {
-            return (
-                txn?.description ||
-                "Wallet Used for Order"
-            );
+        if (credit) {
+            return txn?.description || `${amtStr} Credited to Wallet`;
         }
 
-        return (
-            txn?.description ||
-            "Wallet Transaction"
-        );
+        return txn?.description || `${amtStr} Debited from Wallet`;
+    };
+
+    const getTransactionBadge = (txn) => {
+        const source = String(txn?.source || "").toLowerCase();
+        const promoType = String(txn?.promotionType || "").toLowerCase();
+        const credit = isCredit(txn);
+
+        if (source === "refund") {
+            return "Order Refund Credited";
+        }
+
+        if (source === "order" || (!credit && txn?.orderId)) {
+            if (promoType === "welcome") {
+                return "Order Payment Debited • Welcome Promo";
+            }
+            if (promoType === "monthly") {
+                return "Order Payment Debited • Monthly Promo";
+            }
+            return "Order Payment Debited";
+        }
+
+        if (source === "promotion") {
+            if (promoType === "monthly") {
+                return "Monthly Promotion Credited";
+            }
+            if (promoType === "welcome") {
+                return "Welcome Promotion Credited";
+            }
+            return "Promotion Credited";
+        }
+
+        if (source === "promotion_expiry") {
+            return "Promotion Expired Debited";
+        }
+
+        if (source === "wallet_add") {
+            return "Wallet Money Credited";
+        }
+
+        return credit ? "Wallet Credited" : "Wallet Debited";
     };
 
 
@@ -1564,24 +1579,28 @@ function Profile() {
                                                             isCredit(
                                                                 txn
                                                             );
-                                                        const isRefundTxn =
-                                                            String(
-                                                                txn?.source || ""
-                                                            ).toLowerCase() ===
-                                                            "refund";
+                                                        const badgeLabel =
+                                                            getTransactionBadge(
+                                                                txn
+                                                            );
 
                                                         return (
                                                             <div
-                                                                className="transaction-item d-flex justify-content-between align-items-center p-3 mb-2 rounded-3 border"
+                                                                className="transaction-item d-flex justify-content-between align-items-center gap-3 p-3 mb-2 rounded-3 border"
                                                                 style={
-                                                                    isRefundTxn
+                                                                    credit
                                                                         ? {
                                                                               background:
                                                                                   "rgba(16, 185, 129, 0.08)",
                                                                               borderColor:
                                                                                   "rgba(16, 185, 129, 0.35)",
                                                                           }
-                                                                        : undefined
+                                                                        : {
+                                                                              background:
+                                                                                  "rgba(239, 68, 68, 0.07)",
+                                                                              borderColor:
+                                                                                  "rgba(239, 68, 68, 0.35)",
+                                                                          }
                                                                 }
                                                                 key={
                                                                     txn?.$id ||
@@ -1590,35 +1609,44 @@ function Profile() {
                                                                 }
                                                             >
 
-                                                                <div className="d-flex align-items-center gap-3">
+                                                                <div className="d-flex align-items-center gap-3 min-w-0">
 
                                                                     <div
-                                                                        className={
+                                                                        className={`rounded-circle d-flex align-items-center justify-content-center flex-shrink-0 ${
                                                                             credit
-                                                                                ? "text-success fs-5"
-                                                                                : "text-danger fs-5"
-                                                                        }
+                                                                                ? "bg-success bg-opacity-10 text-success"
+                                                                                : "bg-danger bg-opacity-10 text-danger"
+                                                                        }`}
+                                                                        style={{
+                                                                            width: 42,
+                                                                            height: 42,
+                                                                        }}
                                                                     >
-                                                                        <FaWallet />
+                                                                        <FaWallet className="fs-5" />
                                                                     </div>
 
 
-                                                                    <div>
+                                                                    <div className="min-w-0">
 
-                                                                        <div className="d-flex align-items-center gap-2 flex-wrap mb-1">
-                                                                            <h6 className="fw-bold mb-0">
-                                                                                {getTransactionTitle(
-                                                                                    txn
-                                                                                )}
-                                                                            </h6>
-                                                                            {isRefundTxn && (
-                                                                                <span className="badge bg-success rounded-pill">
-                                                                                    Order Refund Credited
-                                                                                </span>
+                                                                        <h6 className="fw-bold mb-1">
+                                                                            {getTransactionTitle(
+                                                                                txn
                                                                             )}
+                                                                        </h6>
+
+                                                                        <div className="mb-1">
+                                                                            <span
+                                                                                className={`badge rounded-pill ${
+                                                                                    credit
+                                                                                        ? "bg-success"
+                                                                                        : "bg-danger"
+                                                                                }`}
+                                                                            >
+                                                                                {badgeLabel}
+                                                                            </span>
                                                                         </div>
 
-                                                                        <small className="text-muted">
+                                                                        <small className="text-muted d-block">
 
                                                                             {formatDate(
                                                                                 txn?.createdAt ||
@@ -1641,7 +1669,13 @@ function Profile() {
 
                                                                         {txn?.promotionType && (
 
-                                                                            <small className="d-block text-primary">
+                                                                            <small
+                                                                                className={`d-block fw-semibold ${
+                                                                                    credit
+                                                                                        ? "text-success"
+                                                                                        : "text-danger"
+                                                                                }`}
+                                                                            >
                                                                                 Promotion Type:{" "}
                                                                                 {txn.promotionType}
                                                                             </small>
@@ -1653,9 +1687,14 @@ function Profile() {
                                                                 </div>
 
 
-                                                                <div className="text-end">
+                                                                <div
+                                                                    className="text-end flex-shrink-0 ms-2"
+                                                                    style={{
+                                                                        whiteSpace: "nowrap",
+                                                                    }}
+                                                                >
                                                                     <div
-                                                                        className={`fw-bold ${
+                                                                        className={`fw-bold fs-6 ${
                                                                             credit
                                                                                 ? "text-success"
                                                                                 : "text-danger"
@@ -1669,11 +1708,17 @@ function Profile() {
                                                                             txn?.amount
                                                                         )}
                                                                     </div>
-                                                                    {isRefundTxn && (
-                                                                        <small className="text-success fw-semibold d-block">
-                                                                            Credited
-                                                                        </small>
-                                                                    )}
+                                                                    <small
+                                                                        className={`fw-semibold d-block ${
+                                                                            credit
+                                                                                ? "text-success"
+                                                                                : "text-danger"
+                                                                        }`}
+                                                                    >
+                                                                        {credit
+                                                                            ? "Credited"
+                                                                            : "Debited"}
+                                                                    </small>
                                                                 </div>
 
                                                             </div>
