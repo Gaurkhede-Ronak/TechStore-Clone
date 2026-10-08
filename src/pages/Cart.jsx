@@ -910,7 +910,7 @@ function Cart() {
                   <div className="coupon-applied-alert mt-2 d-flex justify-content-between align-items-center">
 
                     <div>
-                      <span className="fw-bold">
+                      <span className="coupon-applied-title fw-bold">
                         ✓{" "}
                         {
                           appliedCoupon.couponCode
@@ -918,7 +918,7 @@ function Cart() {
                         applied
                       </span>
 
-                      <div className="small text-light opacity-75">
+                      <div className="coupon-applied-sub small">
                         You saved ₹
                         {discount.toLocaleString(
                           "en-IN"
@@ -928,11 +928,14 @@ function Cart() {
 
                     <button
                       type="button"
-                      className="btn-close btn-close-white small"
+                      className="coupon-remove-btn"
                       onClick={
                         removeCoupon
                       }
-                    />
+                      aria-label="Remove coupon"
+                    >
+                      <FaTimes size={13} />
+                    </button>
                   </div>
                 )}
 

@@ -1643,38 +1643,52 @@
 }
 
 
-/* WALLET FORM */
+/* WALLET & PROFILE FORM */
+
+.profile-nav-divider {
+    height: 1px;
+    background: #e2e8f0;
+    width: 100%;
+}
 
 .profile-page-wrapper .form-control,
 .profile-page-wrapper .form-select {
     min-height: 50px;
-
     border-radius: 13px;
-
     border: 1.5px solid #cbd5e1;
-
-    background: #ffffff;
-
+    background-color: #ffffff;
     color: #0f172a;
-
     font-size: 14px;
-
+    font-weight: 500;
     box-shadow: none;
-
     transition:
         border-color 0.25s ease,
         box-shadow 0.25s ease,
         transform 0.25s ease;
 }
 
+.profile-page-wrapper input[type="date"] {
+    color-scheme: light;
+}
+
+.profile-page-wrapper .form-control:disabled,
+.profile-page-wrapper .form-control[readonly],
+.profile-page-wrapper .profile-readonly-input {
+    background-color: #f1f5f9 !important;
+    border-color: #cbd5e1 !important;
+    color: #475569 !important;
+    opacity: 1 !important;
+    cursor: not-allowed;
+}
+
 .profile-page-wrapper .form-control:focus,
 .profile-page-wrapper .form-select:focus {
+    background-color: #ffffff;
+    color: #0f172a;
     border-color: #2563eb;
-
     box-shadow:
         0 0 0 4px rgba(37, 99, 235, 0.1),
         0 10px 25px rgba(37, 99, 235, 0.07);
-
     transform: translateY(-1px);
 }
 
@@ -1684,11 +1698,10 @@
 
 .profile-page-wrapper .form-label {
     color: #334155;
-
     font-size: 13px;
-
     font-weight: 750;
 }
+
 
 
 /* WALLET TRANSACTION LIST */
@@ -2187,24 +2200,47 @@ body.dark .profile-nav-link.active {
         );
 }
 
+body.dark .profile-nav-divider {
+    background: rgba(255, 255, 255, 0.08);
+}
+
 body.dark .profile-page-wrapper .form-control,
 body.dark .profile-page-wrapper .form-select {
-    background: #111827;
-
-    border-color:
-        rgba(255, 255, 255, 0.1);
-
+    background-color: #111827;
+    border-color: rgba(255, 255, 255, 0.14);
     color: #f8fafc;
+}
+
+body.dark .profile-page-wrapper .form-select {
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%2394a3b8' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m2 5 6 6 6-6'/%3e%3c/svg%3e");
+}
+
+body.dark .profile-page-wrapper .form-select option {
+    background-color: #0f172a;
+    color: #f8fafc;
+}
+
+body.dark .profile-page-wrapper input[type="date"] {
+    color-scheme: dark;
+}
+
+body.dark .profile-page-wrapper .form-control:disabled,
+body.dark .profile-page-wrapper .form-control[readonly],
+body.dark .profile-page-wrapper .profile-readonly-input {
+    background-color: #0f172a !important;
+    border-color: rgba(255, 255, 255, 0.09) !important;
+    color: #94a3b8 !important;
+    opacity: 1 !important;
+    cursor: not-allowed;
 }
 
 body.dark .profile-page-wrapper .form-control:focus,
 body.dark .profile-page-wrapper .form-select:focus {
-    background: #0f172a;
-
+    background-color: #0f172a;
+    color: #f8fafc;
     border-color: #3b82f6;
-
     box-shadow:
-        0 0 0 4px rgba(59, 130, 246, 0.12),
+        0 0 0 4px rgba(59, 130, 246, 0.15),
         0 12px 25px rgba(0, 0, 0, 0.2);
 }
 
@@ -2215,6 +2251,7 @@ body.dark .profile-page-wrapper .form-control::placeholder {
 body.dark .profile-page-wrapper .form-label {
     color: #cbd5e1;
 }
+
 
 body.dark .profile-content-card .stats-box {
     background:

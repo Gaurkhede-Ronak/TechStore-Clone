@@ -1247,6 +1247,109 @@ body.dark .coupon-option-main small {
 }
 
 /* =========================================================
+   LIGHT & DARK MODE PERFECTION FOR COUPON ALERT & GST INPUT
+   ========================================================= */
+.summary-card .coupon-applied-alert {
+    background: #ecfdf5 !important;
+    border: 1.5px solid #6ee7b7 !important;
+    color: #065f46 !important;
+    padding: 11px 14px !important;
+    border-radius: 12px !important;
+}
+
+.summary-card .coupon-applied-title {
+    color: #065f46 !important;
+    font-weight: 800 !important;
+}
+
+.summary-card .coupon-applied-sub {
+    color: #047857 !important;
+    font-weight: 600 !important;
+    margin-top: 2px;
+}
+
+.summary-card .coupon-remove-btn {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    border: 1px solid #6ee7b7;
+    background: #ffffff;
+    color: #047857;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.summary-card .coupon-remove-btn:hover {
+    background: #fee2e2;
+    color: #dc2626;
+    border-color: #fca5a5;
+}
+
+.summary-card .form-control {
+    background: #ffffff !important;
+    border: 1.5px solid #cbd5e1 !important;
+    border-right: none !important;
+    color: #0f172a !important;
+    font-weight: 600;
+}
+
+.summary-card .form-control:disabled {
+    background: #f8fafc !important;
+    color: #0f172a !important;
+    border-color: #cbd5e1 !important;
+    opacity: 1 !important;
+}
+
+.coupon-select-trigger.is-disabled,
+.coupon-select-trigger:disabled {
+    background: #f8fafc !important;
+    color: #0f172a !important;
+    border-color: #cbd5e1 !important;
+    opacity: 1 !important;
+}
+
+body.dark .summary-card .coupon-applied-alert {
+    background: rgba(16, 185, 129, 0.14) !important;
+    border: 1.5px solid rgba(16, 185, 129, 0.4) !important;
+    color: #34d399 !important;
+}
+
+body.dark .summary-card .coupon-applied-title {
+    color: #34d399 !important;
+}
+
+body.dark .summary-card .coupon-applied-sub {
+    color: #a7f3d0 !important;
+}
+
+body.dark .summary-card .coupon-remove-btn {
+    background: rgba(15, 23, 42, 0.75);
+    border-color: rgba(16, 185, 129, 0.4);
+    color: #34d399;
+}
+
+body.dark .summary-card .coupon-remove-btn:hover {
+    background: rgba(239, 68, 68, 0.22);
+    color: #f87171;
+    border-color: rgba(239, 68, 68, 0.45);
+}
+
+body.dark .summary-card .form-control,
+body.dark .summary-card .form-control:disabled,
+body.dark .coupon-select-trigger,
+body.dark .coupon-select-trigger.is-disabled,
+body.dark .coupon-select-trigger:disabled {
+    background: #111827 !important;
+    border-color: rgba(255, 255, 255, 0.14) !important;
+    color: #f8fafc !important;
+    opacity: 1 !important;
+}
+
+/* =========================================================
    CART DELETE / ADD TO WISHLIST CONFIRMATION MODAL
    ========================================================= */
 .cart-delete-modal-backdrop {

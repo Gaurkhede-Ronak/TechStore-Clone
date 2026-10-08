@@ -918,9 +918,11 @@ function Profile() {
                                 </button>
 
 
+                                <div className="profile-nav-divider my-2" />
+
                                 <button
                                     type="button"
-                                    className="profile-nav-link text-danger mt-3 border-top pt-3"
+                                    className="profile-nav-link text-danger"
                                     onClick={
                                         handleLogout
                                     }
@@ -2168,10 +2170,11 @@ function Profile() {
 
                                             <input
                                                 type="email"
-                                                className="form-control bg-light"
+                                                className="form-control profile-readonly-input"
                                                 value={
                                                     email
                                                 }
+                                                readOnly
                                                 disabled
                                             />
 
@@ -2187,6 +2190,7 @@ function Profile() {
                                             <input
                                                 type="text"
                                                 className="form-control"
+                                                placeholder="Enter phone number"
                                                 value={
                                                     phone
                                                 }
@@ -2236,7 +2240,7 @@ function Profile() {
                                             </label>
 
                                             <select
-                                                className="form-select form-control"
+                                                className="form-select"
                                                 value={
                                                     gender
                                                 }
