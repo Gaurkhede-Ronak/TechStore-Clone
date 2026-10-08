@@ -576,7 +576,7 @@ function PaymentSuccess() {
             style={{
               background: `conic-gradient(
                 #22c55e ${progress}deg,
-                #e5e7eb ${progress}deg
+                var(--ring-track, #e2e8f0) ${progress}deg
               )`,
             }}
           >

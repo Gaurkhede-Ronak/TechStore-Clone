@@ -1,57 +1,24 @@
-/* 1. COLOR PALETTE VARIABLES (LIGHT VS DARK) */
+/* 1. COLOR PALETTE VARIABLES (SCOPED TO .order-page FOR LIGHT & DARK MODE) */
 
-/* DEFAULT: DARK MODE */
-:root,
-[data-theme="dark"],
-.dark {
-  --bg-main: #0b1120;
-  --card-bg: rgba(30, 41, 59, 0.7);
-  --card-border: rgba(255, 255, 255, 0.12);
-  --card-shadow: 0 30px 60px rgba(0, 0, 0, 0.6);
-
-  --box-bg: rgba(255, 255, 255, 0.04);
-  --box-border: rgba(255, 255, 255, 0.08);
-
-  --text-main: #f8fafc;
-  --text-sub: #94a3b8;
-  --text-muted: #64748b;
-
-  --accent-green: #22c55e;
-  --accent-blue: #3b82f6;
-  --accent-purple: #a855f7;
-
-  --chip-bg: rgba(255, 255, 255, 0.08);
-  --badge-bg: rgba(34, 197, 94, 0.18);
-
-  --banner-bg: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(168, 85, 247, 0.15));
-  --banner-border: rgba(59, 130, 246, 0.3);
-
-  --dot-default: #334155;
-  --glow-1: #3b82f6;
-  --glow-2: #22c55e;
-}
-
-/* LIGHT MODE OVERRIDES - Apple Clean Crystal Light UI */
-[data-theme="light"],
-.light,
-body.light {
-  --bg-main: #f8fafc; /* Crisp Clean Off-White */
-  --card-bg: #ffffff; /* Solid/Glass White Card */
+/* DEFAULT: LIGHT MODE */
+.order-page {
+  --bg-main: #f8fafc;
+  --card-bg: #ffffff;
   --card-border: #e2e8f0;
-  --card-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.05);
+  --card-shadow: 0 20px 45px -10px rgba(15, 23, 42, 0.08), 0 1px 3px rgba(15, 23, 42, 0.05);
 
-  --box-bg: #f1f5f9;
+  --box-bg: #f8fafc;
   --box-border: #cbd5e1;
 
-  --text-main: #0f172a; /* Sharp Dark Heading Text */
-  --text-sub: #334155;  /* Easy-to-read Subtitle */
+  --text-main: #0f172a;
+  --text-sub: #334155;
   --text-muted: #64748b;
 
   --accent-green: #16a34a;
   --accent-blue: #2563eb;
   --accent-purple: #7c3aed;
 
-  --chip-bg: #e2e8f0;
+  --chip-bg: #f1f5f9;
   --badge-bg: rgba(22, 163, 74, 0.12);
 
   --banner-bg: linear-gradient(135deg, #eff6ff, #f3e8ff);
@@ -60,6 +27,36 @@ body.light {
   --dot-default: #cbd5e1;
   --glow-1: #bfdbfe;
   --glow-2: #bbf7d0;
+}
+
+/* DARK MODE OVERRIDES */
+body.dark .order-page,
+[data-theme="dark"] .order-page {
+  --bg-main: #070c18;
+  --card-bg: rgba(15, 23, 42, 0.9);
+  --card-border: rgba(255, 255, 255, 0.12);
+  --card-shadow: 0 30px 60px rgba(0, 0, 0, 0.75);
+
+  --box-bg: rgba(11, 17, 32, 0.85);
+  --box-border: rgba(255, 255, 255, 0.1);
+
+  --text-main: #f8fafc;
+  --text-sub: #cbd5e1;
+  --text-muted: #94a3b8;
+
+  --accent-green: #4ade80;
+  --accent-blue: #60a5fa;
+  --accent-purple: #c084fc;
+
+  --chip-bg: rgba(255, 255, 255, 0.08);
+  --badge-bg: rgba(34, 197, 94, 0.18);
+
+  --banner-bg: linear-gradient(135deg, rgba(59, 130, 246, 0.16), rgba(168, 85, 247, 0.16));
+  --banner-border: rgba(59, 130, 246, 0.32);
+
+  --dot-default: #334155;
+  --glow-1: #3b82f6;
+  --glow-2: #22c55e;
 }
 
 /* 2. MAIN PAGE CONTAINER & GLOWS */
@@ -82,13 +79,12 @@ body.light {
   position: absolute;
   border-radius: 50%;
   filter: blur(120px);
-  opacity: 0.3;
+  opacity: 0.4;
   transition: opacity 0.4s ease;
 }
 
-[data-theme="light"] .bg-circle,
-.light .bg-circle {
-  opacity: 0.4;
+body.dark .order-page .bg-circle {
+  opacity: 0.25;
 }
 
 .bg1 { width: 450px; height: 450px; background: var(--glow-1); top: -80px; left: -80px; }
