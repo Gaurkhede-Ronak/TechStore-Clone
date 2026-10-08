@@ -674,6 +674,63 @@ const Wallet = () => {
                     </div>
                 </div>
 
+                {/* CANCELLED ORDER REFUND CREDITED BANNER */}
+                {(() => {
+                    const refundTxns = (transactions || []).filter(
+                        (t) =>
+                            String(t?.source || "").toLowerCase() ===
+                                "refund" && isCredit(t)
+                    );
+                    if (refundTxns.length === 0) return null;
+                    const totalRefundedAmt = refundTxns.reduce(
+                        (sum, t) => sum + Number(t?.amount || 0),
+                        0
+                    );
+                    const latestRefund = refundTxns[0];
+                    return (
+                        <div
+                            className="p-4 rounded-4 mb-4"
+                            style={{
+                                background:
+                                    "linear-gradient(135deg, rgba(16, 185, 129, 0.14), rgba(5, 150, 105, 0.06))",
+                                border: "1.5px solid rgba(16, 185, 129, 0.45)",
+                            }}
+                        >
+                            <div className="d-flex align-items-center justify-content-between flex-wrap gap-3">
+                                <div className="d-flex align-items-center gap-3">
+                                    <div
+                                        className="rounded-circle bg-success text-white d-flex align-items-center justify-content-center flex-shrink-0 shadow-sm"
+                                        style={{ width: 46, height: 46 }}
+                                    >
+                                        <FaCheckCircle size={22} />
+                                    </div>
+                                    <div>
+                                        <span className="badge bg-success mb-1">
+                                            Order Cancelled Refund Credited
+                                        </span>
+                                        <h5 className="fw-bold text-success mb-1">
+                                            +{formatCurrency(totalRefundedAmt)} Credited to Your Wallet
+                                        </h5>
+                                        <small className="text-muted d-block">
+                                            {latestRefund?.orderId
+                                                ? `Refund from Cancelled Order #${latestRefund.orderId} has been credited back to your TechStore Wallet.`
+                                                : "Your cancelled order wallet payment has been credited back to your TechStore Wallet."}
+                                        </small>
+                                    </div>
+                                </div>
+                                <div className="text-md-end">
+                                    <span className="small text-muted d-block">
+                                        Available Wallet Balance
+                                    </span>
+                                    <strong className="fs-4 text-success">
+                                        {formatCurrency(balance)}
+                                    </strong>
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })()}
+
                 {/* PROMOTIONS */}
 
                 <div className="card border-0 shadow-sm rounded-4 mb-4">

@@ -12,6 +12,7 @@ import shipmentEventService from "../appwrite/shipmentEventService";
 import warehouseService from "../appwrite/warehouseService";
 import deliveryOtpService from "../appwrite/deliveryOtpService";
 import returnExchangeService from "../appwrite/returnExchangeService";
+import walletService from "../appwrite/walletService";
 import { doesRequestMatchItem } from "../utils/orderItemHelper";
 
 import {
@@ -1511,9 +1512,9 @@ function OrderDetails() {
               : externalPaymentAmount)
         )
       : hasExplicitPaymentStatus
-      ? 0
+      ? walletPaidVal
       : Math.max(
-          0,
+          walletPaidVal,
           Number(
             order?.totalPaid ??
               (
@@ -1592,48 +1593,41 @@ function OrderDetails() {
     activeItemSellingPrice *
     itemQty;
 
-  let actualRefundAmount;
+  const isEntireOrderCancelled =
+    normalizeStatus(order?.status) === "CANCELLED" ||
+    normalizeStatus(shipment?.status) === "CANCELLED" ||
+    (rawOrderItems.length > 0 &&
+      rawOrderItems.every(
+        (it) =>
+          Boolean(it?.isCancelled) ||
+          normalizeStatus(it?.status) === "CANCELLED"
+      ));
 
-  if (isPureCOD) {
-    actualRefundAmount = 0;
-  } else {
-    let baseRefund =
-      itemTotalPrice;
+  let refundToWallet = 0;
+  let refundToOnline = 0;
+  let actualRefundAmount = 0;
 
-    if (
-      rawOrderItems.length ===
-      1
-    ) {
-      baseRefund = Math.max(
-        0,
-        totalPaid -
-          platformFeeVal
-      );
+  if (!isPureCOD) {
+    if (rawOrderItems.length <= 1 || isEntireOrderCancelled) {
+      refundToWallet = walletPaidVal > 0 ? walletPaidVal : 0;
+      refundToOnline = isCOD
+        ? 0
+        : Math.max(
+            0,
+            totalPaid - walletPaidVal - platformFeeVal
+          );
+    } else {
+      refundToWallet =
+        walletPaidVal > 0
+          ? Math.min(walletPaidVal, itemTotalPrice)
+          : 0;
+      refundToOnline = isCOD
+        ? 0
+        : Math.max(0, itemTotalPrice - refundToWallet);
     }
 
-    actualRefundAmount =
-      isCodWithWallet
-        ? Math.min(
-            walletPaidVal,
-            baseRefund
-          )
-        : baseRefund;
+    actualRefundAmount = refundToWallet + refundToOnline;
   }
-
-  const refundToWallet =
-    walletPaidVal > 0
-      ? Math.min(
-          walletPaidVal,
-          actualRefundAmount
-        )
-      : 0;
-
-  const refundToOnline =
-    Math.max(
-      0,
-      actualRefundAmount -
-        refundToWallet
-    );
 
   /* APPWRITE TRACKING MILESTONES — Built in the exact Shipment Progress UI style (Image 2) */
 
@@ -2784,7 +2778,7 @@ function OrderDetails() {
             updatePayload
           );
 
-        setOrder({
+        const mergedCancelledOrder = {
           ...order,
           ...updatedOrder,
           items: updatedItems,
@@ -2795,7 +2789,36 @@ function OrderDetails() {
           cancelledDate: allItemsCancelled
             ? cancelTimeISO
             : order?.cancelledDate,
-        });
+        };
+
+        setOrder(mergedCancelledOrder);
+
+        // Refund wallet amount for the cancelled order / item
+        let walletRefundResult = null;
+        if (walletPaidVal > 0) {
+          try {
+            walletRefundResult =
+              await walletService.refundOrderWallet(
+                mergedCancelledOrder,
+                {
+                  userId:
+                    order?.userId ||
+                    currentUser?.$id ||
+                    "",
+                  fullOrder: allItemsCancelled,
+                  shipmentId:
+                    shipment?.$id || "",
+                  trackingId:
+                    shipment?.trackingId || "",
+                }
+              );
+          } catch (walletRefundErr) {
+            console.error(
+              "Wallet refund on cancel error:",
+              walletRefundErr
+            );
+          }
+        }
 
         // Only cancel the whole shipment if all items in the order are cancelled
         if (allItemsCancelled && shipment?.$id) {
@@ -2847,8 +2870,16 @@ function OrderDetails() {
           "cancelled"
         );
 
+        const creditedWalletAmt = Number(
+          walletRefundResult?.amount ||
+            walletRefundResult?.totalRefunded ||
+            (walletPaidVal > 0 ? refundToWallet : 0)
+        );
+
         toast.success(
-          rawOrderItems.length > 1 && !allItemsCancelled
+          creditedWalletAmt > 0
+            ? `Order Cancelled! ₹${formatMoney(creditedWalletAmt)} credited back to your TechStore Wallet.`
+            : rawOrderItems.length > 1 && !allItemsCancelled
             ? "Selected item cancelled successfully!"
             : "Order Cancelled Successfully",
           {
@@ -2895,6 +2926,29 @@ function OrderDetails() {
       setCancelReturnLoading(false);
     }
   };
+
+  /* AUTO-SYNC WALLET REFUND FOR CANCELLED ORDERS */
+  useEffect(() => {
+    if (!order || !isCancelled || walletPaidVal <= 0) return;
+    walletService
+      .refundOrderWallet(order, {
+        userId: order?.userId || currentUser?.$id || "",
+        fullOrder: isEntireOrderCancelled,
+        shipmentId: shipment?.$id || "",
+        trackingId: shipment?.trackingId || "",
+      })
+      .catch((err) => {
+        console.warn("OrderDetails wallet refund sync warning:", err);
+      });
+  }, [
+    order,
+    isCancelled,
+    walletPaidVal,
+    isEntireOrderCancelled,
+    currentUser?.$id,
+    shipment?.$id,
+    shipment?.trackingId,
+  ]);
 
   /* LOADING */
 
@@ -4132,13 +4186,67 @@ function OrderDetails() {
                     )}
                   </h4>
 
+                  {refundToWallet > 0 && (
+                    <span className="badge bg-success text-white px-3 py-2 rounded-pill d-inline-flex align-items-center gap-2">
+                      <FaCheckCircle />
+                      ₹{formatMoney(refundToWallet)} Credited to Wallet
+                    </span>
+                  )}
+
                 </div>
 
-                <p className="text-muted mb-4">
-                  Refund has been initiated on{" "}
-                  {formatFullDayDate(cancelledRawDate)}, the amount should get
-                  credited in 7-10 business days.
-                </p>
+                {refundToWallet > 0 && refundToOnline <= 0 ? (
+                  <p className="text-success fw-semibold mb-4">
+                    ₹{formatMoney(refundToWallet)} has been refunded and credited back to your TechStore Wallet on{" "}
+                    {formatFullDayDate(cancelledRawDate)}.
+                  </p>
+                ) : (
+                  <p className="text-muted mb-4">
+                    Refund has been initiated on{" "}
+                    {formatFullDayDate(cancelledRawDate)}.
+                    {refundToWallet > 0
+                      ? ` ₹${formatMoney(refundToWallet)} has been credited directly to your TechStore Wallet.`
+                      : ""}{" "}
+                    {refundToOnline > 0
+                      ? "Online payment refund will be credited in 7-10 business days."
+                      : ""}
+                  </p>
+                )}
+
+                {refundToWallet > 0 && (
+                  <div
+                    className="p-3 rounded-4 mb-4 d-flex align-items-center justify-content-between flex-wrap gap-3"
+                    style={{
+                      background: "rgba(16, 185, 129, 0.1)",
+                      border: "1px solid rgba(16, 185, 129, 0.3)",
+                    }}
+                  >
+                    <div className="d-flex align-items-center gap-3">
+                      <div
+                        className="rounded-circle bg-success text-white d-flex align-items-center justify-content-center flex-shrink-0"
+                        style={{ width: 40, height: 40 }}
+                      >
+                        <FaWallet size={18} />
+                      </div>
+                      <div>
+                        <div className="fw-bold text-success">
+                          +₹{formatMoney(refundToWallet)} Credited to TechStore Wallet
+                        </div>
+                        <small className="text-muted">
+                          Your wallet balance has been restored for Cancelled Order #{getOrderReference(order)}
+                        </small>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-success rounded-pill px-3 fw-semibold"
+                      onClick={() => navigate("/profile?tab=wallet")}
+                    >
+                      Check Wallet Balance
+                    </button>
+                  </div>
+                )}
 
                 <h6 className="fw-bold mb-3">
                   Refund Credit Mode
@@ -4150,11 +4258,11 @@ function OrderDetails() {
 
                     <span className="text-muted d-inline-flex align-items-center gap-2">
                       <FaWallet className="text-primary" />
-                      TechStore Wallet
+                      TechStore Wallet (Credited)
                     </span>
 
-                    <strong>
-                      ₹
+                    <strong className="text-success">
+                      +₹
                       {formatMoney(
                         refundToWallet
                       )}

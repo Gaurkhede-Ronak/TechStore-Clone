@@ -2,6 +2,7 @@ import { Databases, ID, Query } from "appwrite";
 import client from "./config";
 import notificationService from "./notificationService";
 import shipmentEventService from "./shipmentEventService";
+import walletService from "./walletService";
 
 const databases = new Databases(client);
 
@@ -397,6 +398,24 @@ class DeliveryOtpService {
               targetOrder.$id,
               orderPayload
             );
+
+            // Refund any wallet payment used on this auto-cancelled order
+            try {
+              await walletService.refundOrderWallet(
+                { ...targetOrder, ...orderPayload },
+                {
+                  userId: userId || targetOrder.userId || "",
+                  fullOrder: true,
+                  shipmentId,
+                  trackingId:
+                    trackingId && !trackingId.startsWith("TRK-")
+                      ? trackingId
+                      : "",
+                }
+              );
+            } catch (walletErr) {
+              console.warn("Auto-cancel wallet refund warning:", walletErr);
+            }
           }
         } catch (orderErr) {
           console.warn("Auto-cancel order update warning:", orderErr);
@@ -1475,6 +1494,9 @@ class DeliveryOtpService {
           });
         }
       }
+
+      // 3. Also sync wallet refunds for any cancelled orders/items
+      await walletService.syncCancelledOrderRefunds(cleanUserId);
     } catch (syncErr) {
       console.warn("syncUserShipmentNotifications warning:", syncErr);
     }

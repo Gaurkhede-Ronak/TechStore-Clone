@@ -1,5 +1,6 @@
 import { ID, Query } from "appwrite";
 import { databases } from "./config";
+import notificationService from "./notificationService";
 
   // APPWRITE CONFIG
 
@@ -14,6 +15,14 @@ const WALLET_COLLECTION_ID =
 const WALLET_TRANSACTIONS_COLLECTION_ID =
     import.meta.env.VITE_WALLET_TRANSACTIONS_COLLECTION_ID ||
     "walletTransactions";
+
+const ORDERS_COLLECTION_ID =
+    import.meta.env.VITE_APPWRITE_ORDERS_COLLECTION_ID ||
+    "69b8ebce0018a5c6be94";
+
+const SHIPMENTS_COLLECTION_ID =
+    import.meta.env.VITE_APPWRITE_SHIPMENTS_COLLECTION_ID ||
+    "shipments";
 
   // PROMOTION CONSTANTS
 
@@ -61,6 +70,38 @@ const roundMoney = (value) => {
     ) / 100;
 };
 
+const parseOrderItemsSafe = (itemsRaw) => {
+    if (Array.isArray(itemsRaw)) return itemsRaw;
+    if (typeof itemsRaw === "string" && itemsRaw.trim()) {
+        try {
+            const parsed = JSON.parse(itemsRaw);
+            return Array.isArray(parsed) ? parsed : [];
+        } catch {
+            return [];
+        }
+    }
+    return [];
+};
+
+const isOrderItemCancelled = (item) => {
+    if (!item || typeof item !== "object") return false;
+    const st = String(item.status || "").trim().toUpperCase();
+    return Boolean(
+        item.isCancelled === true ||
+            st === "CANCELLED" ||
+            st === "CANCELED"
+    );
+};
+
+const computeItemSellingTotal = (item) => {
+    const price = Number(item?.price || 0);
+    const discount = Number(item?.discount || 0);
+    const qty = Math.max(1, Number(item?.quantity || 1));
+    const sellingUnit =
+        discount > 0 ? price - (price * discount) / 100 : price;
+    return roundMoney(sellingUnit * qty);
+};
+
   // GET WALLET
 
 const getWallet = async (userId) => {
@@ -96,6 +137,81 @@ const getTransactions = async (userId) => {
     return response.documents || [];
 };
 
+  // COMPUTE REFUND OFFSET MAP BY DEBIT TRANSACTION ID
+  // Matches `source: "refund"` credits against `source: "order"` debits for the same orderId
+  // so that refunded order payments restore the user's promotional & wallet credits.
+
+const getEffectiveDebitAmountsMap = async (userId, preloadedTransactions = null) => {
+    const cleanId = cleanUserId(userId);
+    const allTx = preloadedTransactions || (await getTransactions(cleanId));
+
+    const refundByOrderKey = new Map();
+    for (const tx of allTx) {
+        if (
+            String(tx?.type || "").toLowerCase() === "credit" &&
+            String(tx?.source || "").toLowerCase() === "refund"
+        ) {
+            const key = String(tx?.orderId || "").trim();
+            if (!key) continue;
+            const prev = refundByOrderKey.get(key) || 0;
+            refundByOrderKey.set(key, roundMoney(prev + Number(tx?.amount || 0)));
+        }
+    }
+
+    // Group order debits by orderId
+    const debitsByOrderKey = new Map();
+    for (const tx of allTx) {
+        if (String(tx?.type || "").toLowerCase() === "debit") {
+            const key = String(tx?.orderId || "").trim();
+            if (!key) continue;
+            if (!debitsByOrderKey.has(key)) {
+                debitsByOrderKey.set(key, []);
+            }
+            debitsByOrderKey.get(key).push(tx);
+        }
+    }
+
+    const effectiveDebitMap = new Map();
+    for (const tx of allTx) {
+        if (String(tx?.type || "").toLowerCase() === "debit") {
+            effectiveDebitMap.set(tx.$id, roundMoney(Number(tx?.amount || 0)));
+        }
+    }
+
+    // Apply refund offsets to each order's debits
+    for (const [orderKey, debits] of debitsByOrderKey.entries()) {
+        let remainingRefundToOffset = roundMoney(refundByOrderKey.get(orderKey) || 0);
+        if (remainingRefundToOffset <= 0) continue;
+
+        // Sort debits so user money is restored first, then welcome, then monthly
+        const sortedDebits = [...debits].sort((a, b) => {
+            const rank = (d) => {
+                const pt = String(d?.promotionType || "").toLowerCase();
+                if (!pt) return 1;
+                if (pt === "welcome") return 2;
+                if (pt === "monthly") return 3;
+                return 4;
+            };
+            return rank(a) - rank(b);
+        });
+
+        for (const debitTx of sortedDebits) {
+            if (remainingRefundToOffset <= 0) break;
+            const origAmt = roundMoney(Number(debitTx?.amount || 0));
+            const offset = roundMoney(Math.min(origAmt, remainingRefundToOffset));
+            effectiveDebitMap.set(debitTx.$id, roundMoney(Math.max(0, origAmt - offset)));
+            remainingRefundToOffset = roundMoney(remainingRefundToOffset - offset);
+        }
+    }
+
+    return {
+        effectiveDebitMap,
+        allTx,
+        refundByOrderKey,
+        debitsByOrderKey,
+    };
+};
+
   // GET PROMOTIONAL CREDIT TRANSACTIONS
 
 const getPromotionalCredits = async (userId) => {
@@ -119,7 +235,8 @@ const getPromotionalCredits = async (userId) => {
 
 const getPromotionUsage = async (
     userId,
-    promotionTransactionId
+    promotionTransactionId,
+    preloadedOffsetData = null
 ) => {
     const cleanId = cleanUserId(userId);
 
@@ -127,27 +244,25 @@ const getPromotionUsage = async (
         return 0;
     }
 
-    const response = await databases.listDocuments(
-        DATABASE_ID,
-        WALLET_TRANSACTIONS_COLLECTION_ID,
-        [
-            Query.equal("userId", cleanId),
-            Query.equal(
-                "referenceTransactionId",
-                promotionTransactionId
-            ),
-            Query.equal("type", "debit"),
-            Query.limit(100),
-        ]
+    const offsetData =
+        preloadedOffsetData ||
+        (await getEffectiveDebitAmountsMap(cleanId));
+
+    const matchingDebits = (offsetData.allTx || []).filter(
+        (tx) =>
+            String(tx?.type || "").toLowerCase() === "debit" &&
+            String(tx?.referenceTransactionId || "") ===
+                String(promotionTransactionId) &&
+            String(tx?.promotionType || "").toLowerCase() !== "expired"
     );
 
     return roundMoney(
-        (response.documents || []).reduce(
-            (total, transaction) =>
-                total +
-                Number(transaction.amount || 0),
-            0
-        )
+        matchingDebits.reduce((total, tx) => {
+            const effectiveAmt = offsetData.effectiveDebitMap.has(tx.$id)
+                ? offsetData.effectiveDebitMap.get(tx.$id)
+                : Number(tx?.amount || 0);
+            return total + Number(effectiveAmt || 0);
+        }, 0)
     );
 };
 
@@ -399,6 +514,9 @@ const expirePromotions = async (
     const promotionalCredits =
         await getPromotionalCredits(cleanId);
 
+    const offsetData =
+        await getEffectiveDebitAmountsMap(cleanId);
+
     let currentWallet = wallet;
 
     for (const credit of promotionalCredits) {
@@ -466,7 +584,8 @@ const expirePromotions = async (
         const usedAmount =
             await getPromotionUsage(
                 cleanId,
-                credit.$id
+                credit.$id,
+                offsetData
             );
 
         const remainingPromotion =
@@ -593,36 +712,6 @@ const expirePromotions = async (
     return currentWallet;
 };
 
-  // GET OR CREATE WALLET
-
-const getOrCreateWallet = async (userId) => {
-    const cleanId = cleanUserId(userId);
-
-    let wallet = await getWallet(cleanId);
-
-    if (!wallet) {
-        wallet = await createWallet(
-            cleanId
-        );
-    }
-
-  // FIRST EXPIRE OLD PROMOTIONS
-
-    wallet = await expirePromotions(
-        cleanId,
-        wallet
-    );
-
-  // THEN GIVE CURRENT MONTH PROMOTION
-
-    wallet = await applyMonthlyPromotion(
-        cleanId,
-        wallet
-    );
-
-    return wallet;
-};
-
   // GET USER MONEY CREDIT TRANSACTIONS
 
 const getUserMoneyCredits = async (
@@ -654,9 +743,7 @@ const getUserMoneyCredits = async (
     ).filter(
         (transaction) =>
             transaction.source ===
-                "wallet_add" ||
-            transaction.source ===
-                "refund"
+            "wallet_add"
     );
 };
 
@@ -664,7 +751,8 @@ const getUserMoneyCredits = async (
 
 const getUserMoneyUsage = async (
     userId,
-    creditId
+    creditId,
+    preloadedOffsetData = null
 ) => {
     const cleanId = cleanUserId(userId);
 
@@ -672,46 +760,32 @@ const getUserMoneyUsage = async (
         return 0;
     }
 
-    const response =
-        await databases.listDocuments(
-            DATABASE_ID,
-            WALLET_TRANSACTIONS_COLLECTION_ID,
-            [
-                Query.equal(
-                    "userId",
-                    cleanId
-                ),
+    const offsetData =
+        preloadedOffsetData ||
+        (await getEffectiveDebitAmountsMap(cleanId));
 
-                Query.equal(
-                    "referenceTransactionId",
-                    creditId
-                ),
-
-                Query.equal(
-                    "type",
-                    "debit"
-                ),
-
-                Query.limit(100),
-            ]
-        );
+    const matchingDebits = (offsetData.allTx || []).filter(
+        (tx) =>
+            String(tx?.type || "").toLowerCase() === "debit" &&
+            String(tx?.referenceTransactionId || "") ===
+                String(creditId)
+    );
 
     return roundMoney(
-        (response.documents || []).reduce(
-            (total, transaction) =>
-                total +
-                Number(
-                    transaction.amount || 0
-                ),
-            0
-        )
+        matchingDebits.reduce((total, tx) => {
+            const effectiveAmt = offsetData.effectiveDebitMap.has(tx.$id)
+                ? offsetData.effectiveDebitMap.get(tx.$id)
+                : Number(tx?.amount || 0);
+            return total + Number(effectiveAmt || 0);
+        }, 0)
     );
 };
 
   // GET AVAILABLE PROMOTION CREDITS
 
 const getAvailablePromotionCredits = async (
-    userId
+    userId,
+    preloadedOffsetData = null
 ) => {
     const cleanId = cleanUserId(userId);
 
@@ -719,6 +793,10 @@ const getAvailablePromotionCredits = async (
         await getPromotionalCredits(
             cleanId
         );
+
+    const offsetData =
+        preloadedOffsetData ||
+        (await getEffectiveDebitAmountsMap(cleanId));
 
     const available = [];
 
@@ -744,7 +822,8 @@ const getAvailablePromotionCredits = async (
         const usedAmount =
             await getPromotionUsage(
                 cleanId,
-                credit.$id
+                credit.$id,
+                offsetData
             );
 
         const remaining =
@@ -767,13 +846,36 @@ const getAvailablePromotionCredits = async (
         });
     }
 
+    const monthlyCredits = available.filter(
+        (c) => String(c.promotionType || "").toLowerCase() === "monthly"
+    );
+    const welcomeCredits = available.filter(
+        (c) => String(c.promotionType || "").toLowerCase() === "welcome"
+    );
+
+    available.monthly = roundMoney(
+        monthlyCredits.reduce(
+            (sum, c) => sum + Number(c.remainingAmount || 0),
+            0
+        )
+    );
+    available.welcome = roundMoney(
+        welcomeCredits.reduce(
+            (sum, c) => sum + Number(c.remainingAmount || 0),
+            0
+        )
+    );
+    available.monthlyExpiry = monthlyCredits[0]?.expiresAt || null;
+    available.welcomeExpiry = welcomeCredits[0]?.expiresAt || null;
+
     return available;
 };
 
   // GET AVAILABLE USER MONEY
 
 const getAvailableUserMoney = async (
-    userId
+    userId,
+    preloadedOffsetData = null
 ) => {
     const cleanId = cleanUserId(userId);
 
@@ -781,6 +883,10 @@ const getAvailableUserMoney = async (
         await getUserMoneyCredits(
             cleanId
         );
+
+    const offsetData =
+        preloadedOffsetData ||
+        (await getEffectiveDebitAmountsMap(cleanId));
 
     let totalAvailable = 0;
 
@@ -797,7 +903,8 @@ const getAvailableUserMoney = async (
         const usedAmount =
             await getUserMoneyUsage(
                 cleanId,
-                credit.$id
+                credit.$id,
+                offsetData
             );
 
         const remaining =
@@ -816,7 +923,423 @@ const getAvailableUserMoney = async (
             );
     }
 
+    // Also include any standalone refund credits that exceeded recorded debits for their orderId
+    for (const [orderKey, refundTotal] of offsetData.refundByOrderKey.entries()) {
+        const orderDebits = offsetData.debitsByOrderKey.get(orderKey) || [];
+        const debitsSum = roundMoney(
+            orderDebits.reduce((s, d) => s + Number(d?.amount || 0), 0)
+        );
+        const excessRefund = roundMoney(Math.max(0, refundTotal - debitsSum));
+        if (excessRefund > 0) {
+            totalAvailable = roundMoney(totalAvailable + excessRefund);
+        }
+    }
+
     return totalAvailable;
+};
+
+  // RECONCILE WALLET BALANCE WITH ACTUAL CREDITS & REFUNDED DEBITS
+
+const reconcileWalletState = async (userId, walletDoc = null) => {
+    const cleanId = cleanUserId(userId);
+    let wallet = walletDoc || (await getWallet(cleanId));
+    if (!wallet) return null;
+
+    const offsetData = await getEffectiveDebitAmountsMap(cleanId);
+    const promoCredits = await getAvailablePromotionCredits(cleanId, offsetData);
+    const userMoney = await getAvailableUserMoney(cleanId, offsetData);
+
+    const expectedPromotionalBalance = roundMoney(
+        Number(promoCredits.monthly || 0) + Number(promoCredits.welcome || 0)
+    );
+    const expectedBalance = roundMoney(expectedPromotionalBalance + userMoney);
+
+    let expectedTotalSpent = 0;
+    for (const tx of offsetData.allTx || []) {
+        if (
+            String(tx?.type || "").toLowerCase() === "debit" &&
+            String(tx?.promotionType || "").toLowerCase() !== "expired"
+        ) {
+            const eff = offsetData.effectiveDebitMap.has(tx.$id)
+                ? offsetData.effectiveDebitMap.get(tx.$id)
+                : Number(tx?.amount || 0);
+            expectedTotalSpent = roundMoney(expectedTotalSpent + Number(eff || 0));
+        }
+    }
+
+    const currentBalance = roundMoney(wallet.balance || 0);
+    const currentPromo = roundMoney(wallet.promotionalBalance || 0);
+    const currentSpent = roundMoney(wallet.totalSpent || 0);
+
+    if (
+        currentBalance !== expectedBalance ||
+        currentPromo !== expectedPromotionalBalance ||
+        currentSpent !== expectedTotalSpent
+    ) {
+        try {
+            wallet = await databases.updateDocument(
+                DATABASE_ID,
+                WALLET_COLLECTION_ID,
+                wallet.$id,
+                {
+                    balance: expectedBalance,
+                    promotionalBalance: expectedPromotionalBalance,
+                    totalSpent: expectedTotalSpent,
+                    updatedAt: isoNow(),
+                }
+            );
+        } catch (err) {
+            console.warn("Wallet state reconciliation warning:", err);
+        }
+    }
+
+    return wallet;
+};
+
+  // REFUND ORDER WALLET (IDEMPOTENT FOR FULL OR PARTIAL CANCELLATION)
+
+const refundOrderWallet = async (orderOrId, options = {}) => {
+    try {
+        let order =
+            orderOrId && typeof orderOrId === "object" ? orderOrId : null;
+
+        if (!order && orderOrId) {
+            const cleanRef = String(orderOrId).trim();
+            if (/^ORD/i.test(cleanRef)) {
+                const res = await databases.listDocuments(
+                    DATABASE_ID,
+                    ORDERS_COLLECTION_ID,
+                    [Query.equal("orderId", cleanRef), Query.limit(1)]
+                );
+                order = res?.documents?.[0] || null;
+            } else {
+                try {
+                    order = await databases.getDocument(
+                        DATABASE_ID,
+                        ORDERS_COLLECTION_ID,
+                        cleanRef
+                    );
+                } catch {
+                    const res = await databases.listDocuments(
+                        DATABASE_ID,
+                        ORDERS_COLLECTION_ID,
+                        [Query.equal("orderId", cleanRef), Query.limit(1)]
+                    );
+                    order = res?.documents?.[0] || null;
+                }
+            }
+        }
+
+        if (!order) {
+            return { refunded: false, amount: 0 };
+        }
+
+        const userId = String(order.userId || options.userId || "").trim();
+        if (!userId) {
+            return { refunded: false, amount: 0 };
+        }
+
+        const orderIdStr = String(order.orderId || order.$id || "").trim();
+        const orderDocIdStr = String(order.$id || "").trim();
+        const matchKeys = new Set(
+            [orderIdStr, orderDocIdStr].filter(Boolean)
+        );
+
+        let wallet = await getWallet(userId);
+        if (!wallet) {
+            wallet = await createWallet(userId);
+        }
+
+        const allTx = await getTransactions(userId);
+
+        // Find all order debits for this order
+        const orderDebits = allTx.filter(
+            (tx) =>
+                String(tx?.type || "").toLowerCase() === "debit" &&
+                matchKeys.has(String(tx?.orderId || "").trim())
+        );
+
+        const debitsTotal = roundMoney(
+            orderDebits.reduce((sum, tx) => sum + Number(tx?.amount || 0), 0)
+        );
+
+        // Find all existing refund credits for this order
+        const existingRefunds = allTx.filter(
+            (tx) =>
+                String(tx?.type || "").toLowerCase() === "credit" &&
+                String(tx?.source || "").toLowerCase() === "refund" &&
+                matchKeys.has(String(tx?.orderId || "").trim())
+        );
+
+        const alreadyRefunded = roundMoney(
+            existingRefunds.reduce(
+                (sum, tx) => sum + Number(tx?.amount || 0),
+                0
+            )
+        );
+
+        const storedWalletPaid = roundMoney(Number(order.walletPaid || 0));
+        const totalWalletPaidForOrder = roundMoney(
+            Math.max(storedWalletPaid, debitsTotal)
+        );
+
+        if (totalWalletPaidForOrder <= 0) {
+            return { refunded: false, amount: 0, alreadyRefunded };
+        }
+
+        // Determine if order is fully or partially cancelled
+        const items = parseOrderItemsSafe(order.items);
+        const cancelledItems = items.filter(isOrderItemCancelled);
+        const orderStatusUpper = String(order.status || "")
+            .trim()
+            .toUpperCase();
+
+        const isFullOrderCancelled =
+            Boolean(options.fullOrder) ||
+            orderStatusUpper === "CANCELLED" ||
+            orderStatusUpper === "CANCELED" ||
+            (items.length > 0 && cancelledItems.length === items.length);
+
+        let targetWalletRefund = 0;
+
+        if (Number(options.refundAmount) > 0) {
+            targetWalletRefund = roundMoney(
+                Math.min(
+                    totalWalletPaidForOrder,
+                    alreadyRefunded + Number(options.refundAmount)
+                )
+            );
+        } else if (isFullOrderCancelled) {
+            targetWalletRefund = totalWalletPaidForOrder;
+        } else if (cancelledItems.length > 0) {
+            const cancelledSellingSum = roundMoney(
+                cancelledItems.reduce(
+                    (sum, item) => sum + computeItemSellingTotal(item),
+                    0
+                )
+            );
+            targetWalletRefund = roundMoney(
+                Math.min(totalWalletPaidForOrder, cancelledSellingSum)
+            );
+        }
+
+        const amountToRefundNow = roundMoney(
+            Math.max(0, targetWalletRefund - alreadyRefunded)
+        );
+
+        if (amountToRefundNow <= 0) {
+            return {
+                refunded: false,
+                amount: 0,
+                alreadyRefunded,
+                totalRefunded: alreadyRefunded,
+            };
+        }
+
+        const canonicalOrderKey =
+            orderDebits[0]?.orderId || orderIdStr || orderDocIdStr;
+
+        // If this order had walletPaid > 0 on the order document, but deductMoney was never recorded
+        // in walletTransactions (debitsTotal === 0), record the order debit first so the ledger
+        // has the matching debit + refund credit pair without double-counting the wallet balance.
+        if (debitsTotal <= 0 && storedWalletPaid > 0) {
+            const currentBal = roundMoney(wallet.balance || 0);
+            const afterDebitBal = roundMoney(
+                Math.max(0, currentBal - amountToRefundNow)
+            );
+            await databases.createDocument(
+                DATABASE_ID,
+                WALLET_TRANSACTIONS_COLLECTION_ID,
+                ID.unique(),
+                {
+                    userId,
+                    type: "debit",
+                    amount: amountToRefundNow,
+                    balanceBefore: currentBal,
+                    balanceAfter: afterDebitBal,
+                    description: `Wallet Payment for Order #${canonicalOrderKey}`,
+                    source: "order",
+                    promotionType:
+                        Number(order.walletWelcomePromotionUsed || 0) >=
+                        amountToRefundNow
+                            ? "welcome"
+                            : Number(order.walletMonthlyPromotionUsed || 0) > 0
+                            ? "monthly"
+                            : "welcome",
+                    expiresAt: "",
+                    orderId: canonicalOrderKey,
+                    transactionId: `ORDER-DEBIT-${canonicalOrderKey}`,
+                    referenceTransactionId: "",
+                    createdAt: order.orderDate || order.$createdAt || isoNow(),
+                }
+            );
+        }
+
+        const balanceBeforeRefund =
+            debitsTotal <= 0
+                ? roundMoney(
+                      Math.max(0, Number(wallet.balance || 0) - amountToRefundNow)
+                  )
+                : roundMoney(wallet.balance || 0);
+
+        const balanceAfterRefund = roundMoney(
+            balanceBeforeRefund + amountToRefundNow
+        );
+
+        const refundDescription =
+            options.description ||
+            `₹${amountToRefundNow.toFixed(2)} Credited to Wallet — Refund for Cancelled Order #${canonicalOrderKey}`;
+
+        await databases.createDocument(
+            DATABASE_ID,
+            WALLET_TRANSACTIONS_COLLECTION_ID,
+            ID.unique(),
+            {
+                userId,
+                type: "credit",
+                amount: amountToRefundNow,
+                balanceBefore: balanceBeforeRefund,
+                balanceAfter: balanceAfterRefund,
+                description: refundDescription,
+                source: "refund",
+                promotionType: "",
+                expiresAt: "",
+                orderId: canonicalOrderKey,
+                transactionId: `REFUND-${canonicalOrderKey}-${Date.now()}`,
+                referenceTransactionId: orderDebits[0]?.$id || "",
+                createdAt: isoNow(),
+            }
+        );
+
+        wallet = await reconcileWalletState(userId, wallet);
+
+        // Send customer notification confirming wallet refund credit
+        try {
+            await notificationService.createUserNotification({
+                userId,
+                type: "WALLET_REFUND",
+                title: `₹${amountToRefundNow.toFixed(0)} Credited to Wallet 💰`,
+                message: `₹${amountToRefundNow.toFixed(2)} has been refunded and credited back to your TechStore Wallet for cancelled Order #${canonicalOrderKey}. Available Wallet Balance: ₹${roundMoney(wallet?.balance || balanceAfterRefund).toFixed(2)}.`,
+                orderId: canonicalOrderKey,
+                shipmentId: String(options.shipmentId || ""),
+                trackingId: String(options.trackingId || ""),
+            });
+        } catch (notifErr) {
+            console.warn("Wallet refund notification warning:", notifErr);
+        }
+
+        return {
+            refunded: true,
+            amount: amountToRefundNow,
+            totalRefunded: roundMoney(alreadyRefunded + amountToRefundNow),
+            wallet,
+        };
+    } catch (error) {
+        console.error("refundOrderWallet error:", error);
+        return { refunded: false, amount: 0, error: error?.message };
+    }
+};
+
+  // AUTOMATICALLY SYNC REFUNDS FOR ANY CANCELLED ORDERS OF USER
+
+const syncCancelledOrderRefunds = async (userId) => {
+    try {
+        const cleanId = cleanUserId(userId);
+
+        const [ordersRes, shipmentsRes] = await Promise.all([
+            databases
+                .listDocuments(DATABASE_ID, ORDERS_COLLECTION_ID, [
+                    Query.equal("userId", cleanId),
+                    Query.orderDesc("$createdAt"),
+                    Query.limit(100),
+                ])
+                .catch(() => ({ documents: [] })),
+            databases
+                .listDocuments(DATABASE_ID, SHIPMENTS_COLLECTION_ID, [
+                    Query.equal("userId", cleanId),
+                    Query.limit(100),
+                ])
+                .catch(() => ({ documents: [] })),
+        ]);
+
+        const orders = ordersRes?.documents || [];
+        const shipments = shipmentsRes?.documents || [];
+
+        const cancelledShipmentOrderIds = new Set();
+        for (const sh of shipments) {
+            const st = String(sh?.status || "").trim().toUpperCase();
+            if (st === "CANCELLED" || st === "CANCELED") {
+                if (sh.orderId) {
+                    cancelledShipmentOrderIds.add(String(sh.orderId).trim());
+                }
+            }
+        }
+
+        for (const order of orders) {
+            const orderIdStr = String(order.orderId || "").trim();
+            const docIdStr = String(order.$id || "").trim();
+            const statusUpper = String(order.status || "").trim().toUpperCase();
+            const isShipmentCancelled =
+                cancelledShipmentOrderIds.has(orderIdStr) ||
+                cancelledShipmentOrderIds.has(docIdStr);
+
+            const items = parseOrderItemsSafe(order.items);
+            const hasCancelledItem = items.some(isOrderItemCancelled);
+
+            if (
+                statusUpper === "CANCELLED" ||
+                statusUpper === "CANCELED" ||
+                isShipmentCancelled ||
+                hasCancelledItem
+            ) {
+                await refundOrderWallet(order, {
+                    userId: cleanId,
+                    fullOrder:
+                        statusUpper === "CANCELLED" ||
+                        statusUpper === "CANCELED" ||
+                        isShipmentCancelled,
+                });
+            }
+        }
+    } catch (err) {
+        console.warn("syncCancelledOrderRefunds warning:", err);
+    }
+};
+
+  // GET OR CREATE WALLET
+
+const getOrCreateWallet = async (userId) => {
+    const cleanId = cleanUserId(userId);
+
+    let wallet = await getWallet(cleanId);
+
+    if (!wallet) {
+        wallet = await createWallet(
+            cleanId
+        );
+    }
+
+  // FIRST EXPIRE OLD PROMOTIONS
+
+    wallet = await expirePromotions(
+        cleanId,
+        wallet
+    );
+
+  // THEN GIVE CURRENT MONTH PROMOTION
+
+    wallet = await applyMonthlyPromotion(
+        cleanId,
+        wallet
+    );
+
+  // SYNC ANY CANCELLED ORDER WALLET REFUNDS & RECONCILE
+
+    await syncCancelledOrderRefunds(cleanId);
+
+    wallet = await reconcileWalletState(cleanId, wallet);
+
+    return wallet;
 };
 
   // CALCULATE WALLET USAGE
@@ -872,11 +1395,15 @@ const calculateWalletUsage = async (
     let welcomePromotion = 0;
     let userMoney = 0;
 
+    const offsetData =
+        await getEffectiveDebitAmountsMap(cleanId);
+
   // 1. MONTHLY PROMOTION
 
     const promotionCredits =
         await getAvailablePromotionCredits(
-            cleanId
+            cleanId,
+            offsetData
         );
 
     const monthlyCredits =
@@ -968,7 +1495,8 @@ const calculateWalletUsage = async (
     if (remaining > 0) {
         const availableUserMoney =
             await getAvailableUserMoney(
-                cleanId
+                cleanId,
+                offsetData
             );
 
         userMoney =
@@ -1030,6 +1558,40 @@ const deductMoney = async (
         throw new Error(
             "Wallet not found."
         );
+    }
+
+    // IDEMPOTENCY CHECK: Avoid double-deducting for the same orderId
+    if (options.orderId) {
+        const existingOrderDebits = await databases.listDocuments(
+            DATABASE_ID,
+            WALLET_TRANSACTIONS_COLLECTION_ID,
+            [
+                Query.equal("userId", cleanId),
+                Query.equal("type", "debit"),
+                Query.equal("orderId", String(options.orderId).trim()),
+                Query.limit(20),
+            ]
+        );
+        const alreadyDeducted = roundMoney(
+            (existingOrderDebits.documents || []).reduce(
+                (s, d) => s + Number(d?.amount || 0),
+                0
+            )
+        );
+        if (alreadyDeducted >= numericAmount) {
+            return {
+                wallet,
+                amount: numericAmount,
+                monthlyPromotion: 0,
+                welcomePromotion: 0,
+                userMoney: 0,
+                total: numericAmount,
+                transactionId:
+                    existingOrderDebits.documents?.[0]?.transactionId ||
+                    options.transactionId ||
+                    `PAY-${Date.now()}`,
+            };
+        }
     }
 
     const currentBalance =
@@ -1515,6 +2077,9 @@ const addMoney = async (
             numericAmount
         );
 
+    const isRefund =
+        String(options.source || "").toLowerCase() === "refund";
+
     const updatedWallet =
         await databases.updateDocument(
             DATABASE_ID,
@@ -1524,14 +2089,15 @@ const addMoney = async (
                 balance:
                     balanceAfter,
 
-                totalAdded:
-                    roundMoney(
-                        Number(
-                            wallet.totalAdded ||
-                            0
-                        ) +
-                        numericAmount
-                    ),
+                totalAdded: isRefund
+                    ? roundMoney(Number(wallet.totalAdded || 0))
+                    : roundMoney(
+                          Number(
+                              wallet.totalAdded ||
+                              0
+                          ) +
+                          numericAmount
+                      ),
 
                 updatedAt:
                     isoNow(),
@@ -1584,7 +2150,7 @@ const addMoney = async (
         }
     );
 
-    return updatedWallet;
+    return await reconcileWalletState(cleanId, updatedWallet);
 };
 
   // REFUND TO WALLET
@@ -1594,13 +2160,25 @@ const refundMoney = async (
     amount,
     options = {}
 ) => {
+    if (options.order || options.orderId) {
+        const res = await refundOrderWallet(
+            options.order || options.orderId,
+            {
+                ...options,
+                userId,
+                refundAmount: amount,
+            }
+        );
+        if (res?.wallet) return res.wallet;
+    }
+
     return await addMoney(
         userId,
         amount,
         {
             description:
                 options.description ||
-                "Order Refund",
+                "Order Cancelled Refund Credited",
 
             source:
                 "refund",
@@ -1649,52 +2227,32 @@ const getWalletSummary = async (
             cleanId
         );
 
+    const offsetData =
+        await getEffectiveDebitAmountsMap(
+            cleanId,
+            transactions
+        );
+
     const promotionCredits =
         await getAvailablePromotionCredits(
-            cleanId
+            cleanId,
+            offsetData
         );
 
     const monthlyPromotion =
         roundMoney(
-            promotionCredits
-                .filter(
-                    (item) =>
-                        item.promotionType ===
-                        "monthly"
-                )
-                .reduce(
-                    (total, item) =>
-                        total +
-                        Number(
-                            item.remainingAmount ||
-                            0
-                        ),
-                    0
-                )
+            promotionCredits.monthly || 0
         );
 
     const welcomePromotion =
         roundMoney(
-            promotionCredits
-                .filter(
-                    (item) =>
-                        item.promotionType ===
-                        "welcome"
-                )
-                .reduce(
-                    (total, item) =>
-                        total +
-                        Number(
-                            item.remainingAmount ||
-                            0
-                        ),
-                    0
-                )
+            promotionCredits.welcome || 0
         );
 
     const userMoney =
         await getAvailableUserMoney(
-            cleanId
+            cleanId,
+            offsetData
         );
 
     return {
@@ -1744,11 +2302,17 @@ const walletService = {
 
     expirePromotions,
 
+    getAvailablePromotionCredits,
+
     addMoney,
 
     deductMoney,
 
     refundMoney,
+
+    refundOrderWallet,
+
+    syncCancelledOrderRefunds,
 
     getTransactions,
 

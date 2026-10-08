@@ -1632,12 +1632,36 @@ function Checkout() {
   // PAYMENT NAVIGATION
 
         if (isCOD) {
-          /*
-           * CODPayment.jsx handles:
-           * - final COD confirmation
-           * - wallet deduction
-           * - final confirmation
-           */
+          if (finalWalletPaid > 0) {
+            try {
+              await walletService.deductMoney(
+                user.$id,
+                finalWalletPaid,
+                {
+                  source: "order",
+                  orderId:
+                    orderData.orderId ||
+                    savedOrderId ||
+                    "",
+                  transactionId: `${
+                    orderData.transactionId ||
+                    orderData.orderId ||
+                    Date.now()
+                  }-WALLET`,
+                  description: `Wallet Payment for Order ${
+                    orderData.orderId ||
+                    savedOrderId ||
+                    ""
+                  }`,
+                }
+              );
+            } catch (codWalletErr) {
+              console.warn(
+                "COD wallet deduction in Checkout warning:",
+                codWalletErr
+              );
+            }
+          }
 
           navigate(
             "/cod-payment",

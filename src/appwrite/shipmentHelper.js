@@ -3,6 +3,7 @@ import shipmentEventService from "./shipmentEventService";
 import warehouseService from "./warehouseService";
 import deliveryOtpService from "./deliveryOtpService";
 import notificationService from "./notificationService";
+import walletService from "./walletService";
 
   // ADMIN USER IDS
 
@@ -1179,10 +1180,9 @@ class ShipmentHelper {
                 }
             }
 
-            // AUTOMATIC CUSTOMER ORDER CANCELLED NOTIFICATION
+            // AUTOMATIC CUSTOMER ORDER CANCELLED NOTIFICATION & WALLET REFUND
             if (
-                normalizedStatus === "CANCELLED" &&
-                previousStatus !== "CANCELLED"
+                normalizedStatus === "CANCELLED"
             ) {
                 const resolvedContext =
                     await deliveryOtpService.resolveShipmentContext(
@@ -1206,7 +1206,10 @@ class ShipmentHelper {
                         }
                     );
 
-                if (resolvedContext.userId) {
+                if (
+                    previousStatus !== "CANCELLED" &&
+                    resolvedContext.userId
+                ) {
                     await deliveryOtpService.ensureOrderAutoCancelledNotification({
                         userId: resolvedContext.userId,
                         orderId: resolvedContext.orderId,
@@ -1215,6 +1218,27 @@ class ShipmentHelper {
                         ),
                         trackingId: resolvedContext.trackingId,
                     });
+                }
+
+                if (resolvedContext.orderDoc || resolvedContext.orderId) {
+                    try {
+                        await walletService.refundOrderWallet(
+                            resolvedContext.orderDoc || resolvedContext.orderId,
+                            {
+                                userId: resolvedContext.userId,
+                                fullOrder: true,
+                                shipmentId: String(
+                                    updatedShipment.$id || shipmentId || ""
+                                ),
+                                trackingId: resolvedContext.trackingId,
+                            }
+                        );
+                    } catch (walletRefundErr) {
+                        console.error(
+                            "Shipment cancel wallet refund error:",
+                            walletRefundErr
+                        );
+                    }
                 }
             }
 

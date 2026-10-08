@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useSelector, useDispatch } from "react-redux";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 
 import {
@@ -71,6 +71,7 @@ const formatDate = (value) => {
 function Profile() {
     const dispatch = useDispatch();
     const navigate = useNavigate();
+    const location = useLocation();
 
   // SAFE REDUX STATE
 
@@ -102,7 +103,21 @@ function Profile() {
     const [orders, setOrders] = useState([]);
 
     const [activeTab, setActiveTab] =
-        useState("overview");
+        useState(() => {
+            const params = new URLSearchParams(window.location.search);
+            const tab = String(params.get("tab") || "").toLowerCase();
+            return ["overview", "wallet", "edit"].includes(tab)
+                ? tab
+                : "overview";
+        });
+
+    useEffect(() => {
+        const params = new URLSearchParams(location.search);
+        const tab = String(params.get("tab") || "").toLowerCase();
+        if (["overview", "wallet", "edit"].includes(tab)) {
+            setActiveTab(tab);
+        }
+    }, [location.search]);
 
     const [name, setName] =
         useState(user?.name || "");
@@ -1181,6 +1196,63 @@ function Profile() {
 
                                         </div>
 
+                                        {/* CANCELLED ORDER REFUND CREDITED BANNER */}
+                                        {(() => {
+                                            const refundTxns = (transactions || []).filter(
+                                                (t) =>
+                                                    String(t?.source || "").toLowerCase() ===
+                                                        "refund" && isCredit(t)
+                                            );
+                                            if (refundTxns.length === 0) return null;
+                                            const totalRefundedAmt = refundTxns.reduce(
+                                                (sum, t) => sum + Number(t?.amount || 0),
+                                                0
+                                            );
+                                            const latestRefund = refundTxns[0];
+                                            return (
+                                                <div
+                                                    className="p-4 rounded-4 mb-4"
+                                                    style={{
+                                                        background:
+                                                            "linear-gradient(135deg, rgba(16, 185, 129, 0.14), rgba(5, 150, 105, 0.06))",
+                                                        border: "1.5px solid rgba(16, 185, 129, 0.45)",
+                                                    }}
+                                                >
+                                                    <div className="d-flex align-items-center justify-content-between flex-wrap gap-3">
+                                                        <div className="d-flex align-items-center gap-3">
+                                                            <div
+                                                                className="rounded-circle bg-success text-white d-flex align-items-center justify-content-center flex-shrink-0 shadow-sm"
+                                                                style={{ width: 46, height: 46 }}
+                                                            >
+                                                                <FaCheckCircle size={22} />
+                                                            </div>
+                                                            <div>
+                                                                <span className="badge bg-success mb-1">
+                                                                    Order Cancelled Refund Credited
+                                                                </span>
+                                                                <h5 className="fw-bold text-success mb-1">
+                                                                    +₹{formatMoney(totalRefundedAmt)} Credited to Your Wallet
+                                                                </h5>
+                                                                <small className="text-muted d-block">
+                                                                    {latestRefund?.orderId
+                                                                        ? `Refund from Cancelled Order #${latestRefund.orderId} has been credited back to your TechStore Wallet.`
+                                                                        : "Your cancelled order wallet payment has been credited back to your TechStore Wallet."}
+                                                                </small>
+                                                            </div>
+                                                        </div>
+                                                        <div className="text-md-end">
+                                                            <span className="small text-muted d-block">
+                                                                Available Wallet Balance
+                                                            </span>
+                                                            <strong className="fs-4 text-success">
+                                                                ₹{formatMoney(walletBalance)}
+                                                            </strong>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })()}
+
 
                                         {/* WALLET STATS */}
 
@@ -1484,10 +1556,25 @@ function Profile() {
                                                             isCredit(
                                                                 txn
                                                             );
+                                                        const isRefundTxn =
+                                                            String(
+                                                                txn?.source || ""
+                                                            ).toLowerCase() ===
+                                                            "refund";
 
                                                         return (
                                                             <div
                                                                 className="transaction-item d-flex justify-content-between align-items-center p-3 mb-2 rounded-3 border"
+                                                                style={
+                                                                    isRefundTxn
+                                                                        ? {
+                                                                              background:
+                                                                                  "rgba(16, 185, 129, 0.08)",
+                                                                              borderColor:
+                                                                                  "rgba(16, 185, 129, 0.35)",
+                                                                          }
+                                                                        : undefined
+                                                                }
                                                                 key={
                                                                     txn?.$id ||
                                                                     txn?.transactionId ||
@@ -1510,11 +1597,18 @@ function Profile() {
 
                                                                     <div>
 
-                                                                        <h6 className="fw-bold mb-1">
-                                                                            {getTransactionTitle(
-                                                                                txn
+                                                                        <div className="d-flex align-items-center gap-2 flex-wrap mb-1">
+                                                                            <h6 className="fw-bold mb-0">
+                                                                                {getTransactionTitle(
+                                                                                    txn
+                                                                                )}
+                                                                            </h6>
+                                                                            {isRefundTxn && (
+                                                                                <span className="badge bg-success rounded-pill">
+                                                                                    Order Refund Credited
+                                                                                </span>
                                                                             )}
-                                                                        </h6>
+                                                                        </div>
 
                                                                         <small className="text-muted">
 
@@ -1522,6 +1616,10 @@ function Profile() {
                                                                                 txn?.createdAt ||
                                                                                 txn?.$createdAt
                                                                             )}
+
+                                                                            {txn?.orderId
+                                                                                ? ` • Order #${txn.orderId}`
+                                                                                : ""}
 
                                                                             {" • "}
 
@@ -1547,19 +1645,26 @@ function Profile() {
                                                                 </div>
 
 
-                                                                <div
-                                                                    className={`fw-bold ${
-                                                                        credit
-                                                                            ? "text-success"
-                                                                            : "text-danger"
-                                                                    }`}
-                                                                >
-                                                                    {credit
-                                                                        ? "+"
-                                                                        : "-"}
-                                                                    ₹
-                                                                    {formatMoney(
-                                                                        txn?.amount
+                                                                <div className="text-end">
+                                                                    <div
+                                                                        className={`fw-bold ${
+                                                                            credit
+                                                                                ? "text-success"
+                                                                                : "text-danger"
+                                                                        }`}
+                                                                    >
+                                                                        {credit
+                                                                            ? "+"
+                                                                            : "-"}
+                                                                        ₹
+                                                                        {formatMoney(
+                                                                            txn?.amount
+                                                                        )}
+                                                                    </div>
+                                                                    {isRefundTxn && (
+                                                                        <small className="text-success fw-semibold d-block">
+                                                                            Credited
+                                                                        </small>
                                                                     )}
                                                                 </div>
 
