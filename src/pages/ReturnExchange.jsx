@@ -496,8 +496,8 @@ function ReturnExchange() {
       <div className="rx-page-wrapper py-5 d-flex align-items-center justify-content-center">
         <div className="text-center py-5">
           <div className="spinner-border text-primary mb-3" role="status" />
-          <h5 className="fw-bold mb-1">Loading Return / Exchange...</h5>
-          <p className="rx-subtitle">Fetching your order details from Appwrite</p>
+          <h5 className="rx-section-title mb-1">Loading Return / Exchange...</h5>
+          <p className="rx-subtitle">Fetching your order details...</p>
         </div>
       </div>
     );
@@ -546,7 +546,7 @@ function ReturnExchange() {
               </div>
               <p className="rx-subtitle">
                 Order ID :{" "}
-                <strong className="font-monospace">
+                <strong className="font-monospace rx-text-strong">
                   {order?.orderId || orderId}
                 </strong>
               </p>
@@ -594,7 +594,7 @@ function ReturnExchange() {
                     </h4>
                     <div className="rx-subtitle">
                       {isActiveExchange ? "Exchange ID" : "Return ID"} :{" "}
-                      <strong className="font-monospace">
+                      <strong className="font-monospace rx-text-strong">
                         {activeRequest.referenceId}
                       </strong>
                     </div>
@@ -732,28 +732,25 @@ function ReturnExchange() {
               </span>
             </div>
 
-            <div className="d-flex align-items-center gap-3 p-3 rounded-3 border bg-light flex-wrap">
+            <div className="rx-selected-product-box">
               {getOrderItemImage(selectedItem) && (
                 <img
                   src={getOrderItemImage(selectedItem)}
                   alt={getOrderItemName(selectedItem)}
-                  style={{
-                    width: 64,
-                    height: 64,
-                    objectFit: "cover",
-                    borderRadius: 12,
-                  }}
-                  className="border bg-white"
+                  className="rx-selected-product-img"
                 />
               )}
               <div className="flex-grow-1">
-                <div className="fw-bold text-dark fs-6">
+                <div className="rx-selected-product-title">
                   {getOrderItemName(selectedItem)}
                 </div>
                 <div className="rx-subtitle">
-                  Quantity: <strong>x{Number(selectedItem?.quantity ?? selectedItem?.qty ?? 1) || 1}</strong>{" "}
+                  Quantity:{" "}
+                  <strong className="rx-text-strong">
+                    x{Number(selectedItem?.quantity ?? selectedItem?.qty ?? 1) || 1}
+                  </strong>{" "}
                   • Item Total:{" "}
-                  <strong className="text-dark">
+                  <strong className="rx-text-strong">
                     ₹{selectedItemAmount.toFixed(2)}
                   </strong>
                 </div>
@@ -778,15 +775,13 @@ function ReturnExchange() {
                         key={idx}
                         type="button"
                         onClick={() => setSelectedItemIndex(idx)}
-                        className={`btn btn-sm rounded-pill px-3 py-2 d-inline-flex align-items-center gap-2 ${
-                          isSelected
-                            ? "btn-dark fw-bold"
-                            : "btn-outline-secondary"
+                        className={`rx-item-select-btn ${
+                          isSelected ? "active" : ""
                         }`}
                       >
                         <span>{getOrderItemName(delivItem)}</span>
                         {itemHasReq && (
-                          <span className="badge bg-warning text-dark">
+                          <span className="rx-item-req-tag">
                             Requested
                           </span>
                         )}

@@ -32,22 +32,24 @@
 body.dark .rx-page-wrapper,
 body.dark-mode .rx-page-wrapper,
 html.dark .rx-page-wrapper,
+.dark-theme .rx-page-wrapper,
+[data-theme="dark"] .rx-page-wrapper,
 [data-bs-theme="dark"] .rx-page-wrapper {
   --rx-bg: #020617;
   --rx-card-bg: #0f172a;
   --rx-card-soft: #1e293b;
-  --rx-border: rgba(255, 255, 255, 0.09);
+  --rx-border: rgba(148, 163, 184, 0.16);
   --rx-text: #f8fafc;
   --rx-text-secondary: #cbd5e1;
   --rx-muted: #94a3b8;
   --rx-primary: #3b82f6;
-  --rx-primary-soft: rgba(59, 130, 246, 0.15);
+  --rx-primary-soft: rgba(59, 130, 246, 0.16);
   --rx-danger: #fb7185;
-  --rx-danger-soft: rgba(244, 63, 94, 0.15);
+  --rx-danger-soft: rgba(244, 63, 94, 0.16);
   --rx-warning: #fb923c;
   --rx-warning-soft: rgba(249, 115, 22, 0.16);
   --rx-success: #34d399;
-  --rx-success-soft: rgba(16, 185, 129, 0.15);
+  --rx-success-soft: rgba(16, 185, 129, 0.16);
   --rx-shadow: 0 18px 45px rgba(0, 0, 0, 0.55);
   --rx-shadow-hover: 0 24px 55px rgba(0, 0, 0, 0.72);
 
@@ -71,7 +73,8 @@ html.dark .rx-page-wrapper,
   border-radius: 22px;
   padding: 24px;
   box-shadow: var(--rx-shadow);
-  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+  color: var(--rx-text);
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease, background 0.25s ease;
 }
 
 .rx-card:hover {
@@ -82,7 +85,7 @@ html.dark .rx-page-wrapper,
   width: 44px;
   height: 44px;
   border-radius: 50%;
-  background: var(--rx-card-bg);
+  background: var(--rx-card-soft);
   border: 1px solid var(--rx-border);
   color: var(--rx-text);
   display: inline-flex;
@@ -132,21 +135,26 @@ html.dark .rx-page-wrapper,
 .rx-title {
   font-size: 1.65rem;
   font-weight: 800;
-  color: var(--rx-text);
+  color: var(--rx-text) !important;
   letter-spacing: -0.4px;
   margin: 0;
 }
 
 .rx-subtitle {
-  color: var(--rx-muted);
+  color: var(--rx-muted) !important;
   font-size: 13.5px;
   margin: 0;
+}
+
+.rx-text-strong {
+  color: var(--rx-text) !important;
+  font-weight: 700;
 }
 
 .rx-section-title {
   font-size: 1.15rem;
   font-weight: 800;
-  color: var(--rx-text);
+  color: var(--rx-text) !important;
   margin-bottom: 4px;
 }
 
@@ -155,7 +163,7 @@ html.dark .rx-page-wrapper,
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  color: var(--rx-muted);
+  color: var(--rx-muted) !important;
   display: block;
   margin-bottom: 4px;
 }
@@ -163,7 +171,92 @@ html.dark .rx-page-wrapper,
 .rx-value {
   font-size: 15px;
   font-weight: 700;
+  color: var(--rx-text) !important;
+}
+
+/* SELECTED PRODUCT BOX & ITEM SWITCHER PILLS */
+.rx-selected-product-box {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  border-radius: 16px;
+  background: var(--rx-card-soft);
+  border: 1px solid var(--rx-border);
+  flex-wrap: wrap;
+  transition: background 0.25s ease, border-color 0.25s ease;
+}
+
+.rx-selected-product-img {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: 12px;
+  background: var(--rx-card-bg);
+  border: 1px solid var(--rx-border);
+  flex-shrink: 0;
+}
+
+.rx-selected-product-title {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--rx-text) !important;
+  margin-bottom: 3px;
+}
+
+.rx-item-select-btn {
+  height: 38px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1.5px solid var(--rx-border);
+  background: var(--rx-card-soft);
+  color: var(--rx-text-secondary);
+  font-size: 13px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.rx-item-select-btn:hover {
+  border-color: var(--rx-primary);
   color: var(--rx-text);
+  transform: translateY(-1px);
+}
+
+.rx-item-select-btn.active {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  border-color: #2563eb;
+  color: #ffffff !important;
+  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.28);
+}
+
+.rx-item-req-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  background: rgba(245, 158, 11, 0.2);
+  color: #d97706;
+}
+
+.rx-item-select-btn.active .rx-item-req-tag {
+  background: rgba(255, 255, 255, 0.22);
+  color: #ffffff;
+}
+
+body.dark .rx-item-req-tag,
+body.dark-mode .rx-item-req-tag,
+html.dark .rx-item-req-tag,
+.dark-theme .rx-item-req-tag,
+[data-theme="dark"] .rx-item-req-tag,
+[data-bs-theme="dark"] .rx-item-req-tag {
+  background: rgba(251, 191, 36, 0.2);
+  color: #fbbf24;
 }
 
 /* BADGES */
@@ -280,13 +373,13 @@ html.dark .rx-page-wrapper,
 .rx-type-title {
   font-size: 16.5px;
   font-weight: 800;
-  color: var(--rx-text);
+  color: var(--rx-text) !important;
   margin-bottom: 3px;
 }
 
 .rx-type-desc {
   font-size: 13px;
-  color: var(--rx-muted);
+  color: var(--rx-muted) !important;
   margin: 0;
 }
 
@@ -309,6 +402,10 @@ html.dark .rx-page-wrapper,
 .rx-textarea:focus {
   border-color: var(--rx-primary) !important;
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18) !important;
+}
+
+.rx-textarea::placeholder {
+  color: var(--rx-muted) !important;
 }
 
 .rx-select option {

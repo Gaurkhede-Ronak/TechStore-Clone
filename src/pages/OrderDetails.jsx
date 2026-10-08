@@ -824,7 +824,7 @@ function OrderDetails() {
 
           setTrackingError(
             error?.message ||
-              "Unable to load shipment tracking from Appwrite."
+              "Unable to load live shipment tracking."
           );
 
           return null;
@@ -4229,7 +4229,7 @@ function OrderDetails() {
                       {shipment?.trackingId
                         ? `Live tracking • ${shipment.trackingId}`
                         : shipmentLoading
-                        ? "Loading shipment from Appwrite..."
+                        ? "Loading live shipment details..."
                         : `Live tracking • ${getOrderReference(order)}`}
                     </p>
                   </div>
@@ -4277,7 +4277,7 @@ function OrderDetails() {
                     <div>
                       <strong>Loading Shipment Progress...</strong>
                       <small>
-                        Fetching live shipment and event data from Appwrite.
+                        Fetching live shipment and tracking updates.
                       </small>
                     </div>
                   </div>
@@ -5556,7 +5556,7 @@ function OrderDetails() {
                       <textarea
                         id="orderReviewText"
                         className="od-review-textarea"
-                        rows="4"
+                        rows="3"
                         placeholder="Share what you liked most about the product quality, performance, and packaging..."
                         value={reviewText}
                         onChange={(event) => setReviewText(event.target.value)}
@@ -5565,21 +5565,10 @@ function OrderDetails() {
                       />
 
                       <div className="od-review-char-row">
-                        <span>Minimum 5 characters</span>
-                        <span>{reviewText.length}/2000</span>
-                      </div>
-                    </div>
-
-                    {/* Reviewer Identity Box */}
-                    <div className="od-review-identity-bar">
-                      <div className="od-review-identity-avatar">
-                        {getCustomerName().charAt(0).toUpperCase()}
-                      </div>
-                      <div className="od-review-identity-info">
-                        <strong>Posting as {getCustomerName()}</strong>
                         <span>
-                          {getCustomerEmail() || "Verified TechStore Customer"}
+                          Posting as <strong>{getCustomerName()}</strong> • Min 5 chars
                         </span>
+                        <span>{reviewText.length}/2000</span>
                       </div>
                     </div>
 

@@ -1652,7 +1652,7 @@ function TrackOrder() {
       {lastUpdated && (
         <div className="mt-3 text-end">
           <small className="text-muted" style={{ fontSize: "11px" }}>
-            Synced with Appwrite at{" "}
+            Last synced at{" "}
             {lastUpdated.toLocaleTimeString("en-IN", {
               hour: "2-digit",
               minute: "2-digit",
@@ -1886,7 +1886,7 @@ function TrackOrder() {
                 Fetching Live {detectedCourier.name} Scans...
               </h4>
               <p className="mb-0 text-muted">
-                Connecting to Appwrite shipment & hub telemetry.
+                Connecting to live shipment & hub telemetry.
               </p>
             </div>
           )}

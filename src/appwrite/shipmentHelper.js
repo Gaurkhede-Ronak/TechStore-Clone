@@ -1210,13 +1210,21 @@ class ShipmentHelper {
                     previousStatus !== "CANCELLED" &&
                     resolvedContext.userId
                 ) {
-                    await deliveryOtpService.ensureOrderAutoCancelledNotification({
+                    const isAutoCancelled =
+                        Boolean(eventData?.autoCancelled) ||
+                        String(eventData?.title || "")
+                            .toLowerCase()
+                            .includes("auto-cancel");
+
+                    await deliveryOtpService.ensureOrderCancelledNotification({
                         userId: resolvedContext.userId,
                         orderId: resolvedContext.orderId,
                         shipmentId: String(
                             updatedShipment.$id || shipmentId || ""
                         ),
                         trackingId: resolvedContext.trackingId,
+                        isAutoCancelled,
+                        customMessage: String(eventData?.description || ""),
                     });
                 }
 

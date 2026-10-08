@@ -681,7 +681,7 @@ function Profile() {
             );
 
             toast.success(
-                "Profile Updated & Synced to Appwrite Successfully!"
+                "Profile Updated Successfully!"
             );
         } catch (error) {
             console.error(

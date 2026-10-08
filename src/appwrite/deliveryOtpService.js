@@ -152,12 +152,14 @@ class DeliveryOtpService {
     return elapsedMs >= TWO_DAYS_MS;
   }
 
-  // ENSURE CUSTOMER RECEIVES ORDER_CANCELLED NOTIFICATION WHEN AUTO-CANCELLED AFTER 2 DAYS
-  async ensureOrderAutoCancelledNotification({
+  // ENSURE CUSTOMER RECEIVES ORDER_CANCELLED NOTIFICATION (MANUAL VS AUTO-CANCELLED)
+  async ensureOrderCancelledNotification({
     userId,
     orderId,
     shipmentId,
     trackingId,
+    isAutoCancelled = false,
+    customMessage = "",
   }) {
     const cleanUserId = String(userId || "").trim();
     const cleanShipmentId = String(shipmentId || "").trim();
@@ -191,21 +193,50 @@ class DeliveryOtpService {
         return sameShipment || sameOrder;
       });
 
-      if (existingCancelledNotif) {
-        return existingCancelledNotif;
-      }
-
       const orderLabel = cleanOrderId ? `Order ${cleanOrderId}` : "Your order";
       const trackingLabel =
         cleanTrackingId && !cleanTrackingId.startsWith("TRK-")
           ? ` (Tracking ID: ${cleanTrackingId})`
           : "";
 
+      const notifType = isAutoCancelled
+        ? "ORDER_AUTO_CANCELLED"
+        : "ORDER_CANCELLED";
+      const notifTitle = isAutoCancelled
+        ? "Order Auto-Cancelled ❌"
+        : "Order Cancelled ❌";
+      const notifMessage = isAutoCancelled
+        ? `${orderLabel}${trackingLabel} has been automatically cancelled because it was not delivered within 2 days of going Out for Delivery.`
+        : customMessage
+        ? `${orderLabel}${trackingLabel}: ${customMessage}`
+        : `${orderLabel}${trackingLabel} has been cancelled successfully.`;
+
+      if (existingCancelledNotif) {
+        if (
+          !isAutoCancelled &&
+          String(existingCancelledNotif.title || "").includes("Auto-Cancelled")
+        ) {
+          try {
+            return await notificationService.updateNotification(
+              existingCancelledNotif.$id,
+              {
+                type: "ORDER_CANCELLED",
+                title: notifTitle,
+                message: notifMessage,
+              }
+            );
+          } catch {
+            return existingCancelledNotif;
+          }
+        }
+        return existingCancelledNotif;
+      }
+
       const createdNotif = await notificationService.createNotification({
         userId: cleanUserId,
-        type: "ORDER_CANCELLED",
-        title: "Order Auto-Cancelled ❌",
-        message: `${orderLabel}${trackingLabel} has been automatically cancelled because it was not delivered within 2 days of going Out for Delivery.`,
+        type: notifType,
+        title: notifTitle,
+        message: notifMessage,
         orderId: cleanOrderId,
         shipmentId: cleanShipmentId,
         trackingId: cleanTrackingId,
@@ -219,9 +250,13 @@ class DeliveryOtpService {
           ADMIN_USER_IDS.map((adminId) =>
             notificationService.createNotification({
               userId: String(adminId),
-              type: "ORDER_CANCELLED",
-              title: "Order Auto-Cancelled (2-Day Timeout) ❌",
-              message: `${orderLabel}${trackingLabel} was automatically cancelled because it remained Out for Delivery for more than 2 days without delivery.`,
+              type: notifType,
+              title: isAutoCancelled
+                ? "Order Auto-Cancelled (2-Day Timeout) ❌"
+                : "Order Cancelled ❌",
+              message: isAutoCancelled
+                ? `${orderLabel}${trackingLabel} was automatically cancelled because it remained Out for Delivery for more than 2 days without delivery.`
+                : `${orderLabel}${trackingLabel} has been cancelled by the customer.`,
               orderId: cleanOrderId,
               shipmentId: cleanShipmentId,
               trackingId: cleanTrackingId,
@@ -234,9 +269,25 @@ class DeliveryOtpService {
 
       return createdNotif;
     } catch (err) {
-      console.error("ensureOrderAutoCancelledNotification error:", err);
+      console.error("ensureOrderCancelledNotification error:", err);
       return null;
     }
+  }
+
+  // ENSURE CUSTOMER RECEIVES ORDER_AUTO_CANCELLED NOTIFICATION WHEN AUTO-CANCELLED AFTER 2 DAYS
+  async ensureOrderAutoCancelledNotification({
+    userId,
+    orderId,
+    shipmentId,
+    trackingId,
+  }) {
+    return this.ensureOrderCancelledNotification({
+      userId,
+      orderId,
+      shipmentId,
+      trackingId,
+      isAutoCancelled: true,
+    });
   }
 
   // AUTO-CANCEL SHIPMENT + ORDER IF OUT FOR DELIVERY FOR > 2 DAYS WITHOUT DELIVERY

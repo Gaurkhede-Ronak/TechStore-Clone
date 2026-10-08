@@ -2849,8 +2849,8 @@ function Checkout() {
                 </div>
 
                 <small className="text-muted d-block mt-1">
-                  Your order information is securely
-                  processed through Appwrite.
+                  Your order information is encrypted and
+                  processed securely.
                 </small>
 
               </div>

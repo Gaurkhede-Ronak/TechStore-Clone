@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import orderService from "../appwrite/orderService";
@@ -602,7 +602,7 @@ function OrderDetails() {
 
           setTrackingError(
             error?.message ||
-              "Unable to load shipment tracking from Appwrite."
+              "Unable to load live shipment tracking."
           );
 
           return null;
@@ -2188,7 +2188,7 @@ function OrderDetails() {
           </div>
           <div className="banner-divider" />
           <div className="banner-bottom-row">
-            <span className="banner-status-label">Current Appwrite Shipment Status</span>
+            <span className="banner-status-label">Current Shipment Status</span>
             <span className="banner-status-value">
               {STATUS_MAP[currentStatus] || currentStatus || "Placed"}
             </span>
@@ -2426,9 +2426,9 @@ function OrderDetails() {
 
                 <p className="order-tracking-subtitle mb-0">
                   {shipment?.trackingId
-                    ? `Live tracking â€¢ ${shipment.trackingId}`
+                    ? `Live tracking • ${shipment.trackingId}`
                     : shipmentLoading
-                    ? "Connecting to Appwrite shipment..."
+                    ? "Connecting to live shipment..."
                     : "Shipment tracking information"}
                 </p>
               </div>
@@ -2466,7 +2466,7 @@ function OrderDetails() {
                 </div>
                 <div>
                   <strong>Loading shipment tracking...</strong>
-                  <small>Fetching live shipment events from Appwrite.</small>
+                  <small>Fetching live shipment events.</small>
                 </div>
               </div>
             ) : !shipment ? (
@@ -2783,7 +2783,7 @@ function OrderDetails() {
                   <div>
                     <span className="order-tracking-live-dot" />
                     <span>
-                      Live shipment data from Appwrite
+                      Live shipment data
                     </span>
                   </div>
 
@@ -2824,7 +2824,7 @@ function OrderDetails() {
                 </h5>
 
                 <small className="text-muted">
-                  Live status from Appwrite
+                  Live status
                 </small>
               </div>
 

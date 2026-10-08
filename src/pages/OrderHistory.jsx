@@ -566,7 +566,7 @@ function OrderHistory() {
             <span className="visually-hidden">Loading...</span>
           </div>
           <h3 className="fw-bold text-dark">Loading Your Orders...</h3>
-          <p className="text-muted mb-0">Fetching your latest orders from Appwrite</p>
+          <p className="text-muted mb-0">Fetching your latest orders...</p>
         </div>
       </div>
     );

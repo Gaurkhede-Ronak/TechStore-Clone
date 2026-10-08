@@ -177,9 +177,46 @@ class NotificationService {
       for (const doc of rawDocs) {
         const typeKey = String(doc?.type || "").toUpperCase();
         const ordKey = String(doc?.orderId || "").trim();
-        const titleKey = String(doc?.title || "").trim();
+        let titleKey = String(doc?.title || "").trim();
 
-        if (ordKey && (typeKey === "WALLET_REFUND" || typeKey === "OUT_FOR_DELIVERY" || typeKey === "DELIVERED" || typeKey === "CANCELLED")) {
+        // Fix any manual cancellation notifications that were previously saved with "Auto-Cancelled" under type "ORDER_CANCELLED"
+        if (
+          typeKey === "ORDER_CANCELLED" &&
+          /auto-cancelled/i.test(titleKey)
+        ) {
+          const cleanTitle = "Order Cancelled ❌";
+          const cleanMsg = ordKey
+            ? `Order ${ordKey} has been cancelled successfully.`
+            : "Your order has been cancelled successfully.";
+          doc.title = cleanTitle;
+          doc.message = cleanMsg;
+          titleKey = cleanTitle;
+
+          if (doc?.$id) {
+            databases
+              .updateDocument(
+                DATABASE_ID,
+                NOTIFICATIONS_COLLECTION_ID,
+                doc.$id,
+                {
+                  title: cleanTitle,
+                  message: cleanMsg,
+                }
+              )
+              .catch(() => {});
+          }
+        }
+
+        if (
+          ordKey &&
+          (typeKey === "WALLET_REFUND" ||
+            typeKey === "OUT_FOR_DELIVERY" ||
+            typeKey === "DELIVERED" ||
+            typeKey === "ORDER_DELIVERED" ||
+            typeKey === "CANCELLED" ||
+            typeKey === "ORDER_CANCELLED" ||
+            typeKey === "ORDER_AUTO_CANCELLED")
+        ) {
           const sig = `${typeKey}::${ordKey}::${titleKey}`;
           if (seenNotifKeys.has(sig)) {
             if (doc?.$id) {
