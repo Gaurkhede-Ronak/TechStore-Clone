@@ -357,56 +357,6 @@ const Wallet = () => {
             : "Wallet Debited";
     };
 
-  // TRANSACTION DESCRIPTION
-
-    const getTransactionDescription = (
-        transaction
-    ) => {
-        const source = String(
-            transaction?.source || ""
-        ).toLowerCase();
-
-        const promotionType = String(
-            transaction?.promotionType || ""
-        ).toLowerCase();
-
-        if (
-            source === "promotion" &&
-            promotionType === "welcome"
-        ) {
-            return "₹1,000 Welcome Promotion";
-        }
-
-        if (
-            source === "promotion" &&
-            promotionType === "monthly"
-        ) {
-            return "₹500 Monthly Promotion";
-        }
-
-        if (
-            source === "promotion_expiry"
-        ) {
-            return "Unused promotional balance expired";
-        }
-
-        if (source === "order") {
-            return transaction?.orderId
-                ? `Order #${transaction.orderId}`
-                : "Payment made using wallet";
-        }
-
-        if (source === "refund") {
-            return transaction?.orderId
-                ? `Refund for Order #${transaction.orderId}`
-                : "Amount refunded to wallet";
-        }
-
-        return (
-            transaction?.description ||
-            "Wallet transaction"
-        );
-    };
 
   // TRANSACTION TYPE
 

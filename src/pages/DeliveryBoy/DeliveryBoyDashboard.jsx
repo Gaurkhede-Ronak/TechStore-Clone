@@ -29,7 +29,6 @@ import returnExchangeService from "../../appwrite/returnExchangeService";
 import {
     getActiveDeliveryItems,
     resolveReturnRequestItem,
-    extractCleanReason,
 } from "../../utils/orderItemHelper";
 
 import "../../css/DeliveryPremiumUI.css";

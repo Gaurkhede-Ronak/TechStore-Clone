@@ -414,7 +414,7 @@ function TrackOrder() {
     }
   }, []);
 
-  const loadReturnRequest = useCallback(async (returnId, orderId) => {
+  const loadReturnRequest = useCallback(async (returnId, orderId, queryVal = "") => {
     try {
       if (returnId) {
         try {
@@ -425,11 +425,25 @@ function TrackOrder() {
         }
       }
 
-      if (orderId) {
+      const upperQuery = String(queryVal || "").trim().toUpperCase();
+      const isReturnQuery =
+        Boolean(returnId) ||
+        upperQuery.startsWith("RE-") ||
+        upperQuery.startsWith("EX-");
+
+      if (orderId && isReturnQuery) {
         const requests = await returnExchangeService.getRequestsByOrderId(
           orderId
         );
         if (Array.isArray(requests) && requests.length > 0) {
+          if (upperQuery.startsWith("RE-") || upperQuery.startsWith("EX-")) {
+            const matchedRef = requests.find(
+              (item) =>
+                String(item?.referenceId || "").toUpperCase() === upperQuery ||
+                String(item?.$id || "") === String(returnId || "")
+            );
+            if (matchedRef) return matchedRef;
+          }
           const active = requests.find(
             (item) =>
               String(item?.status || "").toUpperCase() !== "CANCELLED"
@@ -712,7 +726,7 @@ function TrackOrder() {
         }
 
         // 6. Load Return / Exchange Request if applicable
-        const req = await loadReturnRequest(cleanReturnId, resolvedOrderId);
+        const req = await loadReturnRequest(cleanReturnId, resolvedOrderId, queryValue);
         setReturnRequest(req);
 
         if (!parsedBoyId && req?.deliveryBoyId) {
@@ -976,13 +990,26 @@ function TrackOrder() {
     .replace(/\s+/g, "_");
 
   const returnSteps = useMemo(() => {
+    if (rawReturnStatus === "CANCELLED" || rawReturnStatus === "CANCELED") {
+      return [
+        {
+          key: "REQUESTED",
+          label: returnType === "EXCHANGE" ? "Exchange Created" : "Return Created",
+        },
+        {
+          key: "CANCELLED",
+          label:
+            returnType === "EXCHANGE" ? "Exchange Cancelled" : "Return Cancelled",
+        },
+      ];
+    }
     return returnType === "EXCHANGE"
       ? [
           { key: "REQUESTED", label: "Exchange Created" },
           { key: "ACCEPTED", label: "Exchange Accepted" },
-          { key: "CONFIRMED", label: "Confirmed" },
-          { key: "PACKED", label: "Packed" },
-          { key: "DISPATCHED", label: "Dispatched" },
+          { key: "CONFIRMED", label: "Replacement Confirmed" },
+          { key: "PACKED", label: "Replacement Packed" },
+          { key: "DISPATCHED", label: "Replacement Dispatched" },
           { key: "PICKUP_ASSIGNED", label: "Out for Exchange" },
           { key: "EXCHANGE_COMPLETED", label: "Exchange Complete" },
         ]
@@ -990,13 +1017,18 @@ function TrackOrder() {
           { key: "REQUESTED", label: "Return Created" },
           { key: "CONFIRMED", label: "Return Accepted" },
           { key: "PICKUP_ASSIGNED", label: "Out for Pickup" },
-          { key: "PICKED_UP", label: "Item Picked Up" },
-          { key: "REFUND_INITIATED", label: "Refund Initiated" },
+          { key: "PICKED_UP", label: "Picked Up & Refund Initiated" },
           { key: "REFUND_COMPLETED", label: "Return Complete" },
         ];
-  }, [returnType]);
+  }, [returnType, rawReturnStatus]);
 
   const normalizedReturnStatus = useMemo(() => {
+    if (rawReturnStatus === "CANCELLED" || rawReturnStatus === "CANCELED") {
+      return "CANCELLED";
+    }
+    if (returnType !== "EXCHANGE" && rawReturnStatus === "REFUND_INITIATED") {
+      return "PICKED_UP";
+    }
     if (
       rawReturnStatus === "ASSIGNED" ||
       rawReturnStatus === "OUT_FOR_EXCHANGE" ||

@@ -1251,7 +1251,8 @@ function Cart() {
                 type="button"
                 className="cart-modal-btn cart-modal-btn-wishlist"
                 onClick={() => {
-                  const { quantity, ...wishlistProduct } = deleteModalItem;
+                  const wishlistProduct = { ...deleteModalItem };
+                  delete wishlistProduct.quantity;
                   dispatch(addWishlist(wishlistProduct));
                   dispatch(removeFromCart(deleteModalItem.$id));
                   setDeleteModalItem(null);

@@ -26,7 +26,7 @@ export const parseOrderItems = (order) => {
 
 export const isOrderItemCancelled = (item) => {
   if (!item) return false;
-  if (Boolean(item.isCancelled)) return true;
+  if (item.isCancelled) return true;
   const st = String(item.status || "")
     .trim()
     .toUpperCase();

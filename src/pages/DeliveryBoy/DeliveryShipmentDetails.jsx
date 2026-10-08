@@ -872,10 +872,10 @@ function DeliveryShipmentDetails() {
                                     <strong>{request.status}</strong>
                                 </div>
 
-                                {request.reason && (
+                                {extractCleanReason(request.reason) && (
                                     <div className="delivery-reason-box">
                                         <span>Customer reason</span>
-                                        <p>{request.reason}</p>
+                                        <p>{extractCleanReason(request.reason)}</p>
                                     </div>
                                 )}
 

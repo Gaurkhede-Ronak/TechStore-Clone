@@ -1499,9 +1499,6 @@ function OrderDetails() {
   const isPureCOD =
     isCOD && walletPaidVal <= 0;
 
-  const isCodWithWallet =
-    isCOD && walletPaidVal > 0;
-
   const storedOnlinePaid =
     Number(
       order?.onlinePaid ??
@@ -1676,31 +1673,24 @@ function OrderDetails() {
           normalizeStatus(it?.status) === "CANCELLED"
       ));
 
-  let refundToWallet = 0;
-  let refundToOnline = 0;
-  let actualRefundAmount = 0;
+  const refundToWallet = isPureCOD
+    ? 0
+    : rawOrderItems.length <= 1 || isEntireOrderCancelled
+    ? walletPaidVal > 0
+      ? walletPaidVal
+      : 0
+    : walletPaidVal > 0
+    ? Math.min(walletPaidVal, itemTotalPrice)
+    : 0;
 
-  if (!isPureCOD) {
-    if (rawOrderItems.length <= 1 || isEntireOrderCancelled) {
-      refundToWallet = walletPaidVal > 0 ? walletPaidVal : 0;
-      refundToOnline = isCOD
-        ? 0
-        : Math.max(
-            0,
-            totalPaid - walletPaidVal - platformFeeVal
-          );
-    } else {
-      refundToWallet =
-        walletPaidVal > 0
-          ? Math.min(walletPaidVal, itemTotalPrice)
-          : 0;
-      refundToOnline = isCOD
-        ? 0
-        : Math.max(0, itemTotalPrice - refundToWallet);
-    }
+  const refundToOnline =
+    isPureCOD || isCOD
+      ? 0
+      : rawOrderItems.length <= 1 || isEntireOrderCancelled
+      ? Math.max(0, totalPaid - walletPaidVal - platformFeeVal)
+      : Math.max(0, itemTotalPrice - refundToWallet);
 
-    actualRefundAmount = refundToWallet + refundToOnline;
-  }
+  const actualRefundAmount = refundToWallet + refundToOnline;
 
   /* APPWRITE TRACKING MILESTONES — Built in the exact Shipment Progress UI style (Image 2) */
 
@@ -2434,6 +2424,7 @@ function OrderDetails() {
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     shipment?.$id,
     shipment?.orderId,
