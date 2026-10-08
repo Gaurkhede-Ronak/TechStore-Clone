@@ -43,11 +43,13 @@ const Notifications = () => {
 
   // LOAD NOTIFICATIONS
 
-    const loadNotifications = async () => {
+    const loadNotifications = async (silent = false) => {
 
         try {
 
-            setLoading(true);
+            if (!silent) {
+                setLoading(true);
+            }
 
 
             const currentUser =
@@ -61,9 +63,13 @@ const Notifications = () => {
                 return;
             }
 
-            await deliveryOtpService.syncUserShipmentNotifications(
-                currentUser.$id
-            );
+            try {
+                await deliveryOtpService.syncUserShipmentNotifications(
+                    currentUser.$id
+                );
+            } catch (syncErr) {
+                console.warn("Notifications sync warning:", syncErr);
+            }
 
             const response =
                 await notificationService.getUserNotifications(
@@ -109,24 +115,33 @@ const Notifications = () => {
                 error
             );
 
-
-            toast.error(
-                "Failed to load notifications."
-            );
+            if (!silent) {
+                toast.error(
+                    "Failed to load notifications."
+                );
+            }
 
         } finally {
 
-            setLoading(false);
+            if (!silent) {
+                setLoading(false);
+            }
 
         }
     };
 
 
-  // INITIAL LOAD
+  // INITIAL LOAD & AUTO REFRESH
 
     useEffect(() => {
 
-        loadNotifications();
+        loadNotifications(false);
+
+        const interval = setInterval(() => {
+            loadNotifications(true);
+        }, 15000);
+
+        return () => clearInterval(interval);
 
     }, []);
 
@@ -346,7 +361,11 @@ const Notifications = () => {
 
             if (notification.orderId) {
 
-                navigate("/orders");
+                navigate(
+                    `/order-details?orderId=${encodeURIComponent(
+                        notification.orderId
+                    )}`
+                );
 
                 return;
             }
@@ -1111,7 +1130,8 @@ const Notifications = () => {
                                                 extractOtpCode(notification) &&
                                                 !notifications.some(
                                                     (n) =>
-                                                        String(n.type || "").toUpperCase().includes("DELIVERED") &&
+                                                        (String(n.type || "").toUpperCase().includes("DELIVERED") ||
+                                                            String(n.type || "").toUpperCase().includes("CANCEL")) &&
                                                         ((notification.orderId && n.orderId === notification.orderId) ||
                                                             (notification.shipmentId && n.shipmentId === notification.shipmentId))
                                                 ) && (
@@ -1119,8 +1139,26 @@ const Notifications = () => {
                                                         <span className="ts-notif-otp-code">
                                                             🔐 OTP: {extractOtpCode(notification)}
                                                         </span>
+                                                        <button
+                                                            type="button"
+                                                            className="btn btn-sm btn-primary py-0 px-2"
+                                                            style={{
+                                                                fontSize: "0.72rem",
+                                                                fontWeight: 700,
+                                                                borderRadius: "6px",
+                                                            }}
+                                                            onClick={() => {
+                                                                const code = extractOtpCode(notification);
+                                                                if (code && navigator?.clipboard?.writeText) {
+                                                                    navigator.clipboard.writeText(code);
+                                                                    toast.success("Delivery OTP copied!");
+                                                                }
+                                                            }}
+                                                        >
+                                                            Copy OTP
+                                                        </button>
                                                         <span className="ts-notif-otp-note">
-                                                            • Valid until parcel is delivered
+                                                            • Valid for 2 days until delivered
                                                         </span>
                                                     </div>
                                                 )}

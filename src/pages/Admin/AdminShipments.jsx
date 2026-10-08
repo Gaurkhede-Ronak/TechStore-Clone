@@ -24,6 +24,7 @@ import toast from "react-hot-toast";
 import shipmentService from "../../appwrite/shipmentService";
 import shipmentEventService from "../../appwrite/shipmentEventService";
 import shipmentHelper from "../../appwrite/shipmentHelper";
+import deliveryOtpService from "../../appwrite/deliveryOtpService";
 import returnExchangeService from "../../appwrite/returnExchangeService";
 import orderService from "../../appwrite/orderService";
 import {
@@ -265,6 +266,13 @@ function AdminShipments() {
             });
 
             setShipments(mergedList);
+
+            // Ensure OTP + customer notification exist for OUT_FOR_DELIVERY shipments & auto-cancel > 2 days
+            deliveryOtpService
+                .processOutForDeliveryShipments(mergedList)
+                .catch((err) =>
+                    console.warn("Admin shipments OTP sync warning:", err)
+                );
         } catch (error) {
             console.error(
                 "Load shipments error:",
@@ -582,13 +590,26 @@ function AdminShipments() {
                 shipment.$id
             );
 
+            const relatedOrder =
+                shipment.orderId && ordersMap[String(shipment.orderId)]
+                    ? ordersMap[String(shipment.orderId)]
+                    : null;
+
             const result =
                 await shipmentHelper.updateShipmentStatus(
                     shipment.$id,
                     nextStatus,
                     {
                         orderId:
-                            shipment.orderId,
+                            String(shipment.orderId || ""),
+                        userId:
+                            String(
+                                shipment.userId ||
+                                    relatedOrder?.userId ||
+                                    ""
+                            ),
+                        trackingId:
+                            String(shipment.trackingId || ""),
                     }
                 );
 
@@ -941,6 +962,29 @@ function AdminShipments() {
                 });
             } catch (eventErr) {
                 console.warn("Appwrite assignment event log warning:", eventErr);
+            }
+
+            // Ensure customer receives their Delivery OTP notification
+            try {
+                const relatedOrder =
+                    assignmentShipment.orderId &&
+                    ordersMap[String(assignmentShipment.orderId)]
+                        ? ordersMap[String(assignmentShipment.orderId)]
+                        : null;
+                await deliveryOtpService.generateOtp({
+                    shipmentId: String(assignmentShipment.$id),
+                    orderId: String(assignmentShipment.orderId || ""),
+                    userId: String(
+                        assignmentShipment.userId ||
+                            relatedOrder?.userId ||
+                            ""
+                    ),
+                    trackingId: String(assignmentShipment.trackingId || ""),
+                    shipmentDoc: assignmentShipment,
+                    orderDoc: relatedOrder,
+                });
+            } catch (otpErr) {
+                console.warn("Delivery OTP ensure on assignment warning:", otpErr);
             }
 
             const updatedShipment = {

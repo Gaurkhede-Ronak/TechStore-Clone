@@ -24,6 +24,7 @@ import toast from "react-hot-toast";
 import authService from "../appwrite/authService";
 import orderService from "../appwrite/orderService";
 import shipmentService from "../appwrite/shipmentService";
+import deliveryOtpService from "../appwrite/deliveryOtpService";
 import returnExchangeService from "../appwrite/returnExchangeService";
 import { resolveReturnRequestItem } from "../utils/orderItemHelper";
 import reviewService from "../appwrite/reviewService";
@@ -179,6 +180,10 @@ function OrderHistory() {
         setLoading(false);
         return;
       }
+
+      await deliveryOtpService
+        .syncUserShipmentNotifications(currentUser.$id)
+        .catch(() => {});
 
       // Fetch user orders, reviews, and return/exchange requests in parallel
       const [orderRes, reviewDocs, userReturnDocs] = await Promise.all([

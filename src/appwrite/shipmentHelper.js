@@ -1079,120 +1079,55 @@ class ShipmentHelper {
                 normalizedStatus ===
                 "OUT_FOR_DELIVERY"
             ) {
-
                 try {
-                    const resolvedUserId = String(
-                        eventData.userId ||
-                        updatedShipment.userId ||
-                        currentShipment.userId ||
-                        ""
-                    );
+                    const resolvedContext =
+                        await deliveryOtpService.resolveShipmentContext(
+                            String(updatedShipment.$id || shipmentId || ""),
+                            {
+                                orderId: String(
+                                    eventData.orderId ||
+                                        updatedShipment.orderId ||
+                                        currentShipment.orderId ||
+                                        ""
+                                ),
+                                userId: String(
+                                    eventData.userId ||
+                                        updatedShipment.userId ||
+                                        currentShipment.userId ||
+                                        ""
+                                ),
+                                trackingId: String(
+                                    updatedShipment.trackingId ||
+                                        currentShipment.trackingId ||
+                                        ""
+                                ),
+                                shipmentDoc: updatedShipment,
+                            }
+                        );
 
                     const otpResult =
                         await deliveryOtpService.generateOtp({
-
-                            shipmentId:
-                                String(
-                                    updatedShipment.$id
-                                ),
-
-                            orderId:
-                                String(
-                                    eventData.orderId ||
-                                    updatedShipment.orderId ||
-                                    ""
-                                ),
-
-                            userId:
-                                resolvedUserId,
-
-                            trackingId:
-                                String(
-                                    updatedShipment.trackingId ||
-                                    ""
-                                ),
+                            shipmentId: String(updatedShipment.$id),
+                            orderId: resolvedContext.orderId,
+                            userId: resolvedContext.userId,
+                            trackingId: resolvedContext.trackingId,
+                            shipmentDoc: updatedShipment,
+                            forceNew:
+                                previousStatus !== "OUT_FOR_DELIVERY",
                         });
 
-
                     if (!otpResult?.success) {
-
                         console.error(
                             "Delivery OTP generation failed:",
                             otpResult?.error
                         );
-
-                    } else if (
-                        previousStatus !== "OUT_FOR_DELIVERY" ||
-                        !otpResult.alreadyExists
-                    ) {
-
+                    } else {
                         console.log(
-                            "Delivery OTP generated successfully:",
+                            "Delivery OTP + customer notification ready:",
                             otpResult.otp
                         );
-
-
-  // CUSTOMER NOTIFICATION
-
-                        const notification =
-                            await notificationService.createNotification({
-
-                                userId:
-                                    resolvedUserId,
-
-                                type:
-                                    "DELIVERY_OTP",
-
-                                title:
-                                    "Delivery OTP 🔐",
-
-                                message:
-                                    `Your delivery OTP is ${otpResult.otp}. ` +
-                                    "Please share this OTP with the delivery partner when your parcel arrives.",
-
-                                orderId:
-                                    String(
-                                        updatedShipment.orderId ||
-                                        ""
-                                    ),
-
-                                shipmentId:
-                                    String(
-                                        updatedShipment.$id ||
-                                        ""
-                                    ),
-
-                                trackingId:
-                                    String(
-                                        updatedShipment.trackingId ||
-                                        ""
-                                    ),
-
-                                otp:
-                                    String(
-                                        otpResult.otp ||
-                                        otpResult.otpCode ||
-                                        ""
-                                    ),
-
-                                isRead:
-                                    false,
-
-                                createdAt:
-                                    new Date().toISOString(),
-                            });
-
-
-                        console.log(
-                            "Delivery OTP notification created:",
-                            notification
-                        );
                     }
-
-                } catch (
-                    otpNotificationError
-                ) {
-
+                } catch (otpNotificationError) {
                     console.error(
                         "OTP / Notification creation error:",
                         otpNotificationError
@@ -1202,38 +1137,84 @@ class ShipmentHelper {
 
             // AUTOMATIC CUSTOMER ORDER DELIVERED NOTIFICATION & ORDER STATUS SYNC
             if (
-                normalizedStatus ===
-                    "DELIVERED" &&
-                previousStatus !==
-                    "DELIVERED"
+                normalizedStatus === "DELIVERED" &&
+                previousStatus !== "DELIVERED"
             ) {
                 await deliveryOtpService.markShipmentDeliveredSync(
                     String(updatedShipment.$id || shipmentId || ""),
                     String(updatedShipment.orderId || "")
                 );
 
-                if (updatedShipment?.userId) {
-                    try {
-                        await notificationService.createNotification({
-                            userId: String(updatedShipment.userId),
-                            recipientRole: "user",
-                            type: "ORDER_DELIVERED",
-                            title: "Order Delivered ✅",
-                            message:
-                                `Your order ${updatedShipment.orderId || ""} (Tracking ID: ${updatedShipment.trackingId || "N/A"}) has been delivered successfully! Thank you for shopping with TechStore. You can now rate and review your product.`,
-                            orderId: String(updatedShipment.orderId || ""),
-                            shipmentId: String(updatedShipment.$id || shipmentId || ""),
-                            trackingId: String(updatedShipment.trackingId || ""),
-                            otp: "",
-                            isRead: false,
-                            createdAt: new Date().toISOString(),
-                        });
-                    } catch (customerDeliveredNotifErr) {
-                        console.error(
-                            "Customer delivered notification error:",
-                            customerDeliveredNotifErr
-                        );
-                    }
+                const resolvedContext =
+                    await deliveryOtpService.resolveShipmentContext(
+                        String(updatedShipment.$id || shipmentId || ""),
+                        {
+                            orderId: String(
+                                eventData.orderId ||
+                                    updatedShipment.orderId ||
+                                    ""
+                            ),
+                            userId: String(
+                                eventData.userId ||
+                                    updatedShipment.userId ||
+                                    currentShipment.userId ||
+                                    ""
+                            ),
+                            trackingId: String(
+                                updatedShipment.trackingId || ""
+                            ),
+                            shipmentDoc: updatedShipment,
+                        }
+                    );
+
+                if (resolvedContext.userId) {
+                    await deliveryOtpService.ensureOrderDeliveredNotification({
+                        userId: resolvedContext.userId,
+                        orderId: resolvedContext.orderId,
+                        shipmentId: String(
+                            updatedShipment.$id || shipmentId || ""
+                        ),
+                        trackingId: resolvedContext.trackingId,
+                    });
+                }
+            }
+
+            // AUTOMATIC CUSTOMER ORDER CANCELLED NOTIFICATION
+            if (
+                normalizedStatus === "CANCELLED" &&
+                previousStatus !== "CANCELLED"
+            ) {
+                const resolvedContext =
+                    await deliveryOtpService.resolveShipmentContext(
+                        String(updatedShipment.$id || shipmentId || ""),
+                        {
+                            orderId: String(
+                                eventData.orderId ||
+                                    updatedShipment.orderId ||
+                                    ""
+                            ),
+                            userId: String(
+                                eventData.userId ||
+                                    updatedShipment.userId ||
+                                    currentShipment.userId ||
+                                    ""
+                            ),
+                            trackingId: String(
+                                updatedShipment.trackingId || ""
+                            ),
+                            shipmentDoc: updatedShipment,
+                        }
+                    );
+
+                if (resolvedContext.userId) {
+                    await deliveryOtpService.ensureOrderAutoCancelledNotification({
+                        userId: resolvedContext.userId,
+                        orderId: resolvedContext.orderId,
+                        shipmentId: String(
+                            updatedShipment.$id || shipmentId || ""
+                        ),
+                        trackingId: resolvedContext.trackingId,
+                    });
                 }
             }
 

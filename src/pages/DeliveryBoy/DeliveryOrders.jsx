@@ -21,6 +21,7 @@ import { toggleTheme } from "../../redux/slices/themeSlice";
 
 import shipmentService from "../../appwrite/shipmentService";
 import orderService from "../../appwrite/orderService";
+import deliveryOtpService from "../../appwrite/deliveryOtpService";
 import returnExchangeService from "../../appwrite/returnExchangeService";
 import {
     getActiveDeliveryItems,
@@ -90,9 +91,14 @@ function DeliveryOrders() {
                 "OUT_FOR_DELIVERY"
             );
 
-            const shipmentList = Array.isArray(shipments)
+            const rawShipmentList = Array.isArray(shipments)
                 ? shipments
                 : shipments?.documents || [];
+
+            const shipmentList =
+                await deliveryOtpService.processOutForDeliveryShipments(
+                    rawShipmentList
+                );
 
             const result = await Promise.all(
                 shipmentList.map(async (shipment) => {

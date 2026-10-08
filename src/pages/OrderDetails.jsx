@@ -2226,35 +2226,35 @@ function OrderDetails() {
       }
 
       try {
-        let activeDoc =
-          await deliveryOtpService.getActiveOtpByShipmentId(
-            shipment.$id
-          );
+        const genResult = await deliveryOtpService.generateOtp({
+          shipmentId: String(shipment.$id),
+          orderId: String(
+            shipment.orderId || order?.orderId || order?.$id || ""
+          ),
+          userId: String(
+            shipment.userId || order?.userId || currentUser?.$id || ""
+          ),
+          trackingId: String(shipment.trackingId || ""),
+          shipmentDoc: shipment,
+          orderDoc: order,
+        });
 
-        let code = String(
-          activeDoc?.otp || activeDoc?.otpCode || ""
-        ).trim();
-
-        if (!code) {
-          const genResult = await deliveryOtpService.generateOtp({
-            shipmentId: String(shipment.$id),
-            orderId: String(
-              shipment.orderId || order?.orderId || order?.$id || ""
-            ),
-            userId: String(
-              shipment.userId || order?.userId || currentUser?.$id || ""
-            ),
-            trackingId: String(shipment.trackingId || ""),
-          });
-          if (genResult?.success && genResult?.otp) {
-            code = String(genResult.otp).trim();
-            activeDoc = genResult.document || activeDoc;
+        if (genResult?.autoCancelled) {
+          if (!cancelled) {
+            setDeliveryOtp("");
+            setShowOtp(false);
+            loadShipmentFromAppwrite(false);
           }
+          return;
         }
+
+        const code = String(
+          genResult?.otp || genResult?.otpCode || ""
+        ).trim();
 
         if (!cancelled && code) {
           setDeliveryOtp(code);
-          setOtpExpiresAt(activeDoc?.expiresAt || null);
+          setOtpExpiresAt(genResult?.expiresAt || null);
           setShowOtp(true);
           setOtpTimeLeft(999999);
         }

@@ -24,6 +24,7 @@ import toast from "react-hot-toast";
 import shipmentService from "../../appwrite/shipmentService";
 import orderService from "../../appwrite/orderService";
 import authService from "../../appwrite/authService";
+import deliveryOtpService from "../../appwrite/deliveryOtpService";
 import returnExchangeService from "../../appwrite/returnExchangeService";
 import {
     getActiveDeliveryItems,
@@ -107,9 +108,14 @@ function DeliveryBoyDashboard() {
                 "OUT_FOR_DELIVERY"
             );
 
-            const shipmentList = Array.isArray(response)
+            const rawShipmentList = Array.isArray(response)
                 ? response
                 : response?.documents || [];
+
+            const shipmentList =
+                await deliveryOtpService.processOutForDeliveryShipments(
+                    rawShipmentList
+                );
 
             setShipments(shipmentList);
 

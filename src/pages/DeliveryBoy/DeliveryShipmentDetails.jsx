@@ -88,20 +88,50 @@ function DeliveryShipmentDetails() {
 
             /* First try shipment. */
             try {
-                const shipmentData = await shipmentService.getShipment(id);
+                let shipmentData = await shipmentService.getShipment(id);
 
                 if (shipmentData) {
-                    setShipment(shipmentData);
+                    let orderData = null;
 
                     if (shipmentData.orderId) {
                         try {
-                            const orderData = await orderService.getOrderSmart(
+                            orderData = await orderService.getOrderSmart(
                                 String(shipmentData.orderId)
                             );
-                            setOrder(orderData);
                         } catch (error) {
                             console.error("Order details error:", error);
                         }
+                    }
+
+                    if (String(shipmentData.status || "").toUpperCase() === "OUT_FOR_DELIVERY") {
+                        try {
+                            const otpRes = await deliveryOtpService.generateOtp(shipmentData.$id, {
+                                userId: shipmentData.userId || orderData?.userId,
+                                orderId: shipmentData.orderId || orderData?.$id,
+                                trackingId: shipmentData.trackingId,
+                            });
+
+                            if (otpRes?.autoCancelled) {
+                                shipmentData = {
+                                    ...shipmentData,
+                                    status: "CANCELLED",
+                                    otpRequired: false,
+                                };
+                                if (orderData) {
+                                    orderData = {
+                                        ...orderData,
+                                        status: "Cancelled",
+                                    };
+                                }
+                            }
+                        } catch (otpErr) {
+                            console.error("OTP sync error:", otpErr);
+                        }
+                    }
+
+                    setShipment(shipmentData);
+                    if (orderData) {
+                        setOrder(orderData);
                     }
 
                     return;
@@ -192,6 +222,9 @@ function DeliveryShipmentDetails() {
 
             if (!result?.success) {
                 toast.error(result?.message || "Invalid OTP.");
+                if (result?.autoCancelled) {
+                    await loadDetails();
+                }
                 return;
             }
 
