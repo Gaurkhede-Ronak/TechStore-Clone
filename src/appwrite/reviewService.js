@@ -40,12 +40,17 @@ class ReviewService {
         ]
       );
     } catch (error) {
-      console.error(
+      console.warn(
         "Get all reviews error:",
         error
       );
-      throw error;
+      return { documents: [], total: 0 };
     }
+  }
+
+  // Get Reviews (Alias for getAllReviews used across components)
+  async getReviews() {
+    return this.getAllReviews();
   }
 
   // Get Product Reviews (Customer Product Page)

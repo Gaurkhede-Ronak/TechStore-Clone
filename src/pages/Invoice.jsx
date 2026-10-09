@@ -11,6 +11,9 @@ import {
   FaShieldAlt,
   FaMapMarkerAlt,
   FaCreditCard,
+  FaMobileAlt,
+  FaMoneyBillWave,
+  FaWallet,
 } from "react-icons/fa";
 import toast from "react-hot-toast";
 import orderService from "../appwrite/orderService";
@@ -114,57 +117,183 @@ function Invoice() {
     const invoiceNumber = `TS-INV-${shortNumeric}`;
 
     const invoiceDate = formatInvoiceDateStr(
-      order.createdAt || order.$createdAt
+      order.createdAt || order.$createdAt || order.orderDate
     );
 
-    const computedSubtotal = items.reduce(
-      (sum, it) =>
-        sum + Number(it?.price || 0) * Math.max(1, Number(it?.quantity || 1)),
-      0
-    );
+    const rawOrderItems = items;
 
-    const computedMrp = items.reduce((sum, it) => {
-      const unitPrice = Number(it?.price || 0);
-      const unitMrp = Number(it?.oldPrice || it?.mrp || Math.round(unitPrice * 1.25));
-      const qty = Math.max(1, Number(it?.quantity || 1));
-      return sum + unitMrp * qty;
+    const itemsOriginalMrpTotal = rawOrderItems.reduce((acc, item) => {
+      const price = Number(item?.oldPrice ?? item?.mrp ?? item?.price ?? 0);
+      const qty = Math.max(1, Number(item?.quantity || item?.qty || 1));
+      return acc + price * qty;
     }, 0);
 
-    const subtotal = Number(order.subtotal || computedSubtotal || 0);
-    const totalMrp = Math.max(computedMrp, subtotal);
-    const mrpDiscount = Math.max(0, totalMrp - subtotal);
-    const couponDiscount = Number(order.discount || 0);
-    const convenienceFee = Number(order.convenienceFee ?? 7);
-    const gst = Number(order.gst ?? order.tax ?? Math.round(subtotal * 0.18));
-    const shipping = Number(order.shipping || 0);
-    const grandTotal = Number(
-      order.totalAmount ||
-        order.finalAmount ||
-        Math.max(0, subtotal - couponDiscount + convenienceFee + gst + shipping)
-    );
-    const walletUsed = Number(order.walletUsed || 0);
-    const balancePaid = Math.max(0, Number(order.onlinePaid ?? grandTotal - walletUsed));
+    const itemsSellingTotal = rawOrderItems.reduce((acc, item) => {
+      const orig = Number(item?.price || 0);
+      const disc = Number(item?.discount || 0);
+      const qty = Math.max(1, Number(item?.quantity || item?.qty || 1));
+      const selling = disc > 0 ? orig - (orig * disc) / 100 : orig;
+      return acc + selling * qty;
+    }, 0);
 
-    const paymentModeRaw = String(order.paymentMethod || "ONLINE").toUpperCase();
-    const paymentStatusRaw = String(order.paymentStatus || "PAID").toUpperCase();
+    const productLevelSavings = Math.max(
+      0,
+      itemsOriginalMrpTotal - itemsSellingTotal
+    );
+
+    const subTotalVal = Number(
+      order.subTotal ??
+        order.subtotal ??
+        order.subTotalAmount ??
+        itemsSellingTotal ??
+        0
+    );
+
+    const shippingVal = Number(order.shipping ?? 0);
+    const gstVal = Number(order.gst ?? order.tax ?? 0);
+    const gstApplied = Boolean(order.gstApplied);
+    const platformFeeVal = Number(
+      order.platformFee ?? order.convenienceFee ?? 9
+    );
+    const couponDiscount = Number(order.discount ?? order.couponDiscount ?? 0);
+
+    const orderOriginalAmount =
+      itemsOriginalMrpTotal > 0
+        ? itemsOriginalMrpTotal
+        : itemsSellingTotal > 0
+        ? itemsSellingTotal
+        : subTotalVal + (gstApplied ? 0 : gstVal);
+
+    const effectiveSelling =
+      itemsSellingTotal > 0 ? itemsSellingTotal : orderOriginalAmount;
+
+    const baseSubtotal =
+      subTotalVal > 0 && gstVal > 0
+        ? subTotalVal
+        : effectiveSelling / 1.18;
+
+    const effectiveGst =
+      gstVal > 0
+        ? gstVal
+        : effectiveSelling - effectiveSelling / 1.18;
+
+    const totalOrderSavings =
+      productLevelSavings + couponDiscount + (gstApplied ? effectiveGst : 0);
+
+    const storedGrandTotal = Number(
+      order.orderGrandTotal ??
+        order.grandTotal ??
+        order.totalAmount ??
+        order.finalAmount ??
+        0
+    );
+
+    const calculatedGrandTotal = Math.max(
+      0,
+      subTotalVal +
+        shippingVal +
+        (gstApplied ? 0 : effectiveGst) +
+        platformFeeVal -
+        couponDiscount
+    );
+
+    const orderGrandTotal =
+      storedGrandTotal > 0 ? storedGrandTotal : calculatedGrandTotal;
+
+    const walletPaidVal = Math.max(
+      0,
+      Number(
+        order.walletPaid ??
+          order.usedWalletAmount ??
+          order.walletUsed ??
+          0
+      )
+    );
+
+    const rawPaymentMethod = String(
+      order.payment || order.paymentMethod || "ONLINE"
+    ).toUpperCase();
+
+    const isCOD =
+      rawPaymentMethod.includes("COD") || rawPaymentMethod.includes("CASH");
+    const isUPI =
+      rawPaymentMethod.includes("UPI") ||
+      rawPaymentMethod.includes("GPAY") ||
+      rawPaymentMethod.includes("PHONEPE") ||
+      rawPaymentMethod.includes("PAYTM");
+    const isCard =
+      rawPaymentMethod.includes("CARD") ||
+      rawPaymentMethod.includes("CREDIT") ||
+      rawPaymentMethod.includes("DEBIT");
+
+    const storedOnlinePaid = Number(order.onlinePaid ?? 0);
+    const storedUpiPaid = Number(order.upiPaid ?? 0);
+    const storedCardPaid = Number(order.cardPaid ?? 0);
+
+    const externalPaymentAmount = isUPI
+      ? Math.max(
+          0,
+          storedUpiPaid ||
+            storedOnlinePaid ||
+            Math.max(0, orderGrandTotal - walletPaidVal)
+        )
+      : isCard
+      ? Math.max(
+          0,
+          storedCardPaid ||
+            storedOnlinePaid ||
+            Math.max(0, orderGrandTotal - walletPaidVal)
+        )
+      : 0;
+
+    const codDueAmount = isCOD
+      ? Math.max(
+          0,
+          Number(order.codAmount ?? orderGrandTotal - walletPaidVal)
+        )
+      : 0;
+
+    const couponCode = String(order.couponCode || "").trim();
 
     return {
       orderRef,
       invoiceNumber,
       invoiceDate,
-      totalMrp,
-      subtotal,
-      mrpDiscount,
+      orderOriginalAmount,
+      totalMrp: orderOriginalAmount,
+      productLevelSavings,
+      mrpDiscount: productLevelSavings,
+      baseSubtotal,
+      subtotal: baseSubtotal,
+      effectiveGst,
+      gst: effectiveGst,
+      gstApplied,
       couponDiscount,
-      convenienceFee,
-      gst,
-      shipping,
-      grandTotal,
-      walletUsed,
-      balancePaid,
-      paymentModeRaw,
-      paymentStatusRaw,
-      couponCode: order.couponCode || "",
+      couponCode,
+      shippingVal,
+      shipping: shippingVal,
+      platformFeeVal,
+      convenienceFee: platformFeeVal,
+      totalOrderSavings,
+      orderGrandTotal,
+      grandTotal: orderGrandTotal,
+      walletPaidVal,
+      walletUsed: walletPaidVal,
+      externalPaymentAmount,
+      codDueAmount,
+      balancePaid: externalPaymentAmount || codDueAmount,
+      isUPI,
+      isCard,
+      isCOD,
+      rawPaymentMethod,
+      paymentModeRaw: isCOD
+        ? "Cash on Delivery"
+        : isUPI
+        ? "BHIM UPI"
+        : isCard
+        ? "Debit / Credit Card"
+        : rawPaymentMethod || "Online Payment",
+      paymentStatusRaw: String(order.paymentStatus || "PAID").toUpperCase(),
     };
   }, [order, items]);
 
@@ -318,80 +447,177 @@ function Invoice() {
 
       const finalY = (doc.lastAutoTable?.finalY || 130) + 8;
 
-      // 4. Price Breakup Summary Card on Right
-      const summaryX = pageWidth - 96;
+      // 4. Order Payment Details Breakdown on Right
+      const summaryWidth = 92;
+      const summaryX = pageWidth - 14 - summaryWidth;
       let curY = finalY;
 
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.setTextColor(30, 58, 138);
+      doc.text("Order Payment Details", summaryX, curY);
+      curY += 6.5;
+
       const summaryRows = [
-        ["Total MRP", formatPdfMoney(invoiceSummary.totalMrp)],
-        ...(invoiceSummary.mrpDiscount > 0
-          ? [["Discount on MRP", `-${formatPdfMoney(invoiceSummary.mrpDiscount)}`]]
-          : []),
-        ["Selling Subtotal", formatPdfMoney(invoiceSummary.subtotal)],
-        ...(invoiceSummary.couponDiscount > 0
+        {
+          label: "Order Amount (MRP)",
+          val: formatPdfMoney(invoiceSummary.orderOriginalAmount),
+        },
+        ...(invoiceSummary.productLevelSavings > 0
           ? [
-              [
-                `Coupon (${invoiceSummary.couponCode || "APPLIED"})`,
-                `-${formatPdfMoney(invoiceSummary.couponDiscount)}`,
-              ],
+              {
+                label: "Product Discount",
+                val: `-${formatPdfMoney(invoiceSummary.productLevelSavings)}`,
+                isGreen: true,
+              },
             ]
           : []),
-        ["Convenience Fee", formatPdfMoney(invoiceSummary.convenienceFee)],
-        ["GST & Taxes", formatPdfMoney(invoiceSummary.gst)],
-        [
-          "Delivery Charges",
-          invoiceSummary.shipping > 0
-            ? formatPdfMoney(invoiceSummary.shipping)
-            : "FREE",
-        ],
+        {
+          label: "Base Subtotal (Excl. GST)",
+          val: formatPdfMoney(invoiceSummary.baseSubtotal),
+        },
+        {
+          label: invoiceSummary.gstApplied
+            ? "GST (18%) (Credit Applied)"
+            : "GST (18%)",
+          val: invoiceSummary.gstApplied
+            ? `-${formatPdfMoney(invoiceSummary.effectiveGst)}`
+            : `+${formatPdfMoney(invoiceSummary.effectiveGst)}`,
+          isGreen: invoiceSummary.gstApplied,
+        },
+        {
+          label: invoiceSummary.couponCode
+            ? `Coupon Discount (${invoiceSummary.couponCode})`
+            : "Coupon Discount",
+          val:
+            invoiceSummary.couponDiscount > 0
+              ? `-${formatPdfMoney(invoiceSummary.couponDiscount)}`
+              : "Rs. 0.00",
+          isGreen: invoiceSummary.couponDiscount > 0,
+        },
+        {
+          label: "Shipping / Delivery Fee",
+          val:
+            invoiceSummary.shippingVal > 0
+              ? formatPdfMoney(invoiceSummary.shippingVal)
+              : "FREE",
+          isGreen: invoiceSummary.shippingVal === 0,
+        },
+        {
+          label: "Convenience Fee (Non-refundable)",
+          val: formatPdfMoney(invoiceSummary.platformFeeVal),
+        },
+        {
+          label: invoiceSummary.couponCode
+            ? `Total Order Savings (${invoiceSummary.couponCode})`
+            : "Total Order Savings",
+          val: `-${formatPdfMoney(invoiceSummary.totalOrderSavings)}`,
+          isGreen: true,
+        },
       ];
 
       doc.setFont("helvetica", "normal");
-      doc.setFontSize(9.2);
+      doc.setFontSize(8.8);
 
-      summaryRows.forEach(([label, val]) => {
+      summaryRows.forEach((row) => {
         doc.setTextColor(71, 85, 105);
-        doc.text(label, summaryX, curY);
-        doc.setTextColor(15, 23, 42);
-        doc.text(val, pageWidth - 14, curY, { align: "right" });
-        curY += 6;
+        doc.setFont("helvetica", "normal");
+        doc.text(row.label, summaryX, curY);
+
+        if (row.isGreen) {
+          doc.setTextColor(22, 163, 74);
+          doc.setFont("helvetica", "bold");
+        } else {
+          doc.setTextColor(15, 23, 42);
+          doc.setFont("helvetica", "normal");
+        }
+        doc.text(row.val, pageWidth - 14, curY, { align: "right" });
+        curY += 5.5;
       });
 
       // Grand Total Highlight Bar
       doc.setFillColor(239, 246, 255);
       doc.setDrawColor(191, 219, 254);
-      doc.roundedRect(summaryX - 4, curY - 3, 86, 11, 2, 2, "FD");
+      doc.roundedRect(summaryX - 3, curY - 2, summaryWidth + 3, 10, 2, 2, "FD");
 
       doc.setFont("helvetica", "bold");
       doc.setFontSize(10.5);
       doc.setTextColor(30, 58, 138);
-      doc.text("Grand Total", summaryX, curY + 4);
-      doc.text(formatPdfMoney(invoiceSummary.grandTotal), pageWidth - 16, curY + 4, {
-        align: "right",
-      });
+      doc.text("Order Total", summaryX + 2, curY + 4.5);
+      doc.text(
+        formatPdfMoney(invoiceSummary.orderGrandTotal),
+        pageWidth - 16,
+        curY + 4.5,
+        { align: "right" }
+      );
 
-      curY += 15;
+      curY += 12;
 
-      if (invoiceSummary.walletUsed > 0) {
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(8.5);
-        doc.setTextColor(22, 163, 74);
-        doc.text(
-          `Paid via TechStore Wallet: ${formatPdfMoney(invoiceSummary.walletUsed)}`,
-          summaryX,
-          curY
-        );
-        curY += 5;
-        doc.setTextColor(71, 85, 105);
-        doc.text(
-          `Balance (${invoiceSummary.paymentModeRaw}): ${formatPdfMoney(
-            invoiceSummary.balancePaid
-          )}`,
-          summaryX,
-          curY
-        );
-        curY += 6;
+      // Payment Mode Section
+      doc.setDrawColor(226, 232, 240);
+      doc.line(summaryX, curY - 1, pageWidth - 14, curY - 1);
+      curY += 4.5;
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9.5);
+      doc.setTextColor(71, 85, 105);
+      doc.text("Payment Mode", summaryX, curY);
+      curY += 5.5;
+
+      const paymentRows = [];
+      if (invoiceSummary.isUPI && invoiceSummary.externalPaymentAmount > 0) {
+        paymentRows.push([
+          "BHIM UPI",
+          formatPdfMoney(invoiceSummary.externalPaymentAmount),
+        ]);
       }
+      if (invoiceSummary.isCard && invoiceSummary.externalPaymentAmount > 0) {
+        paymentRows.push([
+          "Debit / Credit Card",
+          formatPdfMoney(invoiceSummary.externalPaymentAmount),
+        ]);
+      }
+      if (invoiceSummary.isCOD && invoiceSummary.codDueAmount > 0) {
+        paymentRows.push([
+          "Cash on Delivery",
+          formatPdfMoney(invoiceSummary.codDueAmount),
+        ]);
+      }
+      if (
+        !invoiceSummary.isUPI &&
+        !invoiceSummary.isCard &&
+        !invoiceSummary.isCOD &&
+        invoiceSummary.externalPaymentAmount > 0
+      ) {
+        paymentRows.push([
+          "Online Payment",
+          formatPdfMoney(invoiceSummary.externalPaymentAmount),
+        ]);
+      }
+      if (invoiceSummary.walletPaidVal > 0) {
+        paymentRows.push([
+          "TechStore Wallet",
+          formatPdfMoney(invoiceSummary.walletPaidVal),
+        ]);
+      }
+      if (paymentRows.length === 0) {
+        paymentRows.push([
+          invoiceSummary.paymentModeRaw,
+          formatPdfMoney(invoiceSummary.orderGrandTotal),
+        ]);
+      }
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8.5);
+      paymentRows.forEach(([mode, amount]) => {
+        doc.setTextColor(71, 85, 105);
+        doc.setFont("helvetica", "normal");
+        doc.text(mode, summaryX, curY);
+        doc.setTextColor(15, 23, 42);
+        doc.setFont("helvetica", "bold");
+        doc.text(amount, pageWidth - 14, curY, { align: "right" });
+        curY += 5;
+      });
 
       // 5. Left Side Declaration & Authorized Signatory
       const footerY = Math.max(curY + 8, finalY + 48);
@@ -711,79 +937,219 @@ function Invoice() {
 
             <div className="invoice-totals-col">
               <div className="invoice-totals-card">
-                <div className="invoice-total-row">
-                  <span>Total MRP</span>
-                  <strong>₹{formatINR(invoiceSummary.totalMrp)}</strong>
+                <div className="order-payment-header-row mb-3">
+                  <h5 className="order-payment-heading m-0">
+                    Order Payment Details
+                  </h5>
                 </div>
 
-                {invoiceSummary.mrpDiscount > 0 && (
-                  <div className="invoice-total-row discount">
-                    <span>Discount on MRP</span>
-                    <strong>-₹{formatINR(invoiceSummary.mrpDiscount)}</strong>
+                <div className="order-payment-breakdown invoice-screen-breakdown">
+                  <div className="order-payment-row">
+                    <span>Order Amount (MRP)</span>
+                    <strong>₹{formatINR(invoiceSummary.orderOriginalAmount)}</strong>
                   </div>
-                )}
 
-                <div className="invoice-total-row">
-                  <span>Selling Subtotal</span>
-                  <strong>₹{formatINR(invoiceSummary.subtotal)}</strong>
-                </div>
+                  {invoiceSummary.productLevelSavings > 0 && (
+                    <div className="order-payment-row is-savings">
+                      <span>Product Discount</span>
+                      <strong className="order-savings-amount">
+                        -₹{formatINR(invoiceSummary.productLevelSavings)}
+                      </strong>
+                    </div>
+                  )}
 
-                {invoiceSummary.couponDiscount > 0 && (
-                  <div className="invoice-total-row discount">
+                  <div className="order-payment-row">
+                    <span>Base Subtotal (Excl. GST)</span>
+                    <strong>₹{formatINR(invoiceSummary.baseSubtotal)}</strong>
+                  </div>
+
+                  <div className="order-payment-row">
+                    <span>
+                      GST (18%)
+                      {invoiceSummary.gstApplied && (
+                        <small className="d-block text-success fw-semibold">
+                          Corporate GSTIN Credit Applied
+                        </small>
+                      )}
+                    </span>
+                    {invoiceSummary.gstApplied ? (
+                      <strong className="order-savings-amount">
+                        -₹{formatINR(invoiceSummary.effectiveGst)}
+                      </strong>
+                    ) : (
+                      <strong>+₹{formatINR(invoiceSummary.effectiveGst)}</strong>
+                    )}
+                  </div>
+
+                  <div className="order-payment-row is-savings">
                     <span>
                       Coupon Discount
-                      {invoiceSummary.couponCode
-                        ? ` (${invoiceSummary.couponCode})`
-                        : ""}
+                      {invoiceSummary.couponCode ? (
+                        <small className="d-block text-success fw-semibold">
+                          Coupon applied: {invoiceSummary.couponCode}
+                        </small>
+                      ) : (
+                        <small className="d-block text-muted">
+                          {invoiceSummary.couponDiscount > 0
+                            ? "Promo discount applied"
+                            : "No coupon applied"}
+                        </small>
+                      )}
                     </span>
-                    <strong>
-                      -₹{formatINR(invoiceSummary.couponDiscount)}
+                    <strong
+                      className={
+                        invoiceSummary.couponDiscount > 0
+                          ? "order-savings-amount"
+                          : "text-muted"
+                      }
+                    >
+                      {invoiceSummary.couponDiscount > 0
+                        ? `-₹${formatINR(invoiceSummary.couponDiscount)}`
+                        : "₹0.00"}
                     </strong>
                   </div>
-                )}
 
-                <div className="invoice-total-row">
-                  <span>Convenience Fee</span>
-                  <strong>₹{formatINR(invoiceSummary.convenienceFee)}</strong>
-                </div>
-
-                <div className="invoice-total-row">
-                  <span>GST & Applicable Taxes</span>
-                  <strong>₹{formatINR(invoiceSummary.gst)}</strong>
-                </div>
-
-                <div className="invoice-total-row">
-                  <span>Delivery Charges</span>
-                  <strong
-                    className={
-                      invoiceSummary.shipping === 0 ? "text-success" : ""
-                    }
-                  >
-                    {invoiceSummary.shipping > 0
-                      ? `₹${formatINR(invoiceSummary.shipping)}`
-                      : "FREE"}
-                  </strong>
-                </div>
-
-                <div className="invoice-grand-total-row">
-                  <span>Grand Total</span>
-                  <strong>₹{formatINR(invoiceSummary.grandTotal)}</strong>
-                </div>
-
-                {invoiceSummary.walletUsed > 0 && (
-                  <div className="invoice-payment-split">
-                    <div className="split-row">
-                      <span>Paid via TechStore Wallet</span>
-                      <strong>₹{formatINR(invoiceSummary.walletUsed)}</strong>
-                    </div>
-                    <div className="split-row">
-                      <span>
-                        Paid via {invoiceSummary.paymentModeRaw}
-                      </span>
-                      <strong>₹{formatINR(invoiceSummary.balancePaid)}</strong>
-                    </div>
+                  <div className="order-payment-row">
+                    <span>Shipping / Delivery Fee</span>
+                    <strong
+                      className={
+                        invoiceSummary.shippingVal === 0 ? "text-success" : ""
+                      }
+                    >
+                      {invoiceSummary.shippingVal > 0
+                        ? `₹${formatINR(invoiceSummary.shippingVal)}`
+                        : "FREE"}
+                    </strong>
                   </div>
-                )}
+
+                  <div className="order-payment-row">
+                    <div>
+                      <span>Convenience Fee</span>
+                      <small className="order-non-refundable-label d-block text-muted">
+                        (Non-refundable)
+                      </small>
+                    </div>
+                    <strong>₹{formatINR(invoiceSummary.platformFeeVal)}</strong>
+                  </div>
+
+                  <div className="order-payment-row is-savings">
+                    <span>
+                      Total Order Savings
+                      {invoiceSummary.couponCode && (
+                        <small className="d-block text-success">
+                          Includes coupon ({invoiceSummary.couponCode})
+                        </small>
+                      )}
+                    </span>
+                    <strong className="order-savings-amount">
+                      -₹{formatINR(invoiceSummary.totalOrderSavings)}
+                    </strong>
+                  </div>
+
+                  <div className="order-payment-total-row">
+                    <span>Order Total</span>
+                    <strong>₹{formatINR(invoiceSummary.orderGrandTotal)}</strong>
+                  </div>
+                </div>
+
+                <hr className="order-payment-section-divider my-3" />
+
+                <div className="order-payment-mode-section">
+                  <h6 className="order-payment-mode-heading">Payment Mode</h6>
+
+                  <div className="order-payment-mode-list">
+                    {invoiceSummary.isUPI &&
+                      invoiceSummary.externalPaymentAmount > 0 && (
+                        <div className="order-payment-mode-item">
+                          <div className="order-payment-mode-left">
+                            <span className="order-payment-mode-icon upi">
+                              <FaMobileAlt />
+                            </span>
+                            <strong>BHIM UPI</strong>
+                          </div>
+                          <strong className="order-payment-mode-amount">
+                            ₹{formatINR(invoiceSummary.externalPaymentAmount)}
+                          </strong>
+                        </div>
+                      )}
+
+                    {invoiceSummary.isCard &&
+                      invoiceSummary.externalPaymentAmount > 0 && (
+                        <div className="order-payment-mode-item">
+                          <div className="order-payment-mode-left">
+                            <span className="order-payment-mode-icon card-mode">
+                              <FaCreditCard />
+                            </span>
+                            <strong>Debit / Credit Card</strong>
+                          </div>
+                          <strong className="order-payment-mode-amount">
+                            ₹{formatINR(invoiceSummary.externalPaymentAmount)}
+                          </strong>
+                        </div>
+                      )}
+
+                    {invoiceSummary.isCOD && invoiceSummary.codDueAmount > 0 && (
+                      <div className="order-payment-mode-item">
+                        <div className="order-payment-mode-left">
+                          <span className="order-payment-mode-icon cod">
+                            <FaMoneyBillWave />
+                          </span>
+                          <strong>Cash on Delivery</strong>
+                        </div>
+                        <strong className="order-payment-mode-amount">
+                          ₹{formatINR(invoiceSummary.codDueAmount)}
+                        </strong>
+                      </div>
+                    )}
+
+                    {!invoiceSummary.isUPI &&
+                      !invoiceSummary.isCard &&
+                      !invoiceSummary.isCOD &&
+                      invoiceSummary.externalPaymentAmount > 0 && (
+                        <div className="order-payment-mode-item">
+                          <div className="order-payment-mode-left">
+                            <span className="order-payment-mode-icon card-mode">
+                              <FaCreditCard />
+                            </span>
+                            <strong>Online Payment</strong>
+                          </div>
+                          <strong className="order-payment-mode-amount">
+                            ₹{formatINR(invoiceSummary.externalPaymentAmount)}
+                          </strong>
+                        </div>
+                      )}
+
+                    {invoiceSummary.walletPaidVal > 0 && (
+                      <div className="order-payment-mode-item">
+                        <div className="order-payment-mode-left">
+                          <span className="order-payment-mode-icon wallet">
+                            <FaWallet />
+                          </span>
+                          <strong>TechStore Wallet</strong>
+                        </div>
+                        <strong className="order-payment-mode-amount">
+                          ₹{formatINR(invoiceSummary.walletPaidVal)}
+                        </strong>
+                      </div>
+                    )}
+
+                    {!invoiceSummary.externalPaymentAmount &&
+                      !invoiceSummary.codDueAmount &&
+                      !invoiceSummary.walletPaidVal && (
+                        <div className="order-payment-mode-item">
+                          <div className="order-payment-mode-left">
+                            <span className="order-payment-mode-icon card-mode">
+                              <FaCreditCard />
+                            </span>
+                            <strong>{invoiceSummary.paymentModeRaw}</strong>
+                          </div>
+                          <strong className="order-payment-mode-amount">
+                            ₹{formatINR(invoiceSummary.orderGrandTotal)}
+                          </strong>
+                        </div>
+                      )}
+                  </div>
+                </div>
               </div>
             </div>
           </div>

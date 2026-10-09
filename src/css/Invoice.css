@@ -500,6 +500,207 @@ body.dark .invoice-grand-total-row {
   justify-content: space-between;
 }
 
+/* ORDER PAYMENT DETAILS INVOICE STYLING (MATCHING ORDERDETAILS & USER SCREENSHOT) */
+.invoice-totals-card .order-payment-heading {
+  font-size: 18px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+body.dark .invoice-totals-card .order-payment-heading,
+body.dark-mode .invoice-totals-card .order-payment-heading {
+  color: #f8fafc;
+}
+
+.invoice-screen-breakdown {
+  display: flex;
+  flex-direction: column;
+}
+
+.invoice-screen-breakdown .order-payment-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 0;
+  color: #1f2937;
+  font-size: 14.5px;
+}
+
+body.dark .invoice-screen-breakdown .order-payment-row,
+body.dark-mode .invoice-screen-breakdown .order-payment-row {
+  color: #cbd5e1;
+}
+
+.invoice-screen-breakdown .order-payment-row strong {
+  color: #111827;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+body.dark .invoice-screen-breakdown .order-payment-row strong,
+body.dark-mode .invoice-screen-breakdown .order-payment-row strong {
+  color: #f8fafc;
+}
+
+.invoice-screen-breakdown .order-savings-amount {
+  color: #16a34a !important;
+  font-weight: 600 !important;
+}
+
+body.dark .invoice-screen-breakdown .order-savings-amount,
+body.dark-mode .invoice-screen-breakdown .order-savings-amount {
+  color: #4ade80 !important;
+}
+
+.invoice-screen-breakdown .order-payment-total-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 10px;
+  padding-top: 12px;
+  border-top: 2px solid #e2e8f0;
+  color: #0f172a;
+  font-size: 17px;
+  font-weight: 800;
+}
+
+body.dark .invoice-screen-breakdown .order-payment-total-row,
+body.dark-mode .invoice-screen-breakdown .order-payment-total-row {
+  border-top-color: rgba(255, 255, 255, 0.14);
+  color: #f8fafc;
+}
+
+.invoice-totals-card .order-payment-section-divider {
+  margin: 16px 0;
+  border: 0;
+  border-top: 1px solid #e2e8f0;
+  opacity: 1;
+}
+
+body.dark .invoice-totals-card .order-payment-section-divider,
+body.dark-mode .invoice-totals-card .order-payment-section-divider {
+  border-top-color: rgba(255, 255, 255, 0.12);
+}
+
+.invoice-totals-card .order-payment-mode-heading {
+  color: #64748b;
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+
+body.dark .invoice-totals-card .order-payment-mode-heading,
+body.dark-mode .invoice-totals-card .order-payment-mode-heading {
+  color: #94a3b8;
+}
+
+.invoice-totals-card .order-payment-mode-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.invoice-totals-card .order-payment-mode-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 0;
+}
+
+.invoice-totals-card .order-payment-mode-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.invoice-totals-card .order-payment-mode-left strong {
+  color: #0f172a;
+  font-size: 14.5px;
+  font-weight: 700;
+}
+
+body.dark .invoice-totals-card .order-payment-mode-left strong,
+body.dark-mode .invoice-totals-card .order-payment-mode-left strong {
+  color: #f8fafc;
+}
+
+.invoice-totals-card .order-payment-mode-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  flex-shrink: 0;
+}
+
+.invoice-totals-card .order-payment-mode-icon.upi {
+  background: #ecfdf5;
+  color: #059669;
+  border: 1px solid #a7f3d0;
+}
+
+body.dark .invoice-totals-card .order-payment-mode-icon.upi,
+body.dark-mode .invoice-totals-card .order-payment-mode-icon.upi {
+  background: rgba(5, 150, 105, 0.2);
+  border-color: rgba(16, 185, 129, 0.4);
+  color: #6ee7b7;
+}
+
+.invoice-totals-card .order-payment-mode-icon.wallet {
+  background: #eff6ff;
+  color: #2563eb;
+  border: 1px solid #bfdbfe;
+}
+
+body.dark .invoice-totals-card .order-payment-mode-icon.wallet,
+body.dark-mode .invoice-totals-card .order-payment-mode-icon.wallet {
+  background: rgba(37, 99, 235, 0.2);
+  border-color: rgba(59, 130, 246, 0.4);
+  color: #93c5fd;
+}
+
+.invoice-totals-card .order-payment-mode-icon.card-mode {
+  background: #f5f3ff;
+  color: #7c3aed;
+  border: 1px solid #ddd6fe;
+}
+
+body.dark .invoice-totals-card .order-payment-mode-icon.card-mode,
+body.dark-mode .invoice-totals-card .order-payment-mode-icon.card-mode {
+  background: rgba(124, 58, 237, 0.2);
+  border-color: rgba(139, 92, 246, 0.4);
+  color: #c4b5fd;
+}
+
+.invoice-totals-card .order-payment-mode-icon.cod {
+  background: #fffbeb;
+  color: #d97706;
+  border: 1px solid #fde68a;
+}
+
+body.dark .invoice-totals-card .order-payment-mode-icon.cod,
+body.dark-mode .invoice-totals-card .order-payment-mode-icon.cod {
+  background: rgba(217, 119, 6, 0.2);
+  border-color: rgba(245, 158, 11, 0.4);
+  color: #fcd34d;
+}
+
+.invoice-totals-card .order-payment-mode-amount {
+  color: #0f172a;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+body.dark .invoice-totals-card .order-payment-mode-amount,
+body.dark-mode .invoice-totals-card .order-payment-mode-amount {
+  color: #f8fafc;
+}
+
 .invoice-empty-card {
   max-width: 460px;
   padding: 42px 28px;

@@ -331,7 +331,7 @@ function DeliveryBoyDashboard() {
 
             const requestType = String(request?.type || "RETURN").toUpperCase();
 
-            // EXCHANGE: PICKED_UP -> 15 sec -> EXCHANGE_COMPLETED
+            // FAST AUTO-PROGRESS: EXCHANGE: PICKED_UP -> 2 sec -> EXCHANGE_COMPLETED
             if (requestType === "EXCHANGE") {
                 setTimeout(async () => {
                     try {
@@ -352,7 +352,7 @@ function DeliveryBoyDashboard() {
                             error?.message || "Unable to complete exchange."
                         );
                     }
-                }, 15000);
+                }, 2000);
 
                 return;
             }
@@ -371,7 +371,7 @@ function DeliveryBoyDashboard() {
                     ? Number(rxItem.itemPrice) * Number(rxItem.itemQty || 1)
                     : 0);
 
-            // RETURN: PICKED_UP -> 15 sec -> REFUND_INITIATED -> 15 sec -> REFUND_COMPLETED
+            // FAST AUTO-PROGRESS: RETURN: PICKED_UP -> 1.8 sec -> REFUND_INITIATED -> 1.8 sec -> REFUND_COMPLETED
             setTimeout(async () => {
                 try {
                     const latestReq = await returnExchangeService.getRequest(requestId);
@@ -407,14 +407,14 @@ function DeliveryBoyDashboard() {
                                 error?.message || "Unable to complete refund."
                             );
                         }
-                    }, 15000);
+                    }, 1800);
                 } catch (error) {
                     console.error("Refund initiation error:", error);
                     toast.error(
                         error?.message || "Unable to initiate refund."
                     );
                 }
-            }, 15000);
+            }, 1800);
         } catch (error) {
             console.error("Item pickup error:", error);
             toast.error(
@@ -425,6 +425,70 @@ function DeliveryBoyDashboard() {
                 ...previous,
                 [requestId]: false,
             }));
+        }
+    };
+
+    const handleCompleteExchangeDirect = async (request) => {
+        const requestId = request?.$id;
+        if (!requestId) return;
+        try {
+            setPickupLoading((prev) => ({ ...prev, [requestId]: true }));
+            await returnExchangeService.updateRequest(requestId, {
+                status: "EXCHANGE_COMPLETED",
+            });
+            await loadReturnRequests();
+            toast.success("Exchange completed successfully.");
+        } catch (error) {
+            console.error("Exchange complete error:", error);
+            toast.error(error?.message || "Unable to complete exchange.");
+        } finally {
+            setPickupLoading((prev) => ({ ...prev, [requestId]: false }));
+        }
+    };
+
+    const handleInitiateRefundDirect = async (request) => {
+        const requestId = request?.$id;
+        if (!requestId) return;
+        try {
+            setPickupLoading((prev) => ({ ...prev, [requestId]: true }));
+            const matchedOrderEntry = returnOrders.find(
+                (entry) => entry?.request?.$id === requestId
+            );
+            const rxItem = resolveReturnRequestItem(
+                request,
+                matchedOrderEntry?.order
+            );
+            const resolvedRefundAmount =
+                Number(request?.refundAmount || 0) ||
+                Number(request?.paymentRefund?.refundAmount || 0) ||
+                (rxItem?.itemPrice
+                    ? Number(rxItem.itemPrice) * Number(rxItem.itemQty || 1)
+                    : 0);
+
+            await returnExchangeService.initiateRefund(requestId, resolvedRefundAmount);
+            await loadReturnRequests();
+            toast.success("Refund initiated.");
+        } catch (error) {
+            console.error("Refund initiate error:", error);
+            toast.error(error?.message || "Unable to initiate refund.");
+        } finally {
+            setPickupLoading((prev) => ({ ...prev, [requestId]: false }));
+        }
+    };
+
+    const handleCompleteRefundDirect = async (request) => {
+        const requestId = request?.$id;
+        if (!requestId) return;
+        try {
+            setPickupLoading((prev) => ({ ...prev, [requestId]: true }));
+            await returnExchangeService.completeRefund(requestId);
+            await loadReturnRequests();
+            toast.success("Refund completed successfully.");
+        } catch (error) {
+            console.error("Refund complete error:", error);
+            toast.error(error?.message || "Unable to complete refund.");
+        } finally {
+            setPickupLoading((prev) => ({ ...prev, [requestId]: false }));
         }
     };
 
@@ -871,8 +935,7 @@ function DeliveryBoyDashboard() {
                                                 </strong>
                                             </div>
 
-                                            {requestStatus ===
-                                                "PICKUP_ASSIGNED" ||
+                                            {requestStatus === "PICKUP_ASSIGNED" ||
                                             requestStatus === "CONFIRMED" ? (
                                                 <button
                                                     type="button"
@@ -900,10 +963,81 @@ function DeliveryBoyDashboard() {
                                                         </>
                                                     )}
                                                 </button>
+                                            ) : requestStatus === "PICKED_UP" && isExchange ? (
+                                                <button
+                                                    type="button"
+                                                    className="delivery-primary-action action-blue"
+                                                    onClick={() =>
+                                                        handleCompleteExchangeDirect(
+                                                            request
+                                                        )
+                                                    }
+                                                    disabled={isPicking}
+                                                >
+                                                    {isPicking ? (
+                                                        <>
+                                                            <FaSpinner className="fa-spin" />
+                                                            Completing...
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <FaCheckCircle />
+                                                            Complete Exchange
+                                                        </>
+                                                    )}
+                                                </button>
+                                            ) : requestStatus === "PICKED_UP" && !isExchange ? (
+                                                <button
+                                                    type="button"
+                                                    className="delivery-primary-action action-red"
+                                                    onClick={() =>
+                                                        handleInitiateRefundDirect(
+                                                            request
+                                                        )
+                                                    }
+                                                    disabled={isPicking}
+                                                >
+                                                    {isPicking ? (
+                                                        <>
+                                                            <FaSpinner className="fa-spin" />
+                                                            Initiating...
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <FaCheckCircle />
+                                                            Initiate Refund
+                                                        </>
+                                                    )}
+                                                </button>
+                                            ) : requestStatus === "REFUND_INITIATED" ? (
+                                                <button
+                                                    type="button"
+                                                    className="delivery-primary-action action-blue"
+                                                    onClick={() =>
+                                                        handleCompleteRefundDirect(
+                                                            request
+                                                        )
+                                                    }
+                                                    disabled={isPicking}
+                                                >
+                                                    {isPicking ? (
+                                                        <>
+                                                            <FaSpinner className="fa-spin" />
+                                                            Completing...
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <FaCheckCircle />
+                                                            Complete Refund
+                                                        </>
+                                                    )}
+                                                </button>
                                             ) : (
                                                 <div className="delivery-completed-pill">
                                                     <FaCheckCircle />
-                                                    Item Picked Up
+                                                    {isExchange
+                                                        ? "Exchange Completed"
+                                                        : "Refund Completed"}
                                                 </div>
                                             )}
                                         </div>
