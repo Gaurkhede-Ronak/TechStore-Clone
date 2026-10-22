@@ -9,6 +9,7 @@ import AppToaster from "./components/AppToaster";
 
 import App from "./App";
 import { store } from "./redux/store";
+import "./css/Global.css";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <BrowserRouter>

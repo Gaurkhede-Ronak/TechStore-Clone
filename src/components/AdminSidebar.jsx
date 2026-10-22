@@ -32,8 +32,8 @@ const ADMIN_SIDEBAR_STYLES = `
     --sidebar-text-soft: #475569;
     --sidebar-muted: #64748b;
     --sidebar-border: #e2e8f0;
-    --sidebar-primary: #2563eb;
-    --sidebar-primary-2: #4f46e5;
+    --sidebar-primary: #6258d6;
+    --sidebar-primary-2: #5146c4;
     --sidebar-danger: #dc2626;
     --sidebar-shadow: 2px 0 20px rgba(15, 23, 42, 0.06);
     --sidebar-transition: .28s ease;
@@ -55,8 +55,8 @@ const ADMIN_SIDEBAR_STYLES = `
     --sidebar-text-soft: #cbd5e1;
     --sidebar-muted: #94a3b8;
     --sidebar-border: rgba(255, 255, 255, 0.08);
-    --sidebar-primary: #3b82f6;
-    --sidebar-primary-2: #6366f1;
+    --sidebar-primary: #a59aff;
+    --sidebar-primary-2: #806ff0;
     --sidebar-shadow: 6px 0 28px rgba(0, 0, 0, 0.32);
 }
 

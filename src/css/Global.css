@@ -1,0 +1,484 @@
+/* TechStore design system: clean surfaces, vivid indigo and a mint accent. */
+:root {
+  --ts-radius-sm: 10px;
+  --ts-radius-md: 16px;
+  --ts-radius-lg: 22px;
+  --ts-ease: cubic-bezier(0.2, 0.75, 0.25, 1);
+  --ts-motion-fast: 180ms;
+  --ts-motion: 280ms;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+html {
+  scroll-padding-top: 90px;
+}
+
+body {
+  background: var(--bg-main);
+  color: var(--text-primary);
+  transition: background-color 300ms var(--ts-ease), color 250ms ease;
+}
+
+html body.dark {
+  background-color: var(--bg-main) !important;
+  color: var(--text-primary) !important;
+}
+
+body.light {
+  --page-accent: #6258d6;
+  --page-accent-hover: #5146c4;
+  --page-accent-soft: #eeecff;
+  --page-highlight: #16a995;
+  --page-highlight-soft: #e5f7f3;
+  --surface-raised: #ffffff;
+  --surface-muted: #f0f1f7;
+  --focus-ring: rgba(98, 88, 214, 0.25);
+}
+
+body.dark {
+  --page-accent: #a59aff;
+  --page-accent-hover: #c3bbff;
+  --page-accent-soft: #2a2744;
+  --page-highlight: #50d4bf;
+  --page-highlight-soft: #1c3736;
+  --surface-raised: #20212f;
+  --surface-muted: #292a39;
+  --focus-ring: rgba(165, 154, 255, 0.3);
+}
+
+::selection {
+  background: rgba(98, 88, 214, 0.22);
+  color: var(--text-primary);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button,
+a,
+input,
+select,
+textarea,
+[role="button"] {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+button:not(:disabled),
+[role="button"],
+a.btn {
+  cursor: pointer;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
+/* Solid, consistent page canvases for customer, delivery and admin routes. */
+html body.light :is(
+  .home-page-wrapper,
+  .product-page-wrapper,
+  .products-page,
+  .product-details-page,
+  .cart-page-wrapper,
+  .checkout-page-wrapper,
+  .auth-page-wrapper,
+  .contact-page-wrapper,
+  .about-page-wrapper,
+  .wishlist-page-wrapper,
+  .profile-page-wrapper,
+  .order-history-wrapper,
+  .order-details-wrapper,
+  .order-page,
+  .rx-page-wrapper,
+  .card-payment-wrapper,
+  .payment-gateway-wrapper,
+  .payment-success-page,
+  .wallet-page,
+  .track-order-page,
+  .notifications-page,
+  .admin-layout,
+  .admin-page,
+  .dashboard-page,
+  .analytics-page,
+  .product-list-page,
+  .inventory-page,
+  .users-page,
+  .shipments-admin-page
+) {
+  background-color: var(--bg-main) !important;
+  color: var(--text-primary);
+}
+
+html body.dark :is(
+  .home-page-wrapper,
+  .product-page-wrapper,
+  .products-page,
+  .product-details-page,
+  .cart-page-wrapper,
+  .checkout-page-wrapper,
+  .auth-page-wrapper,
+  .contact-page-wrapper,
+  .about-page-wrapper,
+  .wishlist-page-wrapper,
+  .profile-page-wrapper,
+  .order-history-wrapper,
+  .order-details-wrapper,
+  .order-page,
+  .rx-page-wrapper,
+  .card-payment-wrapper,
+  .payment-gateway-wrapper,
+  .payment-success-page,
+  .wallet-page,
+  .track-order-page,
+  .notifications-page,
+  .admin-layout,
+  .admin-page,
+  .dashboard-page,
+  .analytics-page,
+  .product-list-page,
+  .inventory-page,
+  .users-page,
+  .shipments-admin-page
+) {
+  background-color: var(--bg-main) !important;
+  color: var(--text-primary);
+}
+
+/* One matte card language across shopping, account, order and admin screens. */
+html body.light :is(
+  .card, .product-card, .category-card, .feature-card, .dashboard-card, .chart-card,
+  .recent-orders, .top-products, .latest-customers, .analytics-panel, .auth-card, .about-card,
+  .contact-card, .contact-form-card, .info-box, .cart-card, .summary-card,
+  .checkout-card, .checkout-summary, .product-details-card, .specs-card,
+  .related-card, .payment-card, .payment-card-3d, .order-card, .order-info-card,
+  .ajio-order-card, .glass-card, .rx-card, .profile-sidebar-card,
+  .profile-content-card, .settings-card, .review-card, .review-table-card,
+  .analytics-stat-card, .analytics-section-card, .analytics-mini-card,
+  .dashboard-kpi-card, .dashboard-section-card, .dashboard-summary-card,
+  .dashboard-shipment-card, .delivery-action-card, .delivery-operation-card,
+  .delivery-stat-card, .delivery-floating-card, .delivery-empty-card,
+  .cp-card, .cp-agent-card, .invoice-card, .newsletter-card-wrapper, .skeleton-card
+) {
+  border-color: var(--border-main);
+  border-radius: var(--ts-radius-md);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-card);
+  color: var(--text-primary);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  transition: background-color var(--ts-motion) ease, border-color var(--ts-motion) ease,
+    box-shadow var(--ts-motion) var(--ts-ease), transform var(--ts-motion) var(--ts-ease),
+    color 180ms ease;
+}
+
+html body.dark :is(
+  .card, .product-card, .category-card, .feature-card, .dashboard-card, .chart-card,
+  .recent-orders, .top-products, .latest-customers, .analytics-panel, .auth-card, .about-card,
+  .contact-card, .contact-form-card, .info-box, .cart-card, .summary-card,
+  .checkout-card, .checkout-summary, .product-details-card, .specs-card,
+  .related-card, .payment-card, .payment-card-3d, .order-card, .order-info-card,
+  .ajio-order-card, .glass-card, .rx-card, .profile-sidebar-card,
+  .profile-content-card, .settings-card, .review-card, .review-table-card,
+  .analytics-stat-card, .analytics-section-card, .analytics-mini-card,
+  .dashboard-kpi-card, .dashboard-section-card, .dashboard-summary-card,
+  .dashboard-shipment-card, .delivery-action-card, .delivery-operation-card,
+  .delivery-stat-card, .delivery-floating-card, .delivery-empty-card,
+  .cp-card, .cp-agent-card, .invoice-card, .newsletter-card-wrapper, .skeleton-card
+) {
+  border-color: var(--border-main) !important;
+  border-radius: var(--ts-radius-md);
+  background: var(--bg-card) !important;
+  box-shadow: var(--shadow-card);
+  color: var(--text-primary);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+html body.light :is(.product-card, .category-card, .feature-card, .dashboard-card, .stat-card, .card):hover,
+html body.dark :is(.product-card, .category-card, .feature-card, .dashboard-card, .stat-card, .card):hover {
+  border-color: var(--border-glow);
+  box-shadow: var(--shadow-3d);
+  transform: translateY(-4px);
+}
+
+/* Consistent heading rhythm and legible supporting text. */
+html body.light :is(
+  .home-page-wrapper, .product-page-wrapper, .about-page-wrapper, .contact-page-wrapper,
+  .cart-page-wrapper, .checkout-page-wrapper, .profile-page-wrapper, .order-history-wrapper,
+  .order-details-wrapper, .wallet-page, .admin-page
+) :is(h1, h2, h3, h4, h5, .page-title, .section-title, .page-heading),
+html body.dark :is(
+  .home-page-wrapper, .product-page-wrapper, .about-page-wrapper, .contact-page-wrapper,
+  .cart-page-wrapper, .checkout-page-wrapper, .profile-page-wrapper, .order-history-wrapper,
+  .order-details-wrapper, .wallet-page, .admin-page
+) :is(h1, h2, h3, h4, h5, .page-title, .section-title, .page-heading) {
+  color: var(--text-primary);
+  letter-spacing: -0.025em;
+}
+
+/* Form controls use the same high-contrast surface on every route. */
+html body.light :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea, .form-control, .form-select) {
+  border-color: #dfe1ec;
+  border-radius: var(--ts-radius-sm);
+  background-color: #ffffff;
+  color: #202238;
+  transition: border-color 180ms ease, box-shadow 180ms ease, background-color 180ms ease;
+}
+
+html body.dark :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea, .form-control, .form-select) {
+  border-color: #3b3c4e;
+  border-radius: var(--ts-radius-sm);
+  background-color: #20212e;
+  color: #f6f5ff;
+  transition: border-color 180ms ease, box-shadow 180ms ease, background-color 180ms ease;
+}
+
+html body.dark :is(input, textarea, .form-control, .form-select)::placeholder {
+  color: #a09eb5;
+  opacity: 1;
+}
+
+html body.light :is(input, select, textarea, .form-control, .form-select):focus {
+  border-color: #8277e7;
+  box-shadow: 0 0 0 4px rgba(98, 88, 214, 0.13);
+}
+
+html body.dark :is(input, select, textarea, .form-control, .form-select):focus {
+  border-color: #a59aff;
+  box-shadow: 0 0 0 4px rgba(165, 154, 255, 0.16);
+}
+
+/* Clear action hierarchy without changing button behavior. */
+html body :is(
+  .btn-primary, .cart-btn, .checkout-btn, .place-order-btn, .add-cart-btn,
+  .btn-primary-ecom, .subscribe-action-btn, .start-shopping-btn, .review-submit-btn
+) {
+  border-color: transparent;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #6258d6, #5146c4);
+  box-shadow: 0 8px 18px rgba(81, 70, 196, 0.2);
+  color: #ffffff;
+  transition: transform var(--ts-motion) var(--ts-ease), box-shadow var(--ts-motion) var(--ts-ease),
+    filter 180ms ease;
+}
+
+html body :is(
+  .btn-primary, .cart-btn, .checkout-btn, .place-order-btn, .add-cart-btn,
+  .btn-primary-ecom, .subscribe-action-btn, .start-shopping-btn, .review-submit-btn
+):hover:not(:disabled) {
+  background: linear-gradient(135deg, #5146c4, #4338a8);
+  box-shadow: 0 12px 24px rgba(81, 70, 196, 0.28);
+  color: #ffffff;
+  transform: translateY(-2px);
+}
+
+html body :is(.btn-success, .buy-now-btn) {
+  border-color: transparent;
+  background: linear-gradient(135deg, #16a995, #108a79);
+  color: #ffffff;
+}
+
+/* Tables stay calm and scannable. */
+html body.light .table {
+  --bs-table-bg: transparent;
+  --bs-table-color: var(--text-primary);
+  --bs-table-border-color: var(--border-main);
+}
+
+html body.dark .table {
+  --bs-table-bg: transparent;
+  --bs-table-color: var(--text-secondary);
+  --bs-table-border-color: var(--border-main);
+}
+
+html body.light .table thead th,
+html body.light .table thead td {
+  background: #f0effa;
+  color: #45425f;
+}
+
+html body.dark .table thead th,
+html body.dark .table thead td {
+  background: #252535;
+  color: #dedbf7;
+}
+
+html body :is(.table tbody tr, .admin-table tbody tr) {
+  transition: background-color 160ms ease;
+}
+
+html body.light :is(.table tbody tr, .admin-table tbody tr):hover {
+  background-color: #f6f5fc;
+}
+
+html body.dark :is(.table tbody tr, .admin-table tbody tr):hover {
+  background-color: #242432;
+}
+
+/* Updated accent color for links and shared navigation. */
+html body.light :is(.view-all, .auth-link, .forgot-password-link, .profile-nav-link.active) {
+  color: #5146c4;
+}
+
+html body.dark :is(.view-all, .auth-link, .forgot-password-link, .profile-nav-link.active) {
+  color: #b4aaff;
+}
+
+html body.light .custom-navbar,
+html body.light .admin-sidebar,
+html body.light .admin-navbar {
+  background: #fbfbfe;
+  border-bottom-color: #e8e8f1;
+}
+
+html body.dark .custom-navbar,
+html body.dark .admin-sidebar,
+html body.dark .admin-navbar {
+  background: #171824;
+  border-bottom-color: #2d2d3d;
+}
+
+html body.light .footer-wrapper {
+  background: #f0eff8;
+  color: var(--text-primary);
+}
+
+html body.dark .footer-wrapper {
+  background: #14141f;
+  color: var(--text-primary);
+}
+
+html body.dark .admin-page,
+html body.dark .admin-layout,
+html body.dark .admin-main {
+  background: var(--bg-main) !important;
+  color: var(--text-primary);
+}
+
+/* Route entry and small interaction motion; no continuous decorative effects. */
+@keyframes tsRouteEnter {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes tsCardEnter {
+  from { opacity: 0; transform: translateY(12px) scale(0.99); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+html body :is(
+  .home-page-wrapper, .product-page-wrapper, .product-details-page, .cart-page-wrapper,
+  .checkout-page-wrapper, .auth-page-wrapper, .about-page-wrapper, .contact-page-wrapper,
+  .wishlist-page-wrapper, .profile-page-wrapper, .order-history-wrapper, .order-details-wrapper,
+  .payment-success-page, .wallet-page, .admin-page
+) {
+  animation: tsRouteEnter 420ms var(--ts-ease) both;
+}
+
+html body :is(.home-products, .categories-section, .features-section, .product-page-wrapper, .admin-page) :is(
+  .product-card, .category-card, .feature-card, .dashboard-card, .dashboard-kpi-card,
+  .analytics-stat-card, .ajio-order-card, .cart-card
+) {
+  animation: tsCardEnter 460ms var(--ts-ease) both;
+}
+
+html body :is(.home-products, .categories-section, .features-section, .product-page-wrapper, .admin-page) :is(
+  .product-card, .category-card, .feature-card, .dashboard-card, .dashboard-kpi-card,
+  .analytics-stat-card, .ajio-order-card, .cart-card
+):nth-child(2) {
+  animation-delay: 45ms;
+}
+
+html body :is(.home-products, .categories-section, .features-section, .product-page-wrapper, .admin-page) :is(
+  .product-card, .category-card, .feature-card, .dashboard-card, .dashboard-kpi-card,
+  .analytics-stat-card, .ajio-order-card, .cart-card
+):nth-child(3) {
+  animation-delay: 90ms;
+}
+
+html body :is(.home-products, .categories-section, .features-section, .product-page-wrapper, .admin-page) :is(
+  .product-card, .category-card, .feature-card, .dashboard-card, .dashboard-kpi-card,
+  .analytics-stat-card, .ajio-order-card, .cart-card
+):nth-child(4) {
+  animation-delay: 135ms;
+}
+
+html body .admin-layout :is(.sidebar-nav a, .admin-navbar button),
+html body :is(.mobile-drawer a, .desktop-menu a, .action-icon, .mobile-icon) {
+  transition: color 180ms ease, background-color 180ms ease, border-color 180ms ease,
+    transform 200ms var(--ts-ease);
+}
+
+html body :is(.sidebar-nav a:hover, .desktop-menu a:hover, .mobile-drawer a:hover, .action-icon:hover, .mobile-icon:hover) {
+  transform: translateY(-1px);
+}
+
+/* Mobile-first spacing and tap targets, with more room on larger screens. */
+@media (max-width: 575.98px) {
+  html { font-size: 15px; }
+
+  html body :is(.product-page-wrapper, .cart-page-wrapper, .checkout-page-wrapper, .order-history-wrapper, .order-details-wrapper, .wallet-page) .container {
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+
+  html body :is(.product-card, .auth-card, .checkout-card, .checkout-summary, .profile-content-card, .profile-sidebar-card, .settings-card) {
+    border-radius: 14px;
+  }
+
+  html body :is(button, .btn, .cart-btn, .checkout-btn, .place-order-btn, .add-cart-btn, .buy-now-btn) {
+    min-height: 42px;
+  }
+
+  html body :is(.table-responsive, .admin-table-wrapper, .orders-table-wrapper) {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  html body :is(.pagination, .custom-pagination) {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 6px;
+  }
+}
+
+@media (min-width: 576px) and (max-width: 991.98px) {
+  html body :is(.product-page-wrapper, .cart-page-wrapper, .checkout-page-wrapper, .order-history-wrapper, .order-details-wrapper, .wallet-page) .container {
+    padding-right: 24px;
+    padding-left: 24px;
+  }
+}
+
+@media (min-width: 1200px) {
+  html body :is(.home-page-wrapper, .product-page-wrapper, .cart-page-wrapper, .checkout-page-wrapper, .order-history-wrapper, .order-details-wrapper) > .container {
+    max-width: 1320px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -1,12 +1,13 @@
 /* TECHSTORE - GLOBAL MOBILE-FIRST STYLES */
 
 :root {
-  --primary: #2563eb;
-  --primary-hover: #1d4ed8;
-  --accent: #3b82f6;
-  --success: #10b981;
-  --warning: #f59e0b;
-  --danger: #ef4444;
+  --primary: #6258d6;
+  --primary-hover: #5146c4;
+  --accent: #806ff0;
+  --secondary-accent: #16a995;
+  --success: #0f9f83;
+  --warning: #e99a26;
+  --danger: #e45470;
   --font-main: "Plus Jakarta Sans", "Poppins", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
@@ -38,37 +39,39 @@ body {
 }
 
 body.light {
-  --bg-main: #f8fafc;
+  color-scheme: light;
+  --bg-main: #f6f7fb;
   --bg-surface: #ffffff;
   --bg-card: #ffffff;
-  --bg-card-elevated: #ffffff;
-  --text-primary: #0f172a;
-  --text-secondary: #475569;
-  --text-muted: #64748b;
-  --border-main: rgba(226, 232, 240, 0.9);
-  --border-glow: rgba(37, 99, 235, 0.15);
-  --glass-bg: rgba(255, 255, 255, 0.82);
-  --glass-border: rgba(226, 232, 240, 0.6);
-  --shadow-card: 0 10px 30px -5px rgba(0, 0, 0, 0.05), 0 4px 10px -2px rgba(0, 0, 0, 0.02);
-  --shadow-3d: 0 20px 40px -15px rgba(15, 23, 42, 0.12), 0 0 15px rgba(37, 99, 235, 0.08);
+  --bg-card-elevated: #fcfcff;
+  --text-primary: #171a2b;
+  --text-secondary: #4b5068;
+  --text-muted: #737990;
+  --border-main: #e8eaf2;
+  --border-glow: rgba(98, 88, 214, 0.16);
+  --glass-bg: #ffffff;
+  --glass-border: #e8eaf2;
+  --shadow-card: 0 12px 34px -10px rgba(24, 30, 58, 0.1);
+  --shadow-3d: 0 22px 48px -18px rgba(66, 61, 142, 0.2);
   background-color: var(--bg-main);
   color: var(--text-primary);
 }
 
 body.dark {
-  --bg-main: #060913;
-  --bg-surface: #0c1222;
-  --bg-card: #111a2e;
-  --bg-card-elevated: #16223b;
-  --text-primary: #f8fafc;
-  --text-secondary: #cbd5e1;
-  --text-muted: #94a3b8;
-  --border-main: rgba(255, 255, 255, 0.08);
-  --border-glow: rgba(56, 189, 248, 0.25);
-  --glass-bg: rgba(12, 18, 34, 0.82);
-  --glass-border: rgba(255, 255, 255, 0.1);
-  --shadow-card: 0 15px 35px -5px rgba(0, 0, 0, 0.6), 0 0 20px rgba(37, 99, 235, 0.08);
-  --shadow-3d: 0 25px 50px -12px rgba(0, 0, 0, 0.85), 0 0 25px rgba(56, 189, 248, 0.18);
+  color-scheme: dark;
+  --bg-main: #10111b;
+  --bg-surface: #171824;
+  --bg-card: #1b1c2a;
+  --bg-card-elevated: #222334;
+  --text-primary: #f6f5ff;
+  --text-secondary: #d2d0e4;
+  --text-muted: #a09eb5;
+  --border-main: rgba(226, 223, 255, 0.11);
+  --border-glow: rgba(144, 128, 255, 0.28);
+  --glass-bg: #1b1c2a;
+  --glass-border: rgba(226, 223, 255, 0.11);
+  --shadow-card: 0 18px 42px -12px rgba(0, 0, 0, 0.42);
+  --shadow-3d: 0 24px 50px -16px rgba(0, 0, 0, 0.58);
   background-color: var(--bg-main);
   color: var(--text-primary);
 }

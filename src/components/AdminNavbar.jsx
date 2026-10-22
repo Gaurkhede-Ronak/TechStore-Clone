@@ -35,9 +35,9 @@ const ADMIN_NAVBAR_STYLES = `
     --admin-border: #e2e8f0;
     --admin-border-soft: #eef2f7;
 
-    --admin-primary: #2563eb;
-    --admin-primary-2: #4f46e5;
-    --admin-primary-soft: #eef4ff;
+    --admin-primary: #6258d6;
+    --admin-primary-2: #5146c4;
+    --admin-primary-soft: #eeecff;
 
     --admin-success: #16a34a;
     --admin-danger: #dc2626;
@@ -70,9 +70,9 @@ const ADMIN_NAVBAR_STYLES = `
     --admin-border: rgba(255, 255, 255, 0.09);
     --admin-border-soft: rgba(255, 255, 255, 0.06);
 
-    --admin-primary: #3b82f6;
-    --admin-primary-2: #6366f1;
-    --admin-primary-soft: rgba(59, 130, 246, 0.14);
+    --admin-primary: #a59aff;
+    --admin-primary-2: #806ff0;
+    --admin-primary-soft: rgba(165, 154, 255, 0.16);
 
     --admin-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
     --admin-shadow-lg: 0 20px 55px rgba(0, 0, 0, 0.55);

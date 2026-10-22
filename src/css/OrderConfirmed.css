@@ -1,9 +1,7 @@
 /* 1. COLOR PALETTE VARIABLES (LIGHT VS DARK) */
 
 /* DEFAULT: DARK MODE */
-:root,
-[data-theme="dark"],
-.dark {
+.order-page {
   --bg-main: #0b1120;
   --card-bg: rgba(30, 41, 59, 0.7);
   --card-border: rgba(255, 255, 255, 0.12);
@@ -32,9 +30,7 @@
 }
 
 /* LIGHT MODE OVERRIDES - Apple Clean Crystal Light UI */
-[data-theme="light"],
-.light,
-body.light {
+body.light .order-page {
   --bg-main: #f8fafc; /* Crisp Clean Off-White */
   --card-bg: #ffffff; /* Solid/Glass White Card */
   --card-border: #e2e8f0;
