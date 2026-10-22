@@ -16,8 +16,6 @@ import {
   FaShoppingBag,
   FaCheckCircle,
   FaShoppingCart,
-  FaHeart,
-  FaTimes,
 } from "react-icons/fa";
 
 import couponService from "../appwrite/couponService";
@@ -27,10 +25,8 @@ import {
   decreaseQty,
   removeFromCart,
 } from "../redux/slices/cartSlice";
-import { addWishlist } from "../redux/slices/wishlistSlice";
 
 import "../css/Cart.css";
-import { scrollToPageTop } from "../components/ScrollToTop";
 
 const FALLBACK_PRODUCT_IMAGE =
   "https://images.unsplash.com/photo-1526738549149-8e07eca6c147?auto=format&fit=crop&w=400&q=80";
@@ -38,10 +34,6 @@ const FALLBACK_PRODUCT_IMAGE =
 function Cart() {
   const navigate = useNavigate();
   const dispatch = useDispatch();
-
-  useEffect(() => {
-    scrollToPageTop();
-  }, []);
 
   const cartItems = useSelector(
     (state) => state.cart.items
@@ -58,8 +50,6 @@ function Cart() {
   const [gstNumber, setGstNumber] = useState("");
   const [gstApplied, setGstApplied] =
     useState(false);
-  const [deleteModalItem, setDeleteModalItem] =
-    useState(null);
 
   /* LOAD COUPONS FROM APPWRITE */
 
@@ -696,10 +686,13 @@ function Cart() {
 
                     <div className="col-xl-2 col-md-2 col-6 text-end text-md-center">
                       <button
-                        type="button"
                         className="remove-btn"
                         onClick={() =>
-                          setDeleteModalItem(item)
+                          dispatch(
+                            removeFromCart(
+                              item.$id
+                            )
+                          )
                         }
                         title="Remove item"
                       >
@@ -910,7 +903,7 @@ function Cart() {
                   <div className="coupon-applied-alert mt-2 d-flex justify-content-between align-items-center">
 
                     <div>
-                      <span className="coupon-applied-title fw-bold">
+                      <span className="fw-bold">
                         ✓{" "}
                         {
                           appliedCoupon.couponCode
@@ -918,7 +911,7 @@ function Cart() {
                         applied
                       </span>
 
-                      <div className="coupon-applied-sub small">
+                      <div className="small text-light opacity-75">
                         You saved ₹
                         {discount.toLocaleString(
                           "en-IN"
@@ -928,14 +921,11 @@ function Cart() {
 
                     <button
                       type="button"
-                      className="coupon-remove-btn"
+                      className="btn-close btn-close-white small"
                       onClick={
                         removeCoupon
                       }
-                      aria-label="Remove coupon"
-                    >
-                      <FaTimes size={13} />
-                    </button>
+                    />
                   </div>
                 )}
 
@@ -1161,124 +1151,6 @@ function Cart() {
 
         </div>
       </div>
-
-      {/* DELETE / ADD TO WISHLIST MODAL */}
-      {deleteModalItem && (
-        <div
-          className="cart-delete-modal-backdrop"
-          onClick={() => setDeleteModalItem(null)}
-        >
-          <div
-            className="cart-delete-modal-card"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              type="button"
-              className="cart-delete-modal-close"
-              onClick={() => setDeleteModalItem(null)}
-              aria-label="Close"
-            >
-              <FaTimes size={14} />
-            </button>
-
-            <div className="cart-delete-modal-header">
-              <div className="cart-delete-modal-icon">
-                <FaTrash size={20} />
-              </div>
-              <div>
-                <h5 className="fw-bold mb-1">Remove Item from Cart?</h5>
-                <p className="text-muted small mb-0">
-                  Choose whether to delete this item or save it to your wishlist.
-                </p>
-              </div>
-            </div>
-
-            <div className="cart-delete-modal-product">
-              {(() => {
-                const rawImg =
-                  deleteModalItem.thumbnail ||
-                  deleteModalItem.image ||
-                  (Array.isArray(deleteModalItem.images)
-                    ? deleteModalItem.images[0]
-                    : null);
-                const modalImgSrc = rawImg
-                  ? typeof rawImg === "string" &&
-                    (rawImg.startsWith("http://") ||
-                      rawImg.startsWith("https://") ||
-                      rawImg.startsWith("data:"))
-                    ? rawImg
-                    : `https://fra.cloud.appwrite.io/v1/storage/buckets/${
-                        import.meta.env.VITE_APPWRITE_BUCKET_ID
-                      }/files/${rawImg}/view?project=${
-                        import.meta.env.VITE_APPWRITE_PROJECT_ID
-                      }`
-                  : FALLBACK_PRODUCT_IMAGE;
-
-                const itemFinalPrice =
-                  deleteModalItem.price -
-                  (deleteModalItem.price * (deleteModalItem.discount || 0)) /
-                    100;
-
-                return (
-                  <>
-                    <div className="cart-delete-modal-img-box">
-                      <img
-                        src={modalImgSrc}
-                        alt={deleteModalItem.title || "Product"}
-                        onError={(e) => {
-                          e.target.onerror = null;
-                          e.target.src = FALLBACK_PRODUCT_IMAGE;
-                        }}
-                      />
-                    </div>
-                    <div className="min-w-0 flex-grow-1">
-                      <h6 className="fw-bold mb-1 text-truncate">
-                        {deleteModalItem.title ||
-                          deleteModalItem.name ||
-                          "Product"}
-                      </h6>
-                      <div className="fw-bold text-primary">
-                        ₹{itemFinalPrice.toLocaleString("en-IN")}
-                      </div>
-                    </div>
-                  </>
-                );
-              })()}
-            </div>
-
-            <div className="cart-delete-modal-actions">
-              <button
-                type="button"
-                className="cart-modal-btn cart-modal-btn-wishlist"
-                onClick={() => {
-                  const wishlistProduct = { ...deleteModalItem };
-                  delete wishlistProduct.quantity;
-                  dispatch(addWishlist(wishlistProduct));
-                  dispatch(removeFromCart(deleteModalItem.$id));
-                  setDeleteModalItem(null);
-                  toast.success("Added to Wishlist & removed from Cart");
-                }}
-              >
-                <FaHeart size={14} />
-                <span>Add to Wishlist</span>
-              </button>
-
-              <button
-                type="button"
-                className="cart-modal-btn cart-modal-btn-delete"
-                onClick={() => {
-                  dispatch(removeFromCart(deleteModalItem.$id));
-                  setDeleteModalItem(null);
-                  toast.success("Item deleted from Cart");
-                }}
-              >
-                <FaTrash size={13} />
-                <span>Delete</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

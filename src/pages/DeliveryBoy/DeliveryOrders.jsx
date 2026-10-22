@@ -21,12 +21,7 @@ import { toggleTheme } from "../../redux/slices/themeSlice";
 
 import shipmentService from "../../appwrite/shipmentService";
 import orderService from "../../appwrite/orderService";
-import deliveryOtpService from "../../appwrite/deliveryOtpService";
 import returnExchangeService from "../../appwrite/returnExchangeService";
-import {
-    getActiveDeliveryItems,
-    resolveReturnRequestItem,
-} from "../../utils/orderItemHelper";
 
 import "../../css/DeliveryPremiumUI.css";
 
@@ -91,14 +86,9 @@ function DeliveryOrders() {
                 "OUT_FOR_DELIVERY"
             );
 
-            const rawShipmentList = Array.isArray(shipments)
+            const shipmentList = Array.isArray(shipments)
                 ? shipments
                 : shipments?.documents || [];
-
-            const shipmentList =
-                await deliveryOtpService.processOutForDeliveryShipments(
-                    rawShipmentList
-                );
 
             const result = await Promise.all(
                 shipmentList.map(async (shipment) => {
@@ -127,27 +117,11 @@ function DeliveryOrders() {
             const requestList =
                 await returnExchangeService.getDeliveryRequests();
 
-            const rawRequests = Array.isArray(requestList)
-                ? requestList
-                : requestList?.documents || [];
-
-            const enrichedRequests = await Promise.all(
-                rawRequests.map(async (req) => {
-                    try {
-                        if (req?.originalOrderId) {
-                            const reqOrder = await orderService.getOrderSmart(
-                                String(req.originalOrderId)
-                            );
-                            return { ...req, order: reqOrder };
-                        }
-                    } catch {
-                        // ignore
-                    }
-                    return req;
-                })
+            setRequests(
+                Array.isArray(requestList)
+                    ? requestList
+                    : requestList?.documents || []
             );
-
-            setRequests(enrichedRequests);
         } catch (error) {
             console.error("Delivery Orders Error:", error);
 
@@ -457,28 +431,6 @@ function DeliveryOrders() {
                                             </div>
                                         </div>
 
-                                        {(() => {
-                                            const activeItems = getActiveDeliveryItems(
-                                                item?.order
-                                            );
-                                            if (activeItems.length === 0) return null;
-                                            return (
-                                                <div className="delivery-info-row mb-2">
-                                                    <span>
-                                                        Items to Deliver ({activeItems.length})
-                                                    </span>
-                                                    <strong>
-                                                        {activeItems
-                                                            .map(
-                                                                (it) =>
-                                                                    `${it?.title || it?.name || "Product"} (x${it?.quantity || it?.qty || 1})`
-                                                            )
-                                                            .join(", ")}
-                                                    </strong>
-                                                </div>
-                                            );
-                                        })()}
-
                                         <div className="delivery-address-box">
                                             <div className="delivery-address-icon">
                                                 <FaMapMarkerAlt />
@@ -588,35 +540,12 @@ function DeliveryOrders() {
                                                     {request.status || "N/A"}
                                                 </strong>
                                             </div>
-                                            {(() => {
-                                                const rxItem = resolveReturnRequestItem(
-                                                    request,
-                                                    request?.order
-                                                );
-                                                return (
-                                                    <>
-                                                        {rxItem?.itemName && (
-                                                            <div className="delivery-info-row">
-                                                                <span>
-                                                                    {request.type === "RETURN"
-                                                                        ? "Return Item"
-                                                                        : "Exchange Item"}
-                                                                </span>
-                                                                <strong>
-                                                                    {rxItem.itemName} (x
-                                                                    {rxItem.itemQty || 1})
-                                                                </strong>
-                                                            </div>
-                                                        )}
-                                                        {rxItem?.cleanReason && (
-                                                            <div className="delivery-reason-box">
-                                                                <span>Reason</span>
-                                                                <p>{rxItem.cleanReason}</p>
-                                                            </div>
-                                                        )}
-                                                    </>
-                                                );
-                                            })()}
+                                            {request.reason && (
+                                                <div className="delivery-reason-box">
+                                                    <span>Reason</span>
+                                                    <p>{request.reason}</p>
+                                                </div>
+                                            )}
                                         </div>
 
                                         <button

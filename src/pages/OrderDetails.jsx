@@ -1,8 +1,6 @@
-import { scrollToPageTop } from "../components/ScrollToTop";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
-import client from "../appwrite/config";
 import orderService from "../appwrite/orderService";
 import shipmentHelper from "../appwrite/shipmentHelper";
 import reviewService from "../appwrite/reviewService";
@@ -12,11 +10,6 @@ import shipmentEventService from "../appwrite/shipmentEventService";
 import warehouseService from "../appwrite/warehouseService";
 import deliveryOtpService from "../appwrite/deliveryOtpService";
 import returnExchangeService from "../appwrite/returnExchangeService";
-import walletService from "../appwrite/walletService";
-import {
-  doesRequestMatchItem,
-  extractCleanReason,
-} from "../utils/orderItemHelper";
 
 import {
   FaArrowLeft,
@@ -26,6 +19,7 @@ import {
   FaExchangeAlt,
   FaSpinner,
   FaMapMarkerAlt,
+  FaBoxOpen,
   FaTimes,
   FaCheckCircle,
   FaRoute,
@@ -37,8 +31,6 @@ import {
   FaMobileAlt,
   FaInfoCircle,
   FaExclamationTriangle,
-  FaCopy,
-  FaLock,
 } from "react-icons/fa";
 
 import toast from "react-hot-toast";
@@ -225,9 +217,6 @@ const formatMoney = (value) =>
 
 function OrderDetails() {
   const navigate = useNavigate();
-  useEffect(() => {
-    scrollToPageTop();
-  }, []);
   const location = useLocation();
 
   /* ORDER */
@@ -277,20 +266,10 @@ function OrderDetails() {
   const [returnRequestLoading, setReturnRequestLoading] =
     useState(false);
 
-  /* CANCEL & TIMELINE ANIMATION STATES */
+  /* CANCEL */
 
   const [cancelPhase, setCancelPhase] =
     useState("none");
-  const [cancelStepAnim, setCancelStepAnim] =
-    useState(0);
-  const [cancelReturnPhase, setCancelReturnPhase] =
-    useState("none");
-  const [rxCancelStepAnim, setRxCancelStepAnim] =
-    useState(0);
-  const [orderAnimIndex, setOrderAnimIndex] =
-    useState(0);
-  const [rxAnimIndex, setRxAnimIndex] =
-    useState(0);
 
   /* DELIVERY OTP */
 
@@ -330,12 +309,6 @@ function OrderDetails() {
     useState(false);
 
   const [reviewSubmitted, setReviewSubmitted] =
-    useState(false);
-
-  const [existingProductReview, setExistingProductReview] =
-    useState(null);
-
-  const [isEditingReview, setIsEditingReview] =
     useState(false);
 
   const [cancelReturnLoading, setCancelReturnLoading] =
@@ -533,38 +506,7 @@ function OrderDetails() {
     return [];
   }, [order]);
 
-  const [selectedProductOverride, setSelectedProductOverride] = useState(null);
-
-  useEffect(() => {
-    setSelectedProductOverride(null);
-  }, [location.search]);
-
   const { activeProduct, activeProductIndex } = useMemo(() => {
-    if (selectedProductOverride && rawOrderItems.length > 0) {
-      const overrideId = String(
-        selectedProductOverride?.productId ||
-          selectedProductOverride?.id ||
-          selectedProductOverride?.$id ||
-          ""
-      ).trim();
-      const overrideTitle = String(
-        selectedProductOverride?.title || selectedProductOverride?.name || ""
-      ).trim();
-      const overrideIdx = rawOrderItems.findIndex(
-        (it) =>
-          it === selectedProductOverride ||
-          (overrideId &&
-            String(it?.productId || it?.id || it?.$id || "").trim() ===
-              overrideId) ||
-          (overrideTitle &&
-            String(it?.title || it?.name || "").trim() === overrideTitle)
-      );
-      return {
-        activeProduct:
-          overrideIdx >= 0 ? rawOrderItems[overrideIdx] : selectedProductOverride,
-        activeProductIndex: overrideIdx >= 0 ? overrideIdx : 0,
-      };
-    }
     const params = new URLSearchParams(location.search);
     const paramIdx = params.get("itemIdx");
     const paramItemId = params.get("itemId");
@@ -630,7 +572,7 @@ function OrderDetails() {
       activeProduct: stateSingle || {},
       activeProductIndex: 0,
     };
-  }, [selectedProductOverride, location.search, location.state, order?.singleProduct, rawOrderItems]);
+  }, [location.search, location.state, order?.singleProduct, rawOrderItems]);
 
   const otherProducts =
     rawOrderItems.filter(
@@ -827,7 +769,7 @@ function OrderDetails() {
 
           setTrackingError(
             error?.message ||
-              "Unable to load live shipment tracking."
+              "Unable to load shipment tracking from Appwrite."
           );
 
           return null;
@@ -856,7 +798,7 @@ function OrderDetails() {
   /* RETURN / EXCHANGE */
 
   const loadReturnExchangeRequests =
-    useCallback(async (showLoader = false) => {
+    useCallback(async () => {
       const orderReference =
         getOrderReference(order);
 
@@ -866,9 +808,9 @@ function OrderDetails() {
       }
 
       try {
-        if (showLoader) {
-          setReturnRequestLoading(true);
-        }
+        setReturnRequestLoading(
+          true
+        );
 
         const response =
           await returnExchangeService.getRequestsByOrderId(
@@ -913,134 +855,50 @@ function OrderDetails() {
 
         setReturnRequests([]);
       } finally {
-        if (showLoader) {
-          setReturnRequestLoading(false);
-        }
+        setReturnRequestLoading(
+          false
+        );
       }
     }, [order]);
 
   useEffect(() => {
-    const orderReference = getOrderReference(order);
-    if (!orderReference) return;
+    if (!order) return;
 
-    loadReturnExchangeRequests(true);
+    loadReturnExchangeRequests();
 
-    const silentRefreshAll = async () => {
-      try {
-        await Promise.allSettled([
-          loadShipmentFromAppwrite(false),
-          loadReturnExchangeRequests(false),
-          orderService
-            .getOrderSmart(String(orderReference))
-            .then((freshOrder) => {
-              if (freshOrder) {
-                setOrder((prev) => {
-                  if (!prev) return freshOrder;
-                  const prevSig = JSON.stringify({
-                    s: prev.status,
-                    ps: prev.paymentStatus,
-                    u: prev.$updatedAt,
-                    it: prev.items,
-                  });
-                  const nextSig = JSON.stringify({
-                    s: freshOrder.status,
-                    ps: freshOrder.paymentStatus,
-                    u: freshOrder.$updatedAt,
-                    it: freshOrder.items,
-                  });
-                  return prevSig === nextSig ? prev : freshOrder;
-                });
-              }
-            })
-            .catch(() => {}),
-        ]);
-      } catch {
-        // Ignore background refresh errors
-      }
-    };
+    const timer =
+      setInterval(() => {
+        loadReturnExchangeRequests();
+      }, 10000);
 
-    const pollTimer = setInterval(silentRefreshAll, 3000);
-
-    let unsubscribe = null;
-    try {
-      unsubscribe = client.subscribe(["documents"], (event) => {
-        const payload = event?.payload;
-        if (!payload) return;
-        const payloadOrderRef = String(
-          payload.orderId || payload.orderID || payload.$id || ""
-        ).trim();
-        if (
-          !payloadOrderRef ||
-          payloadOrderRef === String(orderReference) ||
-          payload.shipmentId
-        ) {
-          silentRefreshAll();
-        }
-      });
-    } catch {
-      // Realtime optional fallback
-    }
-
-    return () => {
-      clearInterval(pollTimer);
-      if (typeof unsubscribe === "function") {
-        try {
-          unsubscribe();
-        } catch {
-          // ignore cleanup error
-        }
-      }
-    };
+    return () =>
+      clearInterval(timer);
   }, [
     order,
-    loadShipmentFromAppwrite,
     loadReturnExchangeRequests,
   ]);
 
   const selectedReturnIdParam = useMemo(() => {
     const params = new URLSearchParams(location.search);
-    const paramReturnId = params.get("returnId");
-    if (paramReturnId) {
-      return String(paramReturnId).trim();
-    }
-    if (location.state?.viewMode === "ORDER") {
-      return "";
-    }
-    return String(
+    return (
+      params.get("returnId") ||
       location.state?.returnRequest?.referenceId ||
-        location.state?.returnRequest?.$id ||
-        ""
-    ).trim();
+      ""
+    );
   }, [location.search, location.state]);
 
   const focusedReturnRequest = useMemo(() => {
-    // STRICT VIEW SEPARATION:
-    // If the user clicked on the Delivered / Order card (no returnId), always return null
-    // so only the Delivered Order Details page opens.
-    // Only open Return / Exchange details when a specific returnId was clicked.
-    if (!selectedReturnIdParam) {
-      return null;
+    if (selectedReturnIdParam) {
+      const matched = returnRequests.find(
+        (r) =>
+          String(r?.referenceId || "") === String(selectedReturnIdParam) ||
+          String(r?.$id || "") === String(selectedReturnIdParam)
+      );
+      if (matched) return matched;
     }
-
-    const matched = returnRequests.find(
-      (r) =>
-        String(r?.referenceId || "") === String(selectedReturnIdParam) ||
-        String(r?.$id || "") === String(selectedReturnIdParam)
-    );
-    if (matched) {
-      return matched;
-    }
-
-    if (
-      location.state?.returnRequest &&
-      (String(location.state.returnRequest?.referenceId || "") ===
-        String(selectedReturnIdParam) ||
-        String(location.state.returnRequest?.$id || "") ===
-          String(selectedReturnIdParam))
-    ) {
+    if (location.state?.returnRequest) {
       return location.state.returnRequest;
     }
-
     return null;
   }, [selectedReturnIdParam, returnRequests, location.state]);
 
@@ -1048,12 +906,8 @@ function OrderDetails() {
     String(focusedReturnRequest?.type || "").toUpperCase() === "EXCHANGE";
   const isFocusedReturn =
     String(focusedReturnRequest?.type || "").toUpperCase() === "RETURN";
-  const isCancellingReturnNow =
-    cancelReturnPhase === "submitting" ||
-    cancelReturnPhase === "cancelling";
   const isFocusedReqCancelled =
-    String(focusedReturnRequest?.status || "").toUpperCase() === "CANCELLED" ||
-    cancelReturnPhase === "cancelled";
+    String(focusedReturnRequest?.status || "").toUpperCase() === "CANCELLED";
 
 
 
@@ -1069,30 +923,14 @@ function OrderDetails() {
       order?.status
     );
 
-  const isItemCancelled =
-    Boolean(activeProduct?.isCancelled) ||
-    normalizeStatus(activeProduct?.status) === "CANCELLED";
-
-  const isCancellingNow =
-    cancelPhase === "submitting" ||
-    cancelPhase === "cancelling";
-
-  const isCancelled =
-    isItemCancelled ||
-    orderDatabaseStatus === "CANCELLED" ||
-    shipmentStatus === "CANCELLED" ||
-    cancelPhase === "cancelled";
-
   /*
     IMPORTANT:
-    If the order or selected item is cancelled, CANCELLED status takes priority.
-    Otherwise Shipment status wins over database status.
+    Shipment status ALWAYS wins.
   */
-  const currentStatus = isCancelled
-    ? "CANCELLED"
-    : shipmentStatus ||
-      orderDatabaseStatus ||
-      "PLACED";
+  const currentStatus =
+    shipmentStatus ||
+    orderDatabaseStatus ||
+    "PLACED";
 
   const [showFeeInfo, setShowFeeInfo] = useState(false);
 
@@ -1104,100 +942,44 @@ function OrderDetails() {
     "Confirmed";
 
   const isDelivered =
-    !isCancelled &&
-    !isCancellingNow &&
-    currentStatus === "DELIVERED";
+    currentStatus ===
+    "DELIVERED";
 
-  const isDeliveryUnsuccessful =
-    !isCancelled &&
-    !isCancellingNow &&
-    [
-      "EXCEPTION",
-      "DELIVERY_UNSUCCESSFUL",
-      "UNDELIVERED",
-      "FAILED",
-      "RTO",
-    ].includes(currentStatus);
+  const isItemCancelled =
+    Boolean(activeProduct?.isCancelled) ||
+    normalizeStatus(activeProduct?.status) === "CANCELLED";
+
+  const isCancelled =
+    isItemCancelled ||
+    currentStatus === "CANCELLED" ||
+    cancelPhase === "cancelled";
+
+  const isDeliveryUnsuccessful = [
+    "EXCEPTION",
+    "DELIVERY_UNSUCCESSFUL",
+    "UNDELIVERED",
+    "FAILED",
+    "RTO",
+  ].includes(currentStatus);
 
   const isOutForDelivery =
-    !isCancelled &&
-    !isCancellingNow &&
-    currentStatus === "OUT_FOR_DELIVERY";
+    currentStatus ===
+    "OUT_FOR_DELIVERY";
 
-  const isDispatchedStage =
-    !isCancelled &&
-    !isCancellingNow &&
-    [
-      "DISPATCHED",
-      "IN_TRANSIT",
-      "REACHED_HUB",
-      "OUT_FOR_DELIVERY",
-    ].includes(currentStatus);
-
-  /* Animated step-by-step progression (Confirmed -> Cancellation requested -> Cancelled) */
-  useEffect(() => {
-    if (isCancellingNow) return;
-    if (!isCancelled) {
-      setCancelStepAnim(0);
-      return;
-    }
-    if (cancelPhase === "cancelled") {
-      setCancelStepAnim(3);
-      return;
-    }
-    setCancelStepAnim(1);
-    const t1 = setTimeout(() => {
-      setCancelStepAnim(2);
-    }, 480);
-    const t2 = setTimeout(() => {
-      setCancelStepAnim(3);
-    }, 1050);
-    return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
-    };
-  }, [isCancelled, isCancellingNow, cancelPhase, activeProductIndex]);
-
-  /* Animated step-by-step progression for Return / Exchange cancellation */
-  useEffect(() => {
-    if (isCancellingReturnNow) return;
-    if (!isFocusedReqCancelled) {
-      setRxCancelStepAnim(0);
-      setCancelReturnPhase("none");
-      return;
-    }
-    if (cancelReturnPhase === "cancelled") {
-      setRxCancelStepAnim(3);
-      return;
-    }
-    setRxCancelStepAnim(1);
-    const t1 = setTimeout(() => {
-      setRxCancelStepAnim(2);
-    }, 480);
-    const t2 = setTimeout(() => {
-      setRxCancelStepAnim(3);
-    }, 1050);
-    return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
-    };
-  }, [
-    isFocusedReqCancelled,
-    isCancellingReturnNow,
-    cancelReturnPhase,
-    focusedReturnRequest?.$id,
-    activeProductIndex,
-  ]);
+  const isDispatchedStage = [
+    "DISPATCHED",
+    "IN_TRANSIT",
+    "REACHED_HUB",
+    "OUT_FOR_DELIVERY",
+  ].includes(currentStatus);
 
   const existingActiveRequest = useMemo(() => {
     return (
       returnRequests.find(
-        (r) =>
-          String(r?.status || "").trim().toUpperCase() !== "CANCELLED" &&
-          doesRequestMatchItem(r, activeProduct, activeProductIndex, order)
+        (r) => String(r?.status || "").trim().toUpperCase() !== "CANCELLED"
       ) || null
     );
-  }, [returnRequests, activeProduct, activeProductIndex, order]);
+  }, [returnRequests]);
 
   const hasExistingReturnOrExchange = Boolean(existingActiveRequest);
 
@@ -1205,7 +987,6 @@ function OrderDetails() {
   const canCancel =
     !isDelivered &&
     !isCancelled &&
-    !isCancellingNow &&
     !isDeliveryUnsuccessful &&
     (currentStatus === "PLACED" ||
       currentStatus === "ORDER_PLACED" ||
@@ -1215,25 +996,13 @@ function OrderDetails() {
 
   const getProductId = (
     product
-  ) => {
-    const rawId =
+  ) =>
+    String(
       product?.productId ||
-      product?.$id ||
-      product?.id ||
-      product?.productID ||
-      "";
-    if (String(rawId).trim()) {
-      return String(rawId).trim();
-    }
-    const fallbackTitle = String(
-      product?.title || product?.name || product?.productName || ""
-    )
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-|-$/g, "");
-    return fallbackTitle || String(order?.orderId || order?.$id || "product");
-  };
+        product?.$id ||
+        product?.id ||
+        ""
+    );
 
   const getProductName = (
     product
@@ -1499,6 +1268,9 @@ function OrderDetails() {
   const isPureCOD =
     isCOD && walletPaidVal <= 0;
 
+  const isCodWithWallet =
+    isCOD && walletPaidVal > 0;
+
   const storedOnlinePaid =
     Number(
       order?.onlinePaid ??
@@ -1582,9 +1354,9 @@ function OrderDetails() {
               : externalPaymentAmount)
         )
       : hasExplicitPaymentStatus
-      ? walletPaidVal
+      ? 0
       : Math.max(
-          walletPaidVal,
+          0,
           Number(
             order?.totalPaid ??
               (
@@ -1663,34 +1435,48 @@ function OrderDetails() {
     activeItemSellingPrice *
     itemQty;
 
-  const isEntireOrderCancelled =
-    normalizeStatus(order?.status) === "CANCELLED" ||
-    normalizeStatus(shipment?.status) === "CANCELLED" ||
-    (rawOrderItems.length > 0 &&
-      rawOrderItems.every(
-        (it) =>
-          Boolean(it?.isCancelled) ||
-          normalizeStatus(it?.status) === "CANCELLED"
-      ));
+  let actualRefundAmount;
 
-  const refundToWallet = isPureCOD
-    ? 0
-    : rawOrderItems.length <= 1 || isEntireOrderCancelled
-    ? walletPaidVal > 0
-      ? walletPaidVal
-      : 0
-    : walletPaidVal > 0
-    ? Math.min(walletPaidVal, itemTotalPrice)
-    : 0;
+  if (isPureCOD) {
+    actualRefundAmount = 0;
+  } else {
+    let baseRefund =
+      itemTotalPrice;
+
+    if (
+      rawOrderItems.length ===
+      1
+    ) {
+      baseRefund = Math.max(
+        0,
+        totalPaid -
+          platformFeeVal
+      );
+    }
+
+    actualRefundAmount =
+      isCodWithWallet
+        ? Math.min(
+            walletPaidVal,
+            baseRefund
+          )
+        : baseRefund;
+  }
+
+  const refundToWallet =
+    walletPaidVal > 0
+      ? Math.min(
+          walletPaidVal,
+          actualRefundAmount
+        )
+      : 0;
 
   const refundToOnline =
-    isPureCOD || isCOD
-      ? 0
-      : rawOrderItems.length <= 1 || isEntireOrderCancelled
-      ? Math.max(0, totalPaid - walletPaidVal - platformFeeVal)
-      : Math.max(0, itemTotalPrice - refundToWallet);
-
-  const actualRefundAmount = refundToWallet + refundToOnline;
+    Math.max(
+      0,
+      actualRefundAmount -
+        refundToWallet
+    );
 
   /* APPWRITE TRACKING MILESTONES — Built in the exact Shipment Progress UI style (Image 2) */
 
@@ -1905,7 +1691,6 @@ function OrderDetails() {
           0
       );
       const isReturn = String(req?.type || "").toUpperCase() === "RETURN";
-      const cleanReason = extractCleanReason(req?.reason || "");
 
       const reqRawDate =
         req?.createdAt ||
@@ -1931,9 +1716,7 @@ function OrderDetails() {
             label: isReturn ? "Return Created" : "Exchange Created",
             description: `Your ${
               isReturn ? "return" : "exchange"
-            } request (${req?.referenceId || "Request"}) was registered.${
-              cleanReason ? ` Reason: ${cleanReason}` : ""
-            }`,
+            } request (${req?.referenceId || "Request"}) was registered.`,
             date: reqRawDate,
             isCompleted: true,
             isCurrent: false,
@@ -1941,13 +1724,9 @@ function OrderDetails() {
           {
             key: "REQ_CANCELLED",
             label: isReturn ? "Return Cancelled" : "Exchange Cancelled",
-            description: isReturn
-              ? `Your return request (${
-                  req?.referenceId || "Request"
-                }) was cancelled. Since the product remains delivered to you, no refund is applicable.`
-              : `Your exchange request (${
-                  req?.referenceId || "Request"
-                }) was cancelled. No replacement pickup or delivery will occur.`,
+            description: `Your ${
+              isReturn ? "return" : "exchange"
+            } request has been cancelled.`,
             date: reqUpdatedRawDate,
             isCompleted: false,
             isCurrent: false,
@@ -1956,7 +1735,7 @@ function OrderDetails() {
         ];
       }
 
-      /* EXCHANGE TIMELINE: 1. Exchange Created -> 2. Exchange Accepted -> 3. Replacement Confirmed -> 4. Replacement Packed -> 5. Replacement Dispatched -> 6. Out for Exchange -> 7. Exchange Complete */
+      /* EXCHANGE TIMELINE: — 1. Exchange Created — 2. Exchange Accepted — 3. Confirmed — 4. Packed — 5. Dispatched — 6. Out for Exchange — 7. Exchange Complete */
       if (!isReturn) {
         const exchangeStageMap = {
           REQUESTED: 0,
@@ -1984,7 +1763,7 @@ function OrderDetails() {
             description: `Your exchange request (${
               req?.referenceId || "Request"
             }) has been placed successfully.${
-              cleanReason ? ` Reason: ${cleanReason}` : ""
+              req?.reason ? ` Reason: ${req.reason}` : ""
             }`,
           },
           {
@@ -1997,23 +1776,23 @@ function OrderDetails() {
           },
           {
             key: "EX_CONFIRMED",
-            label: "Replacement Confirmed",
+            label: "Confirmed",
             description:
               stageIdx >= 2
-                ? "Your replacement product order has been confirmed at ₹0 extra cost."
+                ? "Your replacement product order has been confirmed."
                 : "Replacement order will be confirmed after approval.",
           },
           {
             key: "EX_PACKED",
-            label: "Replacement Packed",
+            label: "Packed",
             description:
               stageIdx >= 3
-                ? "Your replacement unit has been packed and quality-checked at the warehouse."
+                ? "Your replacement product has been packed and is ready for dispatch."
                 : "Replacement product is being prepared for packing.",
           },
           {
             key: "EX_DISPATCHED",
-            label: "Replacement Dispatched",
+            label: "Dispatched",
             description:
               stageIdx >= 4
                 ? "Your replacement product has been dispatched from the warehouse."
@@ -2024,14 +1803,14 @@ function OrderDetails() {
             label: "Out for Exchange",
             description:
               stageIdx >= 5
-                ? "Delivery executive is out for doorstep exchange (old unit pickup + new replacement handover)."
-                : "Delivery partner will be assigned for doorstep exchange.",
+                ? "Replacement product is out for exchange with our delivery partner."
+                : "Delivery partner will be assigned for exchange.",
           },
           {
             key: "EX_COMPLETE",
             label: "Exchange Complete",
             description: isAllExchangeDone
-              ? "Your old item was picked up and your new replacement product has been delivered."
+              ? "Your exchange has been completed successfully."
               : `Expected completion by ${formatDate(expectedCompleteDate)}.`,
           },
         ];
@@ -2057,100 +1836,87 @@ function OrderDetails() {
         });
       }
 
-      /* RETURN TIMELINE: 1. Return Created -> 2. Return Accepted -> 3. Out for Pickup -> 4. Picked Up & Refund Initiated -> 5. Return Complete */
-      const returnStageMap = {
-        REQUESTED: 0,
-        ACCEPTED: 1,
-        CONFIRMED: 1,
-        APPROVED: 1,
-        PICKUP_ASSIGNED: 2,
-        PICKED_UP: 3,
-        REFUND_INITIATED: 3,
-        REFUND_COMPLETED: 4,
-        REFUNDED: 4,
-        COMPLETED: 4,
-      };
+      /* RETURN TIMELINE: — 1. Return Created — 2. Return Accepted — 3. Out for Pickup / Refund Initiated — 4. Return Complete */
+      const isStep2Done = [
+        "ACCEPTED",
+        "CONFIRMED",
+        "APPROVED",
+        "PICKUP_ASSIGNED",
+        "PICKED_UP",
+        "REFUND_INITIATED",
+        "REFUND_COMPLETED",
+        "REFUNDED",
+        "COMPLETED",
+      ].includes(requestStatus);
 
-      let returnStageIdx = returnStageMap[requestStatus] ?? 0;
-      if (refundStatus === "COMPLETED" || refundStatus === "REFUNDED") {
-        returnStageIdx = 4;
-      } else if (
-        (refundStatus === "INITIATED" || refundStatus === "REFUND_INITIATED") &&
-        returnStageIdx < 3
-      ) {
-        returnStageIdx = 3;
-      }
+      const isStep3Done =
+        refundStatus === "INITIATED" ||
+        refundStatus === "COMPLETED" ||
+        [
+          "PICKUP_ASSIGNED",
+          "PICKED_UP",
+          "REFUND_INITIATED",
+          "REFUND_COMPLETED",
+          "REFUNDED",
+          "COMPLETED",
+        ].includes(requestStatus);
 
-      const isAllReturnDone = returnStageIdx >= 4;
+      const isStep4Done =
+        refundStatus === "COMPLETED" ||
+        ["REFUND_COMPLETED", "REFUNDED", "COMPLETED"].includes(requestStatus);
 
-      const retDefinitions = [
+      return [
         {
           key: "REQ_CREATED",
           label: "Return Created",
           description: `Your return request (${
             req?.referenceId || "Request"
           }) has been placed successfully.${
-            cleanReason ? ` Reason: ${cleanReason}` : ""
+            req?.reason ? ` Reason: ${req.reason}` : ""
           }`,
+          date: reqRawDate,
+          isCompleted: true,
+          isCurrent: !isStep2Done,
         },
         {
           key: "REQ_ACCEPTED",
           label: "Return Accepted",
-          description:
-            returnStageIdx >= 1
-              ? "Your return request has been approved by TechStore. Doorstep pickup will be scheduled."
-              : "Awaiting approval and pickup confirmation from TechStore.",
+          description: isStep2Done
+            ? "Your return request has been approved by TechStore."
+            : "Awaiting approval and pickup confirmation from TechStore.",
+          date: isStep2Done ? reqUpdatedRawDate : "",
+          isCompleted: isStep2Done,
+          isCurrent: isStep2Done && !isStep3Done,
         },
         {
-          key: "REQ_PICKUP",
-          label: "Out for Pickup",
+          key: "REQ_PROCESS",
+          label:
+            requestStatus === "PICKUP_ASSIGNED"
+              ? "Out for Pickup"
+              : "Refund Initiated",
           description:
-            returnStageIdx >= 2
-              ? "Our courier partner has been assigned and is out to pick up your return item."
-              : "Courier partner will be assigned for doorstep pickup.",
-        },
-        {
-          key: "REQ_REFUND_INIT",
-          label: "Picked Up & Refund Initiated",
-          description:
-            returnStageIdx >= 3
-              ? refundAmount > 0
-                ? `Return item picked up & verified. Refund of ₹${formatMoney(
-                    refundAmount
-                  )} has been initiated to your payment mode.`
-                : "Return item picked up & verified. Refund has been initiated."
-              : "Refund will be initiated once the item is picked up and verified.",
+            requestStatus === "PICKUP_ASSIGNED"
+              ? "Our delivery partner is out to pick up your return item."
+              : refundAmount > 0
+              ? `Refund of ₹${formatMoney(
+                  refundAmount
+                )} initiated to original payment mode (credited in 7-10 business days).`
+              : "Refund will be initiated after pickup verification.",
+          date: isStep3Done ? reqUpdatedRawDate : "",
+          isCompleted: isStep3Done,
+          isCurrent: isStep3Done && !isStep4Done,
         },
         {
           key: "REQ_COMPLETE",
           label: "Return Complete",
-          description: isAllReturnDone
-            ? `Your return and refund${
-                refundAmount > 0 ? ` of ₹${formatMoney(refundAmount)}` : ""
-              } has been completed successfully.`
+          description: isStep4Done
+            ? "Your return and refund has been completed successfully."
             : `Expected completion by ${formatDate(expectedCompleteDate)}.`,
+          date: isStep4Done ? expectedCompleteDate : "",
+          isCompleted: isStep4Done,
+          isCurrent: false,
         },
       ];
-
-      return retDefinitions.map((def, idx) => {
-        const isCompleted = returnStageIdx >= idx;
-        const isCurrent = returnStageIdx === idx && !isAllReturnDone;
-        const stepDate =
-          idx === 0
-            ? reqRawDate
-            : isCompleted
-            ? idx === 4
-              ? expectedCompleteDate
-              : reqUpdatedRawDate
-            : "";
-
-        return {
-          ...def,
-          date: stepDate,
-          isCompleted,
-          isCurrent,
-        };
-      });
     },
     [
       actualRefundAmount,
@@ -2158,85 +1924,6 @@ function OrderDetails() {
       order?.$createdAt,
     ]
   );
-
-  /* SEQUENTIAL STEP-BY-STEP ANIMATION FOR ORDER PLACED -> DELIVERED */
-  const targetOrderStageIndex = useMemo(() => {
-    let lastCompleted = 0;
-    trackingMilestones.forEach((step, idx) => {
-      if (step.isCompleted || step.isUnsuccessful) {
-        lastCompleted = idx;
-      }
-    });
-    return lastCompleted;
-  }, [trackingMilestones]);
-
-  useEffect(() => {
-    setOrderAnimIndex(0);
-  }, [order?.$id, order?.orderId, activeProductIndex]);
-
-  useEffect(() => {
-    if (shipmentLoading && !shipment) return;
-    if (orderAnimIndex < targetOrderStageIndex) {
-      const timer = setTimeout(() => {
-        setOrderAnimIndex((prev) =>
-          Math.min(prev + 1, targetOrderStageIndex)
-        );
-      }, 420);
-      return () => clearTimeout(timer);
-    }
-    if (orderAnimIndex > targetOrderStageIndex) {
-      setOrderAnimIndex(targetOrderStageIndex);
-    }
-  }, [orderAnimIndex, targetOrderStageIndex, shipmentLoading, shipment]);
-
-  /* SEQUENTIAL STEP-BY-STEP ANIMATION FOR RETURN & EXCHANGE */
-  const allFocusedRxSteps = useMemo(
-    () => buildReturnExchangeSteps(focusedReturnRequest),
-    [buildReturnExchangeSteps, focusedReturnRequest]
-  );
-
-  const targetRxStageIndex = useMemo(() => {
-    let lastIdx = 0;
-    allFocusedRxSteps.forEach((s, idx) => {
-      if (s.isCompleted || s.isCancelledStep) {
-        lastIdx = idx;
-      }
-    });
-    return lastIdx;
-  }, [allFocusedRxSteps]);
-
-  useEffect(() => {
-    setRxAnimIndex(0);
-  }, [
-    focusedReturnRequest?.$id,
-    focusedReturnRequest?.referenceId,
-    activeProductIndex,
-  ]);
-
-  useEffect(() => {
-    if (
-      !focusedReturnRequest ||
-      isFocusedReqCancelled ||
-      isCancellingReturnNow
-    ) {
-      return;
-    }
-    if (rxAnimIndex < targetRxStageIndex) {
-      const timer = setTimeout(() => {
-        setRxAnimIndex((prev) => Math.min(prev + 1, targetRxStageIndex));
-      }, 420);
-      return () => clearTimeout(timer);
-    }
-    if (rxAnimIndex > targetRxStageIndex) {
-      setRxAnimIndex(targetRxStageIndex);
-    }
-  }, [
-    rxAnimIndex,
-    targetRxStageIndex,
-    focusedReturnRequest,
-    isFocusedReqCancelled,
-    isCancellingReturnNow,
-  ]);
 
   const scrollToPaymentBreakup = () => {
     const el = document.getElementById("order-payment-section");
@@ -2362,113 +2049,56 @@ function OrderDetails() {
       }
     };
 
-  /* OTP — NEVER EXPIRES UNTIL DELIVERED */
+  /* OTP TIMER */
 
   useEffect(() => {
-    let cancelled = false;
+    if (!otpExpiresAt) {
+      setOtpTimeLeft(0);
+      return;
+    }
 
-    const syncActiveOtp = async () => {
-      if (
-        !shipment?.$id ||
-        currentStatus !== "OUT_FOR_DELIVERY" ||
-        isDelivered ||
-        isCancelled
-      ) {
-        setDeliveryOtp("");
-        setShowOtp(false);
-        setOtpExpiresAt(null);
-        setOtpTimeLeft(0);
-        return;
-      }
+    const calculateOtpTime =
+      () => {
+        const expiry =
+          new Date(
+            otpExpiresAt
+          ).getTime();
 
-      try {
-        const genResult = await deliveryOtpService.generateOtp({
-          shipmentId: String(shipment.$id),
-          orderId: String(
-            shipment.orderId || order?.orderId || order?.$id || ""
-          ),
-          userId: String(
-            shipment.userId || order?.userId || currentUser?.$id || ""
-          ),
-          trackingId: String(shipment.trackingId || ""),
-          shipmentDoc: shipment,
-          orderDoc: order,
-        });
+        const remaining =
+          Math.max(
+            0,
+            Math.floor(
+              (
+                expiry -
+                Date.now()
+              ) / 1000
+            )
+          );
 
-        if (genResult?.autoCancelled) {
-          if (!cancelled) {
-            setDeliveryOtp("");
-            setShowOtp(false);
-            loadShipmentFromAppwrite(false);
-          }
-          return;
+        setOtpTimeLeft(
+          remaining
+        );
+
+        if (remaining <= 0) {
+          setDeliveryOtp("");
+          setShowOtp(false);
+          setOtpExpiresAt(null);
         }
+      };
 
-        const code = String(
-          genResult?.otp || genResult?.otpCode || ""
-        ).trim();
+    calculateOtpTime();
 
-        if (!cancelled && code) {
-          setDeliveryOtp(code);
-          setOtpExpiresAt(genResult?.expiresAt || null);
-          setShowOtp(true);
-          setOtpTimeLeft(999999);
-        }
-      } catch (err) {
-        console.warn("Active OTP load warning:", err);
-      }
-    };
+    const timer =
+      setInterval(
+        calculateOtpTime,
+        1000
+      );
 
-    syncActiveOtp();
+    return () =>
+      clearInterval(timer);
+  }, [otpExpiresAt]);
 
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    shipment?.$id,
-    shipment?.orderId,
-    shipment?.userId,
-    shipment?.trackingId,
-    order?.orderId,
-    order?.$id,
-    order?.userId,
-    currentUser?.$id,
-    currentStatus,
-    isDelivered,
-    isCancelled,
-    otpExpiresAt,
-  ]);
-
-  /* LOAD EXISTING USER REVIEW FOR ACTIVE PRODUCT */
-  useEffect(() => {
-    let cancelled = false;
-
-    const checkUserReview = async () => {
-      const uid = String(currentUser?.$id || "").trim();
-      const pid = getProductId(activeProduct);
-      if (!uid || !pid || !isDelivered) {
-        if (!cancelled) setExistingProductReview(null);
-        return;
-      }
-      try {
-        const found = await reviewService.getUserReviewForProduct(uid, pid);
-        if (!cancelled) {
-          setExistingProductReview(found || null);
-        }
-      } catch {
-        if (!cancelled) setExistingProductReview(null);
-      }
-    };
-
-    checkUserReview();
-
-    return () => {
-      cancelled = true;
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentUser?.$id, activeProduct, isDelivered]);
-
+  // eslint-disable-next-line no-unused-vars
   const handleCopyOtp =
     async () => {
       if (!deliveryOtp) return;
@@ -2522,28 +2152,11 @@ function OrderDetails() {
         activeProduct
       );
 
-      if (existingProductReview) {
-        setReviewRating(Number(existingProductReview.rating || 5));
-        setReviewText(String(existingProductReview.review || ""));
-        setIsEditingReview(false);
-      } else {
-        setReviewRating(5);
-        setReviewText("");
-        setIsEditingReview(true);
-      }
-
+      setReviewRating(5);
+      setReviewText("");
       setReviewSubmitted(false);
       setReviewModalOpen(true);
     };
-
-  useEffect(() => {
-    if (!reviewModalOpen) return undefined;
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prevOverflow || "";
-    };
-  }, [reviewModalOpen]);
 
   const closeReviewModal =
     () => {
@@ -2553,7 +2166,8 @@ function OrderDetails() {
 
       setReviewModalOpen(false);
       setReviewProduct(null);
-      setIsEditingReview(false);
+      setReviewRating(5);
+      setReviewText("");
       setReviewSubmitted(false);
     };
 
@@ -2602,72 +2216,61 @@ function OrderDetails() {
           true
         );
 
-        let savedReview = null;
+        await reviewService.createReview(
+          {
+            productId:
+              getProductId(
+                reviewProduct
+              ),
 
-        if (existingProductReview?.$id) {
-          toast.error("Approved reviews are locked and cannot be edited.");
-          setIsEditingReview(false);
-          setReviewSubmitting(false);
-          return;
-        } else {
-          savedReview = await reviewService.createReview(
-            {
-              productId:
-                getProductId(
-                  reviewProduct
-                ),
+            productName:
+              getProductName(
+                reviewProduct
+              ),
 
-              productName:
-                getProductName(
-                  reviewProduct
-                ),
+            userId:
+              String(
+                currentUser.$id
+              ),
 
-              userId:
-                String(
-                  currentUser.$id
-                ),
+            customerName:
+              getCustomerName(),
 
-              customerName:
-                getCustomerName(),
+            customerEmail:
+              getCustomerEmail(),
 
-              customerEmail:
-                getCustomerEmail(),
+            rating:
+              Number(
+                reviewRating
+              ),
 
-              rating:
-                Number(
-                  reviewRating
-                ),
+            review:
+              cleanReview,
 
-              review:
-                cleanReview,
+            status:
+              "Pending",
 
-              status:
-                "Approved",
+            orderId:
+              String(
+                order?.orderId ||
+                  order?.$id ||
+                  ""
+              ),
 
-              orderId:
-                String(
-                  order?.orderId ||
-                    order?.$id ||
-                    ""
-                ),
+            createdAt:
+              new Date().toISOString(),
+          }
+        );
 
-              createdAt:
-                new Date().toISOString(),
-            }
-          );
-        }
+        setReviewSubmitted(
+          true
+        );
 
-        if (savedReview) {
-          setExistingProductReview(savedReview);
-        }
-
-        setIsEditingReview(false);
-        setReviewSubmitted(true);
+        setReviewText("");
+        setReviewRating(5);
 
         toast.success(
-          existingProductReview?.$id
-            ? "Review updated successfully ⭐"
-            : "Review submitted successfully ⭐"
+          "Review submitted successfully ⭐"
         );
       } catch (error) {
         console.error(
@@ -2738,15 +2341,10 @@ function OrderDetails() {
         return;
       }
 
-      const ref = getOrderReference(order);
       navigate(
-        ref ? `/invoice?orderId=${encodeURIComponent(ref)}` : "/invoice",
+        "/invoice",
         {
-          state: {
-            ...order,
-            shipment,
-            autoDownload: true,
-          },
+          state: order,
         }
       );
     };
@@ -2779,24 +2377,10 @@ function OrderDetails() {
         return;
       }
 
-      const rxParams = new URLSearchParams();
-      rxParams.set("itemIdx", String(activeProductIndex));
-      const prodId = getProductId(activeProduct);
-      if (prodId) {
-        rxParams.set("itemId", String(prodId));
-      }
-
       navigate(
         `/return-exchange/${encodeURIComponent(
           orderReference
-        )}?${rxParams.toString()}`,
-        {
-          state: {
-            order,
-            singleProduct: activeProduct,
-            itemIndex: activeProductIndex,
-          },
-        }
+        )}`
       );
     };
 
@@ -2866,25 +2450,17 @@ function OrderDetails() {
       }
 
       try {
-        setCancelPhase("submitting");
-        setCancelStepAnim(1);
-
-        // Smoothly scroll to Shipment Progress card so the user sees the step-by-step animation
-        setTimeout(() => {
-          const progressEl = document.getElementById("shipment-progress-section");
-          if (progressEl) {
-            progressEl.scrollIntoView({ behavior: "smooth", block: "center" });
-          }
-        }, 80);
+        setCancelPhase(
+          "submitting"
+        );
 
         toast.loading(
-          "Submitting cancellation request...",
+          "Processing cancellation request...",
           {
             id: "cancelToast",
           }
         );
 
-        const stageOneStart = Date.now();
         const cancelTimeISO =
           new Date().toISOString();
 
@@ -2949,7 +2525,7 @@ function OrderDetails() {
             updatePayload
           );
 
-        const mergedCancelledOrder = {
+        setOrder({
           ...order,
           ...updatedOrder,
           items: updatedItems,
@@ -2960,78 +2536,47 @@ function OrderDetails() {
           cancelledDate: allItemsCancelled
             ? cancelTimeISO
             : order?.cancelledDate,
-        };
+        });
 
-        // Refund wallet amount for the cancelled order / item
-        let walletRefundResult = null;
-        if (walletPaidVal > 0) {
+        // Only cancel the whole shipment if all items in the order are cancelled
+        if (allItemsCancelled && shipment?.$id) {
           try {
-            walletRefundResult =
-              await walletService.refundOrderWallet(
-                mergedCancelledOrder,
-                {
-                  userId:
-                    order?.userId ||
-                    currentUser?.$id ||
-                    "",
-                  fullOrder: allItemsCancelled,
-                  shipmentId:
-                    shipment?.$id || "",
-                  trackingId:
-                    shipment?.trackingId || "",
-                }
-              );
-          } catch (walletRefundErr) {
-            console.error(
-              "Wallet refund on cancel error:",
-              walletRefundErr
+            await shipmentHelper.updateShipmentStatus(
+              shipment.$id,
+              "CANCELLED",
+              {
+                orderId:
+                  shipment.orderId ||
+                  order?.orderId ||
+                  orderDocumentId,
+
+                trackingId:
+                  shipment.trackingId,
+
+                title:
+                  "Shipment Cancelled",
+
+                description:
+                  "This shipment was cancelled by the customer.",
+
+                city:
+                  shipment.destinationCity ||
+                  order?.city ||
+                  "",
+
+                state:
+                  shipment.destinationState ||
+                  order?.state ||
+                  "",
+              }
             );
-          }
-        }
 
-        // Cancel the shipment if all items in the order are cancelled
-        if (allItemsCancelled) {
-          try {
-            let targetShipment = shipment;
-            if (!targetShipment?.$id) {
-              const fetchedShipments = await shipmentService.getShipmentsByOrderId(
-                String(getOrderReference(order))
-              );
-              const sList = Array.isArray(fetchedShipments)
-                ? fetchedShipments
-                : fetchedShipments?.documents || [];
-              targetShipment = sList[0] || null;
-            }
-
-            if (targetShipment?.$id) {
-              await shipmentHelper.updateShipmentStatus(
-                targetShipment.$id,
-                "CANCELLED",
-                {
-                  orderId:
-                    targetShipment.orderId ||
-                    order?.orderId ||
-                    orderDocumentId,
-                  trackingId:
-                    targetShipment.trackingId,
-                  title:
-                    "Shipment Cancelled",
-                  description:
-                    "This shipment was cancelled by the customer.",
-                  city:
-                    targetShipment.destinationCity ||
-                    order?.city ||
-                    "",
-                  state:
-                    targetShipment.destinationState ||
-                    order?.state ||
-                    "",
-                }
-              );
-
-              await loadShipmentFromAppwrite(false);
-            }
-          } catch (shipmentError) {
+            await loadShipmentFromAppwrite(
+              false
+            );
+          } catch (
+            shipmentError
+          ) {
             console.error(
               "Shipment cancellation error:",
               shipmentError
@@ -3039,35 +2584,12 @@ function OrderDetails() {
           }
         }
 
-        // Ensure Stage 1 ("Cancellation requested" active pulse) is visible for at least 1100ms
-        const elapsedStageOne = Date.now() - stageOneStart;
-        if (elapsedStageOne < 1100) {
-          await new Promise((resolve) =>
-            setTimeout(resolve, 1100 - elapsedStageOne)
-          );
-        }
-
-        // Stage 2: Complete "Cancellation requested" and animate connector line to "Cancelled"
-        setCancelPhase("cancelling");
-        setCancelStepAnim(2);
-
-        await new Promise((resolve) => setTimeout(resolve, 650));
-
-        // Stage 3: Final "Cancelled" state
-        setOrder(mergedCancelledOrder);
-        setCancelStepAnim(3);
-        setCancelPhase("cancelled");
-
-        const creditedWalletAmt = Number(
-          walletRefundResult?.amount ||
-            walletRefundResult?.totalRefunded ||
-            (walletPaidVal > 0 ? refundToWallet : 0)
+        setCancelPhase(
+          "cancelled"
         );
 
         toast.success(
-          creditedWalletAmt > 0
-            ? `Order Cancelled! ₹${formatMoney(creditedWalletAmt)} credited back to your TechStore Wallet.`
-            : rawOrderItems.length > 1 && !allItemsCancelled
+          rawOrderItems.length > 1 && !allItemsCancelled
             ? "Selected item cancelled successfully!"
             : "Order Cancelled Successfully",
           {
@@ -3080,7 +2602,6 @@ function OrderDetails() {
           error
         );
 
-        setCancelStepAnim(0);
         setCancelPhase(
           "none"
         );
@@ -3104,62 +2625,17 @@ function OrderDetails() {
     }
     try {
       setCancelReturnLoading(true);
-      const progressSection = document.getElementById("shipment-progress-section");
-      if (progressSection) {
-        progressSection.scrollIntoView({ behavior: "smooth", block: "center" });
-      }
-      // Stage 1: Requesting cancellation
-      setCancelReturnPhase("submitting");
-      setRxCancelStepAnim(1);
-
-      await Promise.all([
-        returnExchangeService.cancelRequest(focusedReturnRequest.$id),
-        new Promise((resolve) => setTimeout(resolve, 650)),
-      ]);
-
-      // Stage 2: Request verified, connector line animates down to Cancelled
-      setRxCancelStepAnim(2);
-      setCancelReturnPhase("cancelling");
-      await new Promise((resolve) => setTimeout(resolve, 600));
-
-      // Stage 3: Final Cancelled state
-      setRxCancelStepAnim(3);
-      setCancelReturnPhase("cancelled");
+      await returnExchangeService.cancelRequest(focusedReturnRequest.$id);
       await loadReturnExchangeRequests();
       toast.success(
         `${isFocusedExchange ? "Exchange" : "Return"} request cancelled successfully.`
       );
     } catch (err) {
-      setRxCancelStepAnim(0);
-      setCancelReturnPhase("none");
       toast.error(err?.message || "Unable to cancel request.");
     } finally {
       setCancelReturnLoading(false);
     }
   };
-
-  /* AUTO-SYNC WALLET REFUND FOR CANCELLED ORDERS */
-  useEffect(() => {
-    if (!order || !isCancelled || walletPaidVal <= 0) return;
-    walletService
-      .refundOrderWallet(order, {
-        userId: order?.userId || currentUser?.$id || "",
-        fullOrder: isEntireOrderCancelled,
-        shipmentId: shipment?.$id || "",
-        trackingId: shipment?.trackingId || "",
-      })
-      .catch((err) => {
-        console.warn("OrderDetails wallet refund sync warning:", err);
-      });
-  }, [
-    order,
-    isCancelled,
-    walletPaidVal,
-    isEntireOrderCancelled,
-    currentUser?.$id,
-    shipment?.$id,
-    shipment?.trackingId,
-  ]);
 
   /* LOADING */
 
@@ -3296,11 +2772,7 @@ function OrderDetails() {
               <div className="d-flex align-items-center gap-2 mb-1 flex-wrap">
 
                 <h2 className="fw-bold mb-0 text-gradient fs-3">
-                  {focusedReturnRequest
-                    ? isFocusedExchange
-                      ? "Exchange Details"
-                      : "Return Details"
-                    : "Order Details"}
+                  Order Details
                 </h2>
 
                 <span
@@ -3311,10 +2783,11 @@ function OrderDetails() {
                         : isFocusedExchange
                         ? "bg-primary text-white"
                         : "bg-warning text-dark"
-                      : isCancellingNow || (isCancelled && cancelStepAnim > 0 && cancelStepAnim < 3)
-                      ? "bg-warning text-dark"
                       : isCancelled
                       ? "bg-danger text-white"
+                      : cancelPhase ===
+                        "submitting"
+                      ? "bg-warning text-dark"
                       : isDelivered
                       ? "bg-success text-white"
                       : isOutForDelivery
@@ -3330,8 +2803,9 @@ function OrderDetails() {
                       : isFocusedExchange
                       ? "Exchanged"
                       : "Returned"
-                    : isCancellingNow || (isCancelled && cancelStepAnim > 0 && cancelStepAnim < 3)
-                    ? "Cancellation Requested"
+                    : cancelPhase ===
+                      "submitting"
+                    ? "Cancellation requested"
                     : isCancelled
                     ? "Cancelled"
                     : orderStatus}
@@ -3340,11 +2814,8 @@ function OrderDetails() {
               </div>
 
               <small className="text-muted fw-medium">
-                {focusedReturnRequest
-                  ? isFocusedExchange
-                    ? "Your complete exchange request & replacement summary"
-                    : "Your complete return request & status summary"
-                  : "Your complete order summary"}
+                Your complete order
+                summary
               </small>
             </div>
           </div>
@@ -3462,12 +2933,16 @@ function OrderDetails() {
 
         <div className="pro-card p-4 mb-4 glass-card hover-lift order-product-summary-card">
 
-          <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3 order-product-card-head">
+          <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
 
             <div>
-              <small className="text-muted d-block order-product-card-label">
-                Ordered Item{rawOrderItems.length > 1 ? ` (${activeProductIndex + 1} of ${rawOrderItems.length})` : ""}
+              <small className="text-muted d-block mb-1">
+                Product
               </small>
+
+              <h5 className="fw-bold mb-0">
+                {itemName}
+              </h5>
             </div>
 
             <div>
@@ -3505,11 +2980,6 @@ function OrderDetails() {
                     ? "Exchanged"
                     : "Returned"}
                 </span>
-              ) : isCancellingNow || (isCancelled && cancelStepAnim > 0 && cancelStepAnim < 3) ? (
-                <span className="badge bg-warning text-dark rounded-pill px-3 py-2 d-inline-flex align-items-center gap-2">
-                  <FaSpinner className="fa-spin" size={11} />
-                  Cancellation Requested
-                </span>
               ) : isCancelled ? (
                 <span className="badge bg-danger rounded-pill px-3 py-2">
                   Cancelled
@@ -3522,10 +2992,6 @@ function OrderDetails() {
                 <span className="badge bg-success rounded-pill px-3 py-2">
                   <FaCheckCircle className="me-1" />
                   Delivered
-                </span>
-              ) : isOutForDelivery ? (
-                <span className="badge bg-warning text-dark rounded-pill px-3 py-2">
-                  Arriving Today
                 </span>
               ) : shipment?.estimatedDeliveryDate ? (
                 <span className="badge bg-light text-dark border rounded-pill px-3 py-2">
@@ -3579,7 +3045,7 @@ function OrderDetails() {
             <div className="flex-grow-1 order-product-info-col">
 
               <span
-                className="badge bg-light text-primary border mb-2 order-brand-badge"
+                className="badge bg-light text-primary border mb-2"
                 style={{
                   fontSize: "10px",
                 }}
@@ -3632,7 +3098,7 @@ function OrderDetails() {
                     )}
                   </span>
 
-                  <span className="badge bg-danger-subtle text-danger order-discount-badge">
+                  <span className="badge bg-danger-subtle text-danger">
                     {
                       activeItemDiscountPercent
                     }
@@ -3671,10 +3137,7 @@ function OrderDetails() {
 
         {/* SHIPMENT / RETURN / EXCHANGE / CANCELLATION PROGRESS — All rendered in the EXACT Shipment Progress UI (Image 2) */}
 
-        <section
-          id="shipment-progress-section"
-          className="shipment-progress-section mb-4"
-        >
+        <section className="shipment-progress-section mb-4">
           <div className="shipment-progress-card glass-card hover-lift">
             {focusedReturnRequest ? (
               (() => {
@@ -3682,26 +3145,9 @@ function OrderDetails() {
                 const rxRefId =
                   focusedReturnRequest.referenceId ||
                   `${isFocusedExchange ? "EX" : "RE"}-${getOrderReference(order)}-01`;
-                const rawRxStatus = String(
+                const rxStatus = String(
                   focusedReturnRequest?.status || "REQUESTED"
                 ).toUpperCase();
-                const rxStatus =
-                  isFocusedReqCancelled || isCancellingReturnNow
-                    ? "CANCELLED"
-                    : rawRxStatus;
-                const effectiveRxCancelStage =
-                  rxCancelStepAnim > 0 ? rxCancelStepAnim : 3;
-                const isFinalRxCancelled = effectiveRxCancelStage >= 3;
-                const rxCreatedDate =
-                  focusedReturnRequest?.createdAt ||
-                  focusedReturnRequest?.$createdAt ||
-                  order?.orderDate ||
-                  order?.$createdAt;
-                const rxUpdatedDate =
-                  focusedReturnRequest?.updatedAt ||
-                  focusedReturnRequest?.$updatedAt ||
-                  rxCreatedDate;
-
                 const showRxCourier = [
                   "DISPATCHED",
                   "IN_TRANSIT",
@@ -3730,13 +3176,7 @@ function OrderDetails() {
                         </h4>
 
                         <p className="shipment-progress-subtitle mb-0">
-                          {rxStatus === "CANCELLED"
-                            ? !isFinalRxCancelled
-                              ? `Processing your ${
-                                  isFocusedExchange ? "exchange" : "return"
-                                } cancellation...`
-                              : `Cancelled by you on ${formatDate(rxUpdatedDate)}`
-                            : `Live tracking • ${rxRefId}`}
+                          {`Live tracking • ${rxRefId}`}
                         </p>
                       </div>
 
@@ -3763,9 +3203,7 @@ function OrderDetails() {
                         <span
                           className={`shipment-progress-status-pill ${
                             rxStatus === "CANCELLED"
-                              ? isFinalRxCancelled
-                                ? "danger"
-                                : "warning"
+                              ? "danger"
                               : [
                                   "ACCEPTED",
                                   "CONFIRMED",
@@ -3783,9 +3221,7 @@ function OrderDetails() {
                         >
                           <span className="shipment-progress-status-dot" />
                           {rxStatus === "CANCELLED"
-                            ? !isFinalRxCancelled
-                              ? "Cancellation Requested"
-                              : isFocusedExchange
+                            ? isFocusedExchange
                               ? "Exchange Cancelled"
                               : "Return Cancelled"
                             : rxStatus === "ACCEPTED"
@@ -3821,406 +3257,196 @@ function OrderDetails() {
                             : "Return Requested"}
                         </span>
 
-                        {rxStatus !== "CANCELLED" && (
-                          <button
-                            type="button"
-                            className="shipment-progress-track-btn"
-                            onClick={() => handleTrackReturn(focusedReturnRequest)}
-                          >
-                            <FaRoute className="me-1" />
-                            Track
-                          </button>
-                        )}
-                      </div>
-                    </div>
-
-                    {rxStatus === "CANCELLED" ? (
-                      <div className="shipment-progress-timeline">
-                        {/* Step 1: Return / Exchange Created */}
-                        <div className="shipment-progress-step completed">
-                          <div className="shipment-progress-marker-column">
-                            <span className="shipment-progress-marker step-marker-pop">
-                              <FaCheck />
-                            </span>
-                            <span className="shipment-progress-line completed cancel-line-anim-1" />
-                          </div>
-
-                          <div className="shipment-progress-step-content step-content-reveal">
-                            <div className="shipment-progress-step-top">
-                              <div>
-                                <h5 className="shipment-progress-step-title mb-1">
-                                  {isFocusedExchange
-                                    ? "Exchange Created"
-                                    : "Return Created"}
-                                </h5>
-                                <p className="shipment-progress-step-description mb-0">
-                                  {`Your ${
-                                    isFocusedExchange ? "exchange" : "return"
-                                  } request (${rxRefId}) was registered.${
-                                    extractCleanReason(focusedReturnRequest?.reason || "")
-                                      ? ` Reason: ${extractCleanReason(
-                                          focusedReturnRequest.reason
-                                        )}`
-                                      : ""
-                                  }`}
-                                </p>
-                              </div>
-
-                              <div className="shipment-progress-date">
-                                <strong>{formatDate(rxCreatedDate)}</strong>
-                                <span>{formatTime(rxCreatedDate)}</span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Step 2: Cancellation requested */}
-                        <div
-                          className={`shipment-progress-step ${
-                            effectiveRxCancelStage >= 2
-                              ? "completed"
-                              : "requesting-step current"
-                          }`}
+                        <button
+                          type="button"
+                          className="shipment-progress-track-btn"
+                          onClick={() => handleTrackReturn(focusedReturnRequest)}
                         >
-                          <div className="shipment-progress-marker-column">
-                            <span
-                              className={`shipment-progress-marker ${
-                                effectiveRxCancelStage < 2
-                                  ? "requesting"
-                                  : "step-marker-pop"
-                              }`}
-                            >
-                              {effectiveRxCancelStage >= 2 ? (
-                                <FaCheck />
-                              ) : (
-                                <FaSpinner className="fa-spin" size={8} />
-                              )}
-                            </span>
-                            <span
-                              className={`shipment-progress-line ${
-                                effectiveRxCancelStage >= 2
-                                  ? "cancelled-line cancel-line-anim-2"
-                                  : ""
-                              }`}
-                            />
-                          </div>
-
-                          <div className="shipment-progress-step-content step-content-reveal">
-                            <div className="shipment-progress-step-top">
-                              <div>
-                                <h5 className="shipment-progress-step-title mb-1">
-                                  Cancellation requested
-                                </h5>
-                                <p className="shipment-progress-step-description mb-0">
-                                  {effectiveRxCancelStage < 2 &&
-                                  isCancellingReturnNow
-                                    ? `Submitting and verifying your ${
-                                        isFocusedExchange ? "exchange" : "return"
-                                      } cancellation...`
-                                    : `You requested to cancel this ${
-                                        isFocusedExchange ? "exchange" : "return"
-                                      } request.`}
-                                </p>
-                              </div>
-
-                              <div className="shipment-progress-date">
-                                <strong>{formatDate(rxUpdatedDate)}</strong>
-                                <span>{formatTime(rxUpdatedDate)}</span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Step 3: Return Cancelled / Exchange Cancelled */}
-                        <div
-                          className={`shipment-progress-step ${
-                            isFinalRxCancelled
-                              ? "cancelled-step current cancel-step-pop"
-                              : "pending"
-                          }`}
-                        >
-                          <div className="shipment-progress-marker-column">
-                            <span
-                              className={`shipment-progress-marker ${
-                                isFinalRxCancelled ? "cancelled" : ""
-                              }`}
-                            >
-                              {isFinalRxCancelled ? <FaTimes /> : null}
-                            </span>
-                          </div>
-
-                          <div className="shipment-progress-step-content">
-                            <div className="shipment-progress-step-top">
-                              <div>
-                                <h5 className="shipment-progress-step-title mb-1">
-                                  {isFocusedExchange
-                                    ? "Exchange Cancelled"
-                                    : "Return Cancelled"}
-                                </h5>
-                                <p className="shipment-progress-step-description mb-0">
-                                  {isFinalRxCancelled
-                                    ? isFocusedExchange
-                                      ? `Your exchange request (${rxRefId}) has been cancelled by you. You will keep your delivered product and no replacement will be sent.`
-                                      : `Your return request (${rxRefId}) has been cancelled by you. Since the product remains delivered to you, no refund is applicable.`
-                                    : "Waiting for cancellation confirmation..."}
-                                </p>
-                              </div>
-
-                              {isFinalRxCancelled && (
-                                <div className="shipment-progress-date">
-                                  <strong>{formatDate(rxUpdatedDate)}</strong>
-                                  <span>{formatTime(rxUpdatedDate)}</span>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="shipment-progress-timeline">
-                        {rxSteps.map((step, index) => {
-                          const nextStep = rxSteps[index + 1];
-                          const isLastStep = index === rxSteps.length - 1;
-                          const isStepReached =
-                            step.isCompleted && index <= rxAnimIndex;
-                          const isNextReached =
-                            Boolean(nextStep?.isCompleted) &&
-                            index + 1 <= rxAnimIndex;
-                          const isAnimCurrent =
-                            isStepReached &&
-                            index === rxAnimIndex &&
-                            (rxAnimIndex < targetRxStageIndex || step.isCurrent);
-                          const isOutgoingFlowing =
-                            isStepReached &&
-                            !isNextReached &&
-                            index === rxAnimIndex &&
-                            step.isCurrent &&
-                            !isLastStep;
-
-                          return (
-                            <div
-                              className={`shipment-progress-step ${
-                                isStepReached ? "completed" : "pending"
-                              } ${isAnimCurrent ? "current" : ""}`}
-                              key={step.key}
-                            >
-                              <div className="shipment-progress-marker-column">
-                                <span
-                                  className={`shipment-progress-marker ${
-                                    isStepReached ? "step-marker-pop" : ""
-                                  } ${isAnimCurrent ? "live-active-marker" : ""}`}
-                                >
-                                  {isStepReached ? <FaCheck /> : null}
-                                </span>
-
-                                {!isLastStep && (
-                                  <span
-                                    className={`shipment-progress-line ${
-                                      isNextReached
-                                        ? "completed step-line-grow"
-                                        : isOutgoingFlowing
-                                        ? "line-progress-flow"
-                                        : ""
-                                    }`}
-                                  />
-                                )}
-                              </div>
-
-                              <div
-                                className={`shipment-progress-step-content ${
-                                  isStepReached ? "step-content-reveal" : ""
-                                }`}
-                              >
-                                <div className="shipment-progress-step-top">
-                                  <div>
-                                    <h5 className="shipment-progress-step-title mb-1">
-                                      {step.label}
-                                    </h5>
-
-                                    {(isStepReached ||
-                                      index <= rxAnimIndex + 1) &&
-                                    step.description ? (
-                                      <p className="shipment-progress-step-description mb-0">
-                                        {step.description}
-                                      </p>
-                                    ) : null}
-                                  </div>
-
-                                  {isStepReached && step.date ? (
-                                    <div className="shipment-progress-date">
-                                      <strong>{formatDate(step.date)}</strong>
-                                      <span>{formatTime(step.date)}</span>
-                                    </div>
-                                  ) : null}
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </>
-                );
-              })()
-            ) : isCancelled || isCancellingNow ? (
-              (() => {
-                const effectiveCancelStage =
-                  cancelStepAnim > 0 ? cancelStepAnim : 3;
-                const isFinalCancelled = effectiveCancelStage >= 3;
-
-                return (
-                  <>
-                    <div className="shipment-progress-head">
-                      <div className="shipment-progress-head-left">
-                        <h4 className="shipment-progress-title mb-1">
-                          Shipment Progress
-                        </h4>
-
-                        <p className="shipment-progress-subtitle mb-0">
-                          {!isFinalCancelled
-                            ? "Processing your cancellation request..."
-                            : `Cancelled by you on ${cancelledFormattedDate}`}
-                        </p>
-                      </div>
-
-                      <div className="shipment-progress-head-actions">
-                        <span
-                          className={`shipment-progress-status-pill ${
-                            isFinalCancelled ? "danger" : "warning"
-                          }`}
-                        >
-                          <span className="shipment-progress-status-dot" />
-                          {isFinalCancelled
-                            ? "Cancelled"
-                            : "Cancellation Requested"}
-                        </span>
+                          <FaRoute className="me-1" />
+                          Track
+                        </button>
                       </div>
                     </div>
 
                     <div className="shipment-progress-timeline">
-                      {/* Step 1: Confirmed */}
-                      <div className="shipment-progress-step completed">
-                        <div className="shipment-progress-marker-column">
-                          <span className="shipment-progress-marker">
-                            <FaCheck />
-                          </span>
-                          <span className="shipment-progress-line completed cancel-line-anim-1" />
-                        </div>
-
-                        <div className="shipment-progress-step-content">
-                          <div className="shipment-progress-step-top">
-                            <div>
-                              <h5 className="shipment-progress-step-title mb-1">
-                                Confirmed
-                              </h5>
-                              <p className="shipment-progress-step-description mb-0">
-                                Your order has been placed successfully and shipment processing has started.
-                              </p>
-                            </div>
-
-                            <div className="shipment-progress-date">
-                              <strong>{originalPlacedDate}</strong>
-                              <span>{originalPlacedTime}</span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Step 2: Cancellation requested */}
-                      <div
-                        className={`shipment-progress-step ${
-                          effectiveCancelStage >= 2
-                            ? "completed"
-                            : "requesting-step current"
-                        }`}
-                      >
-                        <div className="shipment-progress-marker-column">
-                          <span
-                            className={`shipment-progress-marker ${
-                              effectiveCancelStage < 2 ? "requesting" : ""
-                            }`}
+                      {rxSteps.map((step, index) => {
+                        const nextStep = rxSteps[index + 1];
+                        const isLastStep = index === rxSteps.length - 1;
+                        return (
+                          <div
+                            className={`shipment-progress-step ${
+                              step.isCancelledStep
+                                ? "cancelled-step current"
+                                : step.isCompleted
+                                ? "completed"
+                                : "pending"
+                            } ${step.isCurrent ? "current" : ""}`}
+                            key={step.key}
                           >
-                            {effectiveCancelStage >= 2 ? (
-                              <FaCheck />
-                            ) : (
-                              <FaSpinner className="fa-spin" size={8} />
-                            )}
-                          </span>
-                          <span
-                            className={`shipment-progress-line ${
-                              effectiveCancelStage >= 2
-                                ? "cancelled-line cancel-line-anim-2"
-                                : ""
-                            }`}
-                          />
-                        </div>
+                            <div className="shipment-progress-marker-column">
+                              <span
+                                className={`shipment-progress-marker ${
+                                  step.isCancelledStep ? "cancelled" : ""
+                                }`}
+                              >
+                                {step.isCancelledStep ? (
+                                  <FaTimes />
+                                ) : step.isCompleted ? (
+                                  <FaCheck />
+                                ) : null}
+                              </span>
 
-                        <div className="shipment-progress-step-content">
-                          <div className="shipment-progress-step-top">
-                            <div>
-                              <h5 className="shipment-progress-step-title mb-1">
-                                Cancellation requested
-                              </h5>
-                              <p className="shipment-progress-step-description mb-0">
-                                {effectiveCancelStage < 2 && isCancellingNow
-                                  ? "Submitting and verifying your cancellation request..."
-                                  : "You requested to cancel this order."}
-                              </p>
+                              {!isLastStep && (
+                                <span
+                                  className={`shipment-progress-line ${
+                                    nextStep?.isCancelledStep
+                                      ? "cancelled-line"
+                                      : nextStep?.isCompleted
+                                      ? "completed"
+                                      : ""
+                                  }`}
+                                />
+                              )}
                             </div>
 
-                            <div className="shipment-progress-date">
-                              <strong>{cancelledFormattedDate}</strong>
-                              <span>{cancelledFormattedTime}</span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
+                            <div className="shipment-progress-step-content">
+                              <div className="shipment-progress-step-top">
+                                <div>
+                                  <h5 className="shipment-progress-step-title mb-1">
+                                    {step.label}
+                                  </h5>
 
-                      {/* Step 3: Cancelled */}
-                      <div
-                        className={`shipment-progress-step ${
-                          isFinalCancelled
-                            ? "cancelled-step current cancel-step-pop"
-                            : "pending"
-                        }`}
-                      >
-                        <div className="shipment-progress-marker-column">
-                          <span
-                            className={`shipment-progress-marker ${
-                              isFinalCancelled ? "cancelled" : ""
-                            }`}
-                          >
-                            {isFinalCancelled ? <FaTimes /> : null}
-                          </span>
-                        </div>
+                                  {!isLastStep && step.description ? (
+                                    <p className="shipment-progress-step-description mb-0">
+                                      {step.description}
+                                    </p>
+                                  ) : null}
+                                </div>
 
-                        <div className="shipment-progress-step-content">
-                          <div className="shipment-progress-step-top">
-                            <div>
-                              <h5 className="shipment-progress-step-title mb-1">
-                                Cancelled
-                              </h5>
-                              <p className="shipment-progress-step-description mb-0">
-                                {isFinalCancelled
-                                  ? cancellationTrackingEvent?.description ||
-                                    `This shipment was cancelled by the customer.`
-                                  : "Waiting for cancellation confirmation..."}
-                              </p>
-                            </div>
-
-                            {isFinalCancelled && (
-                              <div className="shipment-progress-date">
-                                <strong>{cancelledFormattedDate}</strong>
-                                <span>{cancelledFormattedTime}</span>
+                                {step.date ? (
+                                  <div className="shipment-progress-date">
+                                    <strong>{formatDate(step.date)}</strong>
+                                    <span>{formatTime(step.date)}</span>
+                                  </div>
+                                ) : null}
                               </div>
-                            )}
+                            </div>
                           </div>
-                        </div>
-                      </div>
+                        );
+                      })}
                     </div>
                   </>
                 );
               })()
+            ) : isCancelled || cancelPhase === "submitting" ? (
+              <>
+                <div className="shipment-progress-head">
+                  <div className="shipment-progress-head-left">
+                    <h4 className="shipment-progress-title mb-1">
+                      Shipment Progress
+                    </h4>
+
+                    <p className="shipment-progress-subtitle mb-0">
+                      {shipment?.trackingId
+                        ? `Live tracking • ${shipment.trackingId}`
+                        : `Cancelled by you on ${cancelledFormattedDate}`}
+                    </p>
+                  </div>
+
+                  <div className="shipment-progress-head-actions">
+                    <span className="shipment-progress-status-pill danger">
+                      <span className="shipment-progress-status-dot" />
+                      {cancelPhase === "submitting" ? "Cancelling..." : "Cancelled"}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="shipment-progress-timeline">
+                  {/* Step 1: Confirmed */}
+                  <div className="shipment-progress-step completed">
+                    <div className="shipment-progress-marker-column">
+                      <span className="shipment-progress-marker">
+                        <FaCheck />
+                      </span>
+                      <span className="shipment-progress-line completed" />
+                    </div>
+
+                    <div className="shipment-progress-step-content">
+                      <div className="shipment-progress-step-top">
+                        <div>
+                          <h5 className="shipment-progress-step-title mb-1">
+                            Confirmed
+                          </h5>
+                          <p className="shipment-progress-step-description mb-0">
+                            Your order has been placed successfully and shipment processing has started.
+                          </p>
+                        </div>
+
+                        <div className="shipment-progress-date">
+                          <strong>{originalPlacedDate}</strong>
+                          <span>{originalPlacedTime}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Step 2: Cancellation requested */}
+                  <div className="shipment-progress-step completed">
+                    <div className="shipment-progress-marker-column">
+                      <span className="shipment-progress-marker">
+                        <FaCheck />
+                      </span>
+                      <span className="shipment-progress-line cancelled-line" />
+                    </div>
+
+                    <div className="shipment-progress-step-content">
+                      <div className="shipment-progress-step-top">
+                        <div>
+                          <h5 className="shipment-progress-step-title mb-1">
+                            Cancellation requested
+                          </h5>
+                          <p className="shipment-progress-step-description mb-0">
+                            You requested to cancel this order.
+                          </p>
+                        </div>
+
+                        <div className="shipment-progress-date">
+                          <strong>{cancelledFormattedDate}</strong>
+                          <span>{cancelledFormattedTime}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Step 3: Cancelled */}
+                  <div className="shipment-progress-step cancelled-step current">
+                    <div className="shipment-progress-marker-column">
+                      <span className="shipment-progress-marker cancelled">
+                        <FaTimes />
+                      </span>
+                    </div>
+
+                    <div className="shipment-progress-step-content">
+                      <div className="shipment-progress-step-top">
+                        <div>
+                          <h5 className="shipment-progress-step-title mb-1">
+                            Cancelled
+                          </h5>
+                          <p className="shipment-progress-step-description mb-0">
+                            {cancellationTrackingEvent?.description ||
+                              `Cancelled by you on ${cancelledFormattedDate}.`}
+                          </p>
+                        </div>
+
+                        <div className="shipment-progress-date">
+                          <strong>{cancelledFormattedDate}</strong>
+                          <span>{cancelledFormattedTime}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </>
             ) : (
               <>
                 <div
@@ -4237,7 +3463,7 @@ function OrderDetails() {
                       {shipment?.trackingId
                         ? `Live tracking • ${shipment.trackingId}`
                         : shipmentLoading
-                        ? "Loading live shipment details..."
+                        ? "Loading shipment from Appwrite..."
                         : `Live tracking • ${getOrderReference(order)}`}
                     </p>
                   </div>
@@ -4285,87 +3511,12 @@ function OrderDetails() {
                     <div>
                       <strong>Loading Shipment Progress...</strong>
                       <small>
-                        Fetching live shipment and tracking updates.
+                        Fetching live shipment and event data from Appwrite.
                       </small>
                     </div>
                   </div>
                 ) : (
                   <div className="shipment-progress-timeline">
-                    {currentStatus === "OUT_FOR_DELIVERY" &&
-                      !isDelivered &&
-                      !isCancelled &&
-                      deliveryOtp && (
-                        <div
-                          className="mb-3 p-3 rounded-4 d-flex flex-wrap align-items-center justify-content-between gap-3"
-                          style={{
-                            background:
-                              "linear-gradient(135deg, rgba(37, 99, 235, 0.1), rgba(124, 58, 237, 0.08))",
-                            border: "1.5px dashed rgba(37, 99, 235, 0.45)",
-                          }}
-                        >
-                          <div className="d-flex align-items-center gap-3">
-                            <div
-                              className="d-flex align-items-center justify-content-center rounded-circle flex-shrink-0"
-                              style={{
-                                width: "42px",
-                                height: "42px",
-                                background: "rgba(37, 99, 235, 0.15)",
-                                color: "#2563eb",
-                                fontSize: "18px",
-                              }}
-                            >
-                              <FaLock />
-                            </div>
-                            <div>
-                              <div className="d-flex align-items-center flex-wrap gap-2">
-                                <span
-                                  className="fw-bold text-uppercase"
-                                  style={{
-                                    fontSize: "0.75rem",
-                                    letterSpacing: "0.06em",
-                                    color: "#2563eb",
-                                  }}
-                                >
-                                  Delivery Verification OTP
-                                </span>
-                                <span
-                                  className="badge rounded-pill"
-                                  style={{
-                                    background: "rgba(16, 185, 129, 0.15)",
-                                    color: "#059669",
-                                    fontSize: "0.7rem",
-                                  }}
-                                >
-                                  Active until delivered
-                                </span>
-                              </div>
-                              <div
-                                className="fw-bolder mt-1"
-                                style={{
-                                  fontFamily: "monospace",
-                                  fontSize: "1.35rem",
-                                  letterSpacing: "4px",
-                                }}
-                              >
-                                {deliveryOtp}
-                              </div>
-                              <small className="text-muted d-block">
-                                Share this 6-digit OTP with the delivery executive when your parcel arrives.
-                              </small>
-                            </div>
-                          </div>
-
-                          <button
-                            type="button"
-                            className="btn btn-sm btn-primary d-inline-flex align-items-center gap-2 rounded-pill px-3 py-2 fw-semibold"
-                            onClick={handleCopyOtp}
-                          >
-                            <FaCopy size={13} />
-                            <span>Copy OTP</span>
-                          </button>
-                        </div>
-                      )}
-
                     {isDeliveryUnsuccessful && (
                       <div className="shipment-unsuccessful-banner">
                         <FaExclamationTriangle className="shipment-unsuccessful-icon" />
@@ -4379,104 +3530,61 @@ function OrderDetails() {
 
                     {trackingMilestones.map((step, index) => {
                       const nextStep = trackingMilestones[index + 1];
-                      const isLastStep = index === trackingMilestones.length - 1;
-                      const isWarningReached =
-                        Boolean(step.isUnsuccessful) &&
-                        index <= orderAnimIndex;
-                      const isNextWarningReached =
-                        Boolean(nextStep?.isUnsuccessful) &&
-                        Boolean(nextStep?.isCompleted) &&
-                        index + 1 <= orderAnimIndex;
-                      const isStepReached =
-                        step.isCompleted && index <= orderAnimIndex;
-                      const isNextReached =
-                        Boolean(nextStep?.isCompleted) &&
-                        index + 1 <= orderAnimIndex;
-                      const isAnimCurrent =
-                        isStepReached &&
-                        index === orderAnimIndex &&
-                        (orderAnimIndex < targetOrderStageIndex ||
-                          step.isCurrent);
-                      const isOutgoingFlowing =
-                        isStepReached &&
-                        !isNextReached &&
-                        !isNextWarningReached &&
-                        index === orderAnimIndex &&
-                        !isDelivered &&
-                        !isDeliveryUnsuccessful &&
-                        !isLastStep;
+                      const isWarningStep = Boolean(step.isUnsuccessful);
+                      const isNextWarning = Boolean(nextStep?.isUnsuccessful);
 
                       return (
                         <div
                           className={`shipment-progress-step ${
-                            isWarningReached
-                              ? "cancelled-step current cancel-step-pop"
-                              : isStepReached
+                            isWarningStep
+                              ? "cancelled-step current"
+                              : step.isCompleted
                               ? "completed"
                               : "pending"
-                          } ${isAnimCurrent ? "current" : ""}`}
+                          } ${step.isCurrent ? "current" : ""}`}
                           key={step.key}
                         >
                           <div className="shipment-progress-marker-column">
                             <span
                               className={`shipment-progress-marker ${
-                                isWarningReached
-                                  ? "cancelled"
-                                  : isStepReached
-                                  ? "step-marker-pop"
-                                  : ""
-                              } ${
-                                isAnimCurrent && !isWarningReached
-                                  ? "live-active-marker"
-                                  : ""
+                                isWarningStep ? "cancelled" : ""
                               }`}
                             >
-                              {isWarningReached ? (
+                              {isWarningStep ? (
                                 <FaExclamationTriangle size={8} />
-                              ) : isStepReached ? (
+                              ) : step.isCompleted ? (
                                 <FaCheck />
                               ) : null}
                             </span>
 
-                            {!isLastStep && (
+                            {index < trackingMilestones.length - 1 && (
                               <span
                                 className={`shipment-progress-line ${
-                                  isNextWarningReached
-                                    ? "cancelled-line step-line-grow"
-                                    : isNextReached
-                                    ? "completed step-line-grow"
-                                    : isOutgoingFlowing
-                                    ? "line-progress-flow"
+                                  isNextWarning && nextStep?.isCompleted
+                                    ? "cancelled-line"
+                                    : nextStep?.isCompleted
+                                    ? "completed"
                                     : ""
                                 }`}
                               />
                             )}
                           </div>
 
-                          <div
-                            className={`shipment-progress-step-content ${
-                              isStepReached || isWarningReached
-                                ? "step-content-reveal"
-                                : ""
-                            }`}
-                          >
+                          <div className="shipment-progress-step-content">
                             <div className="shipment-progress-step-top">
                               <div>
                                 <h5 className="shipment-progress-step-title mb-1">
                                   {step.label}
                                 </h5>
 
-                                {isStepReached || isWarningReached ? (
-                                  step.description ? (
-                                    <p className="shipment-progress-step-description mb-0">
-                                      {step.description}
-                                    </p>
-                                  ) : null
+                                {step.description ? (
+                                  <p className="shipment-progress-step-description mb-0">
+                                    {step.description}
+                                  </p>
                                 ) : null}
                               </div>
 
-                              {(isStepReached || isWarningReached) &&
-                              step.date ? (
+                              {step.date ? (
                                 <div className="shipment-progress-date">
                                   <strong>{formatDate(step.date)}</strong>
                                   <span>{formatTime(step.date)}</span>
@@ -4556,62 +3664,26 @@ function OrderDetails() {
                     onClick={handleReviewProducts}
                   >
                     <FaStar className="text-warning flex-shrink-0" />
-                    <span>
-                      {existingProductReview ? "Your Review" : "Review Product"}
-                    </span>
+                    <span>Review Product</span>
                   </button>
 
                   <button
                     type="button"
-                    className="btn order-action-btn order-action-btn-return"
-                    onClick={() => {
-                      if (hasExistingReturnOrExchange && existingActiveRequest) {
-                        const params = new URLSearchParams();
-                        params.set("orderId", getOrderReference(order));
-                        params.set("itemIdx", String(activeProductIndex));
-                        const prodId = getProductId(activeProduct);
-                        if (prodId) {
-                          params.set("itemId", String(prodId));
-                        }
-                        if (
-                          existingActiveRequest.referenceId ||
-                          existingActiveRequest.$id
-                        ) {
-                          params.set(
-                            "returnId",
-                            String(
-                              existingActiveRequest.referenceId ||
-                                existingActiveRequest.$id
-                            )
-                          );
-                        }
-                        navigate(`/order-details?${params.toString()}`, {
-                          state: {
-                            order,
-                            shipment,
-                            singleProduct: activeProduct,
-                            itemIndex: activeProductIndex,
-                            returnRequest: existingActiveRequest,
-                            viewMode:
-                              String(
-                                existingActiveRequest?.type || ""
-                              ).toUpperCase() === "EXCHANGE"
-                                ? "EXCHANGE"
-                                : "RETURN",
-                          },
-                        });
-                      } else {
-                        handleReturnExchange();
-                      }
-                    }}
+                    className={`btn order-action-btn ${
+                      hasExistingReturnOrExchange
+                        ? "order-action-btn-disabled"
+                        : "order-action-btn-return"
+                    }`}
+                    onClick={handleReturnExchange}
+                    disabled={hasExistingReturnOrExchange}
                   >
                     <FaExchangeAlt className="flex-shrink-0" />
                     <span>
                       {hasExistingReturnOrExchange
                         ? String(existingActiveRequest?.type || "").toUpperCase() ===
                           "EXCHANGE"
-                          ? "View Exchange Status"
-                          : "View Return Status"
+                          ? "Exchange Requested"
+                          : "Return Requested"
                         : "Return / Exchange"}
                     </span>
                   </button>
@@ -4625,9 +3697,7 @@ function OrderDetails() {
                     onClick={handleReviewProducts}
                   >
                     <FaStar className="text-warning flex-shrink-0" />
-                    <span>
-                      {existingProductReview ? "Your Review" : "Review Product"}
-                    </span>
+                    <span>Review Product</span>
                   </button>
                 </div>
               )
@@ -4669,7 +3739,7 @@ function OrderDetails() {
                 <button
                   type="button"
                   className={`btn order-action-btn w-100 ${
-                    canCancel || isCancellingNow
+                    canCancel
                       ? "order-action-btn-cancel"
                       : "order-action-btn-disabled"
                   }`}
@@ -4679,14 +3749,10 @@ function OrderDetails() {
                     cancelPhase !== "none"
                   }
                 >
-                  {isCancellingNow ? (
+                  {cancelPhase === "submitting" ? (
                     <>
                       <FaSpinner className="fa-spin flex-shrink-0" />
-                      <span>
-                        {cancelPhase === "submitting"
-                          ? "Cancellation Requested..."
-                          : "Finalizing Cancellation..."}
-                      </span>
+                      <span>Cancelling Product...</span>
                     </>
                   ) : canCancel ? (
                     <span>Cancel Product</span>
@@ -4700,263 +3766,116 @@ function OrderDetails() {
           </div>
         ) : null}
 
-        {/* EXCHANGE REPLACEMENT PROCESS CARD (Shown only for Active Exchange requests) */}
-        {focusedReturnRequest && isFocusedExchange && !isFocusedReqCancelled && (
-          <div className="pro-card p-4 p-md-5 mb-4 glass-card hover-lift order-refund-card animate-fade-in">
-            <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-              <h4 className="fw-bold mb-0 d-flex align-items-center gap-2">
-                <FaExchangeAlt className="text-primary" />
-                Exchange Replacement Process
-              </h4>
-              <span className="badge bg-primary text-white px-3 py-2 rounded-pill">
-                Free Doorstep Replacement • ₹0.00
-              </span>
-            </div>
+        {/* REFUND */}
 
-            <p className="text-muted mb-4">
-              No refund or extra payment is involved in an exchange. Your
-              existing item will be picked up and replaced with a brand-new unit
-              at your doorstep.
-            </p>
+        {(isCancelled || isFocusedReturn) && (
+          <div className="pro-card p-4 p-md-5 mb-4 glass-card hover-lift order-refund-card">
 
-            <div className="d-flex flex-column gap-3">
-              <div className="d-flex justify-content-between align-items-center flex-wrap gap-2">
-                <span className="text-muted">1. Original Item Pickup</span>
-                <strong>Doorstep Verification & Handover</strong>
+            {isPureCOD ? (
+              <div>
+
+                <h4 className="fw-bold mb-3">
+                  Refund Details
+                </h4>
+
+                <p className="text-muted mb-0">
+                  No refund is involved
+                  as the order was a
+                  Cash on Delivery
+                  order.
+                </p>
+
               </div>
-              <div className="d-flex justify-content-between align-items-center flex-wrap gap-2">
-                <span className="text-muted">2. Replacement Product</span>
-                <strong>
-                  {itemName} (x{itemQty})
-                </strong>
-              </div>
-              <div className="d-flex justify-content-between align-items-center flex-wrap gap-2">
-                <span className="text-muted">3. Exchange Fee / Extra Charge</span>
-                <strong className="text-success">₹0.00 (Free)</strong>
-              </div>
-            </div>
-          </div>
-        )}
+            ) : (
+              <div>
 
-        {/* REFUND (Shown ONLY for Pre-Delivery Cancelled Orders OR Active Non-Cancelled Returns — NEVER for Return Cancelled!) */}
+                <div className="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
 
-        {((!focusedReturnRequest &&
-          isCancelled &&
-          (cancelStepAnim === 0 || cancelStepAnim >= 3)) ||
-          (isFocusedReturn && !isFocusedReqCancelled)) &&
-          (() => {
-            const rawRxSt = String(
-              focusedReturnRequest?.status || ""
-            ).toUpperCase();
-            const rawRefSt = String(
-              focusedReturnRequest?.refundStatus ||
-                focusedReturnRequest?.paymentRefund?.refundStatus ||
-                ""
-            ).toUpperCase();
-            const isReturnRefundInitiated =
-              !isFocusedReturn ||
-              [
-                "PICKED_UP",
-                "REFUND_INITIATED",
-                "REFUNDED",
-                "REFUND_COMPLETED",
-                "COMPLETED",
-              ].includes(rawRxSt) ||
-              [
-                "INITIATED",
-                "REFUND_INITIATED",
-                "COMPLETED",
-                "REFUNDED",
-              ].includes(rawRefSt);
-            const isReturnRefundCompleted =
-              isFocusedReturn &&
-              (["REFUNDED", "REFUND_COMPLETED", "COMPLETED"].includes(rawRxSt) ||
-                ["COMPLETED", "REFUNDED"].includes(rawRefSt));
-            const refundRefDate = isFocusedReturn
-              ? focusedReturnRequest?.updatedAt ||
-                focusedReturnRequest?.$updatedAt ||
-                focusedReturnRequest?.createdAt ||
-                focusedReturnRequest?.$createdAt ||
-                cancelledRawDate
-              : cancelledRawDate;
+                  <h4 className="fw-bold mb-0">
+                    Total Refund ₹
+                    {formatMoney(
+                      actualRefundAmount
+                    )}
+                  </h4>
 
-            return (
-              <div className="pro-card p-4 p-md-5 mb-4 glass-card hover-lift order-refund-card animate-fade-in">
-                {isPureCOD ? (
-                  <div>
-                    <h4 className="fw-bold mb-3">
-                      {isFocusedReturn ? "Return Refund Details" : "Refund Details"}
-                    </h4>
+                </div>
 
-                    <p className="text-muted mb-0">
-                      {isFocusedReturn
-                        ? isReturnRefundInitiated
-                          ? `Refund of ₹${formatMoney(
-                              itemTotalPrice
-                            )} for your Cash on Delivery return has been initiated following pickup verification.`
-                          : `Estimated Refund: ₹${formatMoney(
-                              itemTotalPrice
-                            )}. Since this was a Cash on Delivery order, your refund will be processed once the return item is picked up and verified at your doorstep.`
-                        : "No refund is involved as the order was a Cash on Delivery order."}
-                    </p>
-                  </div>
-                ) : (
-                  <div>
-                    <div className="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
-                      <h4 className="fw-bold mb-0">
-                        {isFocusedReturn && !isReturnRefundInitiated
-                          ? `Estimated Refund ₹${formatMoney(actualRefundAmount)}`
-                          : `Total Refund ₹${formatMoney(actualRefundAmount)}`}
-                      </h4>
+                <p className="text-muted mb-4">
+                  Refund has been initiated on{" "}
+                  {formatFullDayDate(cancelledRawDate)}, the amount should get
+                  credited in 7-10 business days.
+                </p>
 
-                      {isFocusedReturn ? (
-                        <span
-                          className={`badge px-3 py-2 rounded-pill d-inline-flex align-items-center gap-2 ${
-                            isReturnRefundCompleted
-                              ? "bg-success text-white"
-                              : isReturnRefundInitiated
-                              ? "bg-primary text-white"
-                              : "bg-warning text-dark"
-                          }`}
-                        >
-                          <FaCheckCircle />
-                          {isReturnRefundCompleted
-                            ? "Refund Completed"
-                            : isReturnRefundInitiated
-                            ? "Refund Initiated"
-                            : "Refund After Pickup Verification"}
-                        </span>
-                      ) : (
-                        refundToWallet > 0 && (
-                          <span className="badge bg-success text-white px-3 py-2 rounded-pill d-inline-flex align-items-center gap-2">
-                            <FaCheckCircle />
-                            ₹{formatMoney(refundToWallet)} Credited to Wallet
-                          </span>
-                        )
+                <h6 className="fw-bold mb-3">
+                  Refund Credit Mode
+                </h6>
+
+                {refundToWallet >
+                  0 && (
+                  <div className="d-flex justify-content-between mb-2">
+
+                    <span className="text-muted d-inline-flex align-items-center gap-2">
+                      <FaWallet className="text-primary" />
+                      TechStore Wallet
+                    </span>
+
+                    <strong>
+                      ₹
+                      {formatMoney(
+                        refundToWallet
                       )}
-                    </div>
+                    </strong>
 
-                    {isFocusedReturn && !isReturnRefundInitiated ? (
-                      <p className="text-muted mb-4">
-                        Your refund of{" "}
-                        <strong>₹{formatMoney(actualRefundAmount)}</strong> will
-                        be initiated automatically once our courier partner picks
-                        up the product from your address and completes quality
-                        verification.
-                      </p>
-                    ) : refundToWallet > 0 && refundToOnline <= 0 ? (
-                      <p className="text-success fw-semibold mb-4">
-                        ₹{formatMoney(refundToWallet)} has been refunded and
-                        credited back to your TechStore Wallet on{" "}
-                        {formatFullDayDate(refundRefDate)}.
-                      </p>
-                    ) : (
-                      <p className="text-muted mb-4">
-                        {isReturnRefundCompleted
-                          ? `Refund has been completed on ${formatFullDayDate(
-                              refundRefDate
-                            )}.`
-                          : `Refund has been initiated on ${formatFullDayDate(
-                              refundRefDate
-                            )}.`}
-                        {refundToWallet > 0
-                          ? ` ₹${formatMoney(
-                              refundToWallet
-                            )} has been credited directly to your TechStore Wallet.`
-                          : ""}{" "}
-                        {refundToOnline > 0 && !isReturnRefundCompleted
-                          ? "Online payment refund will be credited in 7-10 business days."
-                          : ""}
-                      </p>
-                    )}
-
-                    {refundToWallet > 0 && isReturnRefundInitiated && (
-                      <div
-                        className="p-3 rounded-4 mb-4 d-flex align-items-center justify-content-between flex-wrap gap-3"
-                        style={{
-                          background: "rgba(16, 185, 129, 0.1)",
-                          border: "1px solid rgba(16, 185, 129, 0.3)",
-                        }}
-                      >
-                        <div className="d-flex align-items-center gap-3">
-                          <div
-                            className="rounded-circle bg-success text-white d-flex align-items-center justify-content-center flex-shrink-0"
-                            style={{ width: 40, height: 40 }}
-                          >
-                            <FaWallet size={18} />
-                          </div>
-                          <div>
-                            <div className="fw-bold text-success">
-                              +₹{formatMoney(refundToWallet)} Credited to TechStore Wallet
-                            </div>
-                            <small className="text-muted">
-                              Your wallet balance has been restored for{" "}
-                              {isFocusedReturn
-                                ? `Return #${focusedReturnRequest?.referenceId || getOrderReference(order)}`
-                                : `Cancelled Order #${getOrderReference(order)}`}
-                            </small>
-                          </div>
-                        </div>
-
-                        <button
-                          type="button"
-                          className="btn btn-sm btn-success rounded-pill px-3 fw-semibold"
-                          onClick={() => navigate("/profile?tab=wallet")}
-                        >
-                          Check Wallet Balance
-                        </button>
-                      </div>
-                    )}
-
-                    <h6 className="fw-bold mb-3">
-                      Refund Credit Mode
-                    </h6>
-
-                    {refundToWallet > 0 && (
-                      <div className="d-flex justify-content-between mb-2">
-                        <span className="text-muted d-inline-flex align-items-center gap-2">
-                          <FaWallet className="text-primary" />
-                          TechStore Wallet{" "}
-                          {isReturnRefundInitiated ? "(Credited)" : "(After Pickup)"}
-                        </span>
-
-                        <strong className="text-success">
-                          +₹{formatMoney(refundToWallet)}
-                        </strong>
-                      </div>
-                    )}
-
-                    {refundToOnline > 0 && (
-                      <div className="d-flex justify-content-between mb-2">
-                        <span className="text-muted d-inline-flex align-items-center gap-2">
-                          {isUPI ? (
-                            <FaMobileAlt className="text-success" />
-                          ) : (
-                            <FaCreditCard className="text-primary" />
-                          )}
-                          {isUPI
-                            ? "BHIM UPI"
-                            : isCard
-                            ? "Debit / Credit Card"
-                            : "Original Payment Method"}
-                        </span>
-
-                        <strong>₹{formatMoney(refundToOnline)}</strong>
-                      </div>
-                    )}
-
-                    <hr />
-
-                    <div className="d-flex justify-content-between fw-bold fs-5">
-                      <span>Total</span>
-
-                      <span>₹{formatMoney(actualRefundAmount)}</span>
-                    </div>
                   </div>
                 )}
+
+                {refundToOnline >
+                  0 && (
+                  <div className="d-flex justify-content-between mb-2">
+
+                    <span className="text-muted d-inline-flex align-items-center gap-2">
+                      {isUPI ? (
+                        <FaMobileAlt className="text-success" />
+                      ) : (
+                        <FaCreditCard className="text-primary" />
+                      )}
+                      {isUPI
+                        ? "BHIM UPI"
+                        : isCard
+                        ? "Debit / Credit Card"
+                        : "Original Payment Method"}
+                    </span>
+
+                    <strong>
+                      ₹
+                      {formatMoney(
+                        refundToOnline
+                      )}
+                    </strong>
+
+                  </div>
+                )}
+
+                <hr />
+
+                <div className="d-flex justify-content-between fw-bold fs-5">
+
+                  <span>Total</span>
+
+                  <span>
+                    ₹
+                    {formatMoney(
+                      actualRefundAmount
+                    )}
+                  </span>
+
+                </div>
+
               </div>
-            );
-          })()}
+            )}
+
+          </div>
+        )}
 
         {/* DELIVERY ADDRESS */}
 
@@ -5042,59 +3961,23 @@ function OrderDetails() {
                         width: "100px",
                       }}
                       onClick={() => {
-                        const clickedIdx = rawOrderItems.findIndex(
-                          (it) =>
-                            it === item ||
-                            JSON.stringify(it) === JSON.stringify(item)
-                        );
-                        const itemProdId = String(
-                          item?.productId || item?.id || item?.$id || ""
-                        ).trim();
-
-                        setSelectedProductOverride(item);
-                        setOrder((previous) =>
-                          previous
-                            ? {
-                                ...previous,
-                                singleProduct: item,
-                              }
-                            : previous
+                        setOrder(
+                          (
+                            previous
+                          ) => ({
+                            ...previous,
+                            singleProduct:
+                              item,
+                          })
                         );
 
-                        const params = new URLSearchParams(location.search);
-                        const ordRef =
-                          params.get("orderId") ||
-                          order?.orderId ||
-                          order?.$id ||
-                          "";
-                        if (ordRef) {
-                          params.set("orderId", String(ordRef));
-                        }
-                        if (clickedIdx >= 0) {
-                          params.set("itemIdx", String(clickedIdx));
-                        }
-                        if (itemProdId) {
-                          params.set("itemId", itemProdId);
-                        } else {
-                          params.delete("itemId");
-                        }
-                        params.delete("returnId");
-
-                        navigate(`/order-details?${params.toString()}`, {
-                          replace: false,
-                          state: {
-                            ...(location.state || {}),
-                            order: order
-                              ? { ...order, singleProduct: item }
-                              : order,
-                            singleProduct: item,
-                            itemIndex: clickedIdx >= 0 ? clickedIdx : 0,
-                            returnRequest: null,
-                            viewMode: "ORDER",
-                          },
-                        });
-
-                        scrollToPageTop();
+                        window.scrollTo(
+                          {
+                            top: 0,
+                            behavior:
+                              "smooth",
+                          }
+                        );
                       }}
                     >
 
@@ -5388,191 +4271,134 @@ function OrderDetails() {
 
         </div>
 
-        {/* REVIEW MODAL — FULL LIGHT & DARK MODE */}
+        {/* REVIEW MODAL */}
 
         {reviewModalOpen && (
           <div
-            className="od-review-modal-backdrop"
+            className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
+            style={{
+              zIndex: 9999,
+              background:
+                "rgba(0,0,0,0.65)",
+              backdropFilter:
+                "blur(6px)",
+              padding: "20px",
+            }}
             onClick={(event) => {
-              if (event.target === event.currentTarget) {
+              if (
+                event.target ===
+                event.currentTarget
+              ) {
                 closeReviewModal();
               }
             }}
           >
+
             <div
-              className="od-review-modal-card"
-              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-4 shadow-lg w-100"
+              style={{
+                maxWidth:
+                  "560px",
+                maxHeight:
+                  "90vh",
+                overflowY:
+                  "auto",
+              }}
             >
-              {/* Modal Header */}
-              <div className="od-review-modal-header">
+
+              <div className="d-flex align-items-center justify-content-between p-4 border-bottom">
+
                 <div>
-                  <span className="od-review-eyebrow">
-                    <FaStar className="text-warning" /> VERIFIED BUYER FEEDBACK
-                  </span>
-                  <h4 className="od-review-modal-title">
-                    {existingProductReview && !isEditingReview && !reviewSubmitted
-                      ? "Your Submitted Review"
-                      : existingProductReview && isEditingReview
-                      ? "Update Your Review"
-                      : "Write a Product Review"}
+                  <h4 className="fw-bold mb-1">
+                    Write a Review ⭐
                   </h4>
+
+                  <small className="text-muted">
+                    Share your
+                    experience
+                    with this
+                    product
+                  </small>
                 </div>
 
                 <button
                   type="button"
-                  className="od-review-close-btn"
-                  onClick={closeReviewModal}
-                  disabled={reviewSubmitting}
-                  aria-label="Close review modal"
+                  className="btn btn-light rounded-circle d-flex align-items-center justify-content-center"
+                  style={{
+                    width:
+                      "40px",
+                    height:
+                      "40px",
+                  }}
+                  onClick={
+                    closeReviewModal
+                  }
+                  disabled={
+                    reviewSubmitting
+                  }
                 >
                   <FaTimes />
                 </button>
+
               </div>
 
-              {/* Modal Body */}
-              <div className="od-review-modal-body">
+              <div className="p-4">
+
                 {reviewSubmitted ? (
-                  <div className="od-review-success-state">
-                    <div className="od-review-success-icon">
+                  <div className="text-center py-4">
+
+                    <div
+                      className="d-flex align-items-center justify-content-center rounded-circle bg-success-subtle text-success mx-auto mb-3"
+                      style={{
+                        width:
+                          "75px",
+                        height:
+                          "75px",
+                        fontSize:
+                          "34px",
+                      }}
+                    >
                       <FaCheck />
                     </div>
 
-                    <h4 className="od-review-success-title">
-                      Thank You for Your Review!
+                    <h4 className="fw-bold mb-2">
+                      Review Submitted!
                     </h4>
 
-                    <p className="od-review-success-text">
-                      Your verified purchase review for{" "}
-                      <strong>{getProductName(reviewProduct)}</strong> has been
-                      published.
+                    <p className="text-muted mb-4">
+                      Thank you for
+                      sharing your
+                      experience.
+                      <br />
+                      Your review
+                      is currently{" "}
+                      <strong>
+                        Pending Admin
+                        Approval
+                      </strong>
+                      .
                     </p>
 
-                    <div className="od-review-success-actions">
-                      {getProductId(reviewProduct) && (
-                        <button
-                          type="button"
-                          className="od-review-btn od-review-btn-secondary"
-                          onClick={() => {
-                            const pid = getProductId(reviewProduct);
-                            closeReviewModal();
-                            navigate(`/product/${pid}`);
-                          }}
-                        >
-                          View on Product Page
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        className="od-review-btn od-review-btn-primary"
-                        onClick={closeReviewModal}
-                      >
-                        Done
-                      </button>
-                    </div>
-                  </div>
-                ) : existingProductReview && !isEditingReview ? (
-                  <div className="od-review-existing-view">
-                    {/* Product Strip */}
-                    <div className="od-review-product-strip">
-                      <img
-                        src={
-                          reviewProduct?.thumbnail ||
-                          reviewProduct?.image ||
-                          reviewProduct?.img ||
-                          "https://images.unsplash.com/photo-1523275335684-37898b30?w=500&auto=format&fit=crop&q=60"
-                        }
-                        alt={getProductName(reviewProduct)}
-                        referrerPolicy="no-referrer"
-                        className="od-review-product-img"
-                      />
-                      <div className="od-review-product-meta">
-                        <span className="od-review-verified-pill">
-                          <FaCheck /> Verified Purchase
-                        </span>
-                        <h6 className="od-review-product-name">
-                          {getProductName(reviewProduct)}
-                        </h6>
-                      </div>
-                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-dark px-4"
+                      onClick={
+                        closeReviewModal
+                      }
+                    >
+                      Done
+                    </button>
 
-                    {/* Submitted Review Card */}
-                    <div className="od-review-saved-box">
-                      <div className="od-review-saved-top">
-                        <div className="od-review-saved-stars">
-                          {[1, 2, 3, 4, 5].map((s) => (
-                            <FaStar
-                              key={s}
-                              className={
-                                s <= Number(existingProductReview.rating || 5)
-                                  ? "star-filled"
-                                  : "star-empty"
-                              }
-                            />
-                          ))}
-                          <strong>
-                            {Number(existingProductReview.rating || 5).toFixed(1)} / 5
-                          </strong>
-                        </div>
-                        <span
-                          className={`od-review-status-pill ${String(
-                            existingProductReview.status || "Approved"
-                          ).toLowerCase()}`}
-                        >
-                          {existingProductReview.status || "Approved"}
-                        </span>
-                      </div>
-
-                      <p className="od-review-saved-text">
-                        {existingProductReview.review}
-                      </p>
-
-                      <div className="od-review-saved-footer">
-                        <span>
-                          By <strong>{existingProductReview.customerName || getCustomerName()}</strong>
-                        </span>
-                        <span>
-                          {formatDate(
-                            existingProductReview.createdAt ||
-                              existingProductReview.$createdAt
-                          )}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="od-review-locked-note mb-3">
-                      <FaCheckCircle className="text-success flex-shrink-0" />
-                      <span>
-                        Your review is verified and approved. Approved reviews are permanently published and cannot be edited.
-                      </span>
-                    </div>
-
-                    <div className="od-review-modal-actions">
-                      {getProductId(reviewProduct) && (
-                        <button
-                          type="button"
-                          className="od-review-btn od-review-btn-secondary"
-                          onClick={() => {
-                            const pid = getProductId(reviewProduct);
-                            closeReviewModal();
-                            navigate(`/product/${pid}`);
-                          }}
-                        >
-                          View on Product Page
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        className="od-review-btn od-review-btn-primary"
-                        onClick={closeReviewModal}
-                      >
-                        Done
-                      </button>
-                    </div>
                   </div>
                 ) : (
-                  <form onSubmit={handleSubmitReview}>
-                    {/* Product Strip */}
-                    <div className="od-review-product-strip">
+                  <form
+                    onSubmit={
+                      handleSubmitReview
+                    }
+                  >
+
+                    <div className="d-flex align-items-center gap-3 p-3 rounded-4 border bg-light mb-4">
+
                       <img
                         src={
                           reviewProduct?.thumbnail ||
@@ -5580,163 +4406,216 @@ function OrderDetails() {
                           reviewProduct?.img ||
                           "https://images.unsplash.com/photo-1523275335684-37898b30?w=500&auto=format&fit=crop&q=60"
                         }
-                        alt={getProductName(reviewProduct)}
+                        alt={getProductName(
+                          reviewProduct
+                        )}
                         referrerPolicy="no-referrer"
-                        className="od-review-product-img"
+                        style={{
+                          width:
+                            "70px",
+                          height:
+                            "70px",
+                          objectFit:
+                            "cover",
+                          borderRadius:
+                            "14px",
+                        }}
                       />
 
-                      <div className="od-review-product-meta">
-                        <span className="od-review-verified-pill">
-                          <FaCheck /> Verified Purchase • Order #{getOrderReference(order)}
-                        </span>
-                        <h6 className="od-review-product-name">
-                          {getProductName(reviewProduct)}
+                      <div className="flex-grow-1">
+
+                        <small className="text-muted d-block">
+                          Reviewing
+                        </small>
+
+                        <h6 className="fw-bold mb-0">
+                          {getProductName(
+                            reviewProduct
+                          )}
                         </h6>
+
                       </div>
                     </div>
 
-                    {/* Interactive Rating Selector */}
-                    <div className="od-review-field-group">
-                      <div className="od-review-label-row">
-                        <label className="od-review-label">Overall Rating</label>
-                        <span className="od-review-rating-tag">
-                          {reviewRating === 5
-                            ? "5.0 ★ Excellent"
-                            : reviewRating === 4
-                            ? "4.0 ★ Very Good"
-                            : reviewRating === 3
-                            ? "3.0 ★ Good"
-                            : reviewRating === 2
-                            ? "2.0 ★ Fair"
-                            : "1.0 ★ Poor"}
-                        </span>
-                      </div>
+                    <div className="p-3 rounded-4 border mb-4">
 
-                      <div className="od-review-star-picker">
-                        {[1, 2, 3, 4, 5].map((star) => (
-                          <button
-                            key={star}
-                            type="button"
-                            className={`od-review-star-btn ${
-                              star <= reviewRating ? "active" : ""
-                            }`}
-                            onClick={() => setReviewRating(star)}
-                            aria-label={`Rate ${star} out of 5 stars`}
-                          >
-                            <FaStar />
-                          </button>
-                        ))}
-                      </div>
+                      <small className="text-muted d-block mb-1">
+                        Review by
+                      </small>
+
+                      <strong className="d-block">
+                        {getCustomerName()}
+                      </strong>
+
+                      {getCustomerEmail() && (
+                        <small className="text-muted">
+                          {getCustomerEmail()}
+                        </small>
+                      )}
+
                     </div>
 
-                    {/* Quick Feedback Chips */}
-                    <div className="od-review-field-group">
-                      <label className="od-review-label">
-                        Quick Highlights <small>(Tap to add)</small>
+                    <div className="mb-4">
+
+                      <label className="form-label fw-bold">
+                        Your Rating
                       </label>
-                      <div className="od-review-quick-tags">
-                        {[
-                          "Excellent build quality!",
-                          "Great value for money.",
-                          "Fast & safe delivery.",
-                          "Works exactly as described.",
-                          "Highly recommended!",
-                        ].map((tagText) => {
-                          const isAdded = reviewText
-                            .toLowerCase()
-                            .includes(tagText.toLowerCase());
-                          return (
+
+                      <div className="d-flex gap-2">
+
+                        {[1, 2, 3, 4, 5].map(
+                          (star) => (
                             <button
-                              key={tagText}
+                              key={
+                                star
+                              }
                               type="button"
-                              className={`od-review-tag-chip ${
-                                isAdded ? "active" : ""
-                              }`}
-                              onClick={() => {
-                                if (isAdded) return;
-                                setReviewText((prev) => {
-                                  const cleanPrev = prev.trim();
-                                  return cleanPrev
-                                    ? `${cleanPrev} ${tagText}`
-                                    : tagText;
-                                });
+                              className="btn p-0 border-0"
+                              style={{
+                                background:
+                                  "transparent",
+                                fontSize:
+                                  "32px",
                               }}
+                              onClick={() =>
+                                setReviewRating(
+                                  star
+                                )
+                              }
                             >
-                              + {tagText}
+                              <FaStar
+                                className={
+                                  star <=
+                                  reviewRating
+                                    ? "text-warning"
+                                    : "text-secondary opacity-25"
+                                }
+                              />
                             </button>
-                          );
-                        })}
+                          )
+                        )}
+
                       </div>
+
                     </div>
 
-                    {/* Review Textarea */}
-                    <div className="od-review-field-group">
-                      <label htmlFor="orderReviewText" className="od-review-label">
-                        Your Detailed Review
+                    <div className="mb-4">
+
+                      <label
+                        htmlFor="orderReviewText"
+                        className="form-label fw-bold"
+                      >
+                        Your Review
                       </label>
 
                       <textarea
                         id="orderReviewText"
-                        className="od-review-textarea"
-                        rows="3"
-                        placeholder="Share what you liked most about the product quality, performance, and packaging..."
-                        value={reviewText}
-                        onChange={(event) => setReviewText(event.target.value)}
-                        maxLength={2000}
-                        disabled={reviewSubmitting}
+                        className="form-control rounded-4"
+                        rows="5"
+                        placeholder="Tell us about your experience with this product..."
+                        value={
+                          reviewText
+                        }
+                        onChange={(
+                          event
+                        ) =>
+                          setReviewText(
+                            event.target
+                              .value
+                          )
+                        }
+                        maxLength={
+                          2000
+                        }
+                        disabled={
+                          reviewSubmitting
+                        }
                       />
 
-                      <div className="od-review-char-row">
-                        <span>
-                          Posting as <strong>{getCustomerName()}</strong> • Min 5 chars
-                        </span>
-                        <span>{reviewText.length}/2000</span>
+                      <div className="d-flex justify-content-between mt-2">
+
+                        <small className="text-muted">
+                          Minimum 5
+                          characters
+                        </small>
+
+                        <small className="text-muted">
+                          {
+                            reviewText.length
+                          }
+                          /2000
+                        </small>
+
                       </div>
+
                     </div>
 
-                    {/* Submit / Cancel Buttons */}
-                    <div className="od-review-modal-actions">
+                    <div className="alert alert-light border rounded-4 mb-4">
+
+                      <div className="d-flex align-items-center gap-2 mb-1">
+
+                        <FaBoxOpen />
+
+                        <strong>
+                          Verified
+                          Purchase
+                        </strong>
+
+                      </div>
+
+                      <small className="text-muted">
+                        This review is
+                        being
+                        submitted
+                        from your
+                        delivered
+                        TechStore
+                        order.
+                      </small>
+
+                    </div>
+
+                    <div className="d-flex gap-2">
+
                       <button
                         type="button"
-                        className="od-review-btn od-review-btn-secondary"
-                        onClick={() => {
-                          if (existingProductReview && isEditingReview) {
-                            setIsEditingReview(false);
-                          } else {
-                            closeReviewModal();
-                          }
-                        }}
-                        disabled={reviewSubmitting}
+                        className="btn btn-outline-secondary flex-fill"
+                        onClick={
+                          closeReviewModal
+                        }
+                        disabled={
+                          reviewSubmitting
+                        }
                       >
                         Cancel
                       </button>
 
                       <button
                         type="submit"
-                        className="od-review-btn od-review-btn-primary"
+                        className="btn btn-dark flex-fill d-flex align-items-center justify-content-center gap-2"
                         disabled={
-                          reviewSubmitting || reviewText.trim().length < 5
+                          reviewSubmitting ||
+                          !reviewText.trim()
                         }
                       >
                         {reviewSubmitting ? (
                           <>
                             <FaSpinner className="fa-spin" />
-                            <span>Submitting...</span>
+                            Submitting...
                           </>
                         ) : (
                           <>
                             <FaStar />
-                            <span>
-                              {existingProductReview?.$id
-                                ? "Update Review"
-                                : "Submit Review"}
-                            </span>
+                            Submit Review
                           </>
                         )}
                       </button>
+
                     </div>
+
                   </form>
                 )}
+
               </div>
             </div>
           </div>

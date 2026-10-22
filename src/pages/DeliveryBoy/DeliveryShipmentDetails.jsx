@@ -25,12 +25,6 @@ import shipmentService from "../../appwrite/shipmentService";
 import orderService from "../../appwrite/orderService";
 import deliveryOtpService from "../../appwrite/deliveryOtpService";
 import returnExchangeService from "../../appwrite/returnExchangeService";
-import {
-    getActiveDeliveryItems,
-    getReturnExchangeItemsForDelivery,
-    resolveReturnRequestItem,
-    extractCleanReason,
-} from "../../utils/orderItemHelper";
 import "../../css/DeliveryPremiumUI.css";
 
 function formatAddressValue(rawAddress) {
@@ -88,50 +82,20 @@ function DeliveryShipmentDetails() {
 
             /* First try shipment. */
             try {
-                let shipmentData = await shipmentService.getShipment(id);
+                const shipmentData = await shipmentService.getShipment(id);
 
                 if (shipmentData) {
-                    let orderData = null;
+                    setShipment(shipmentData);
 
                     if (shipmentData.orderId) {
                         try {
-                            orderData = await orderService.getOrderSmart(
+                            const orderData = await orderService.getOrderSmart(
                                 String(shipmentData.orderId)
                             );
+                            setOrder(orderData);
                         } catch (error) {
                             console.error("Order details error:", error);
                         }
-                    }
-
-                    if (String(shipmentData.status || "").toUpperCase() === "OUT_FOR_DELIVERY") {
-                        try {
-                            const otpRes = await deliveryOtpService.generateOtp(shipmentData.$id, {
-                                userId: shipmentData.userId || orderData?.userId,
-                                orderId: shipmentData.orderId || orderData?.$id,
-                                trackingId: shipmentData.trackingId,
-                            });
-
-                            if (otpRes?.autoCancelled) {
-                                shipmentData = {
-                                    ...shipmentData,
-                                    status: "CANCELLED",
-                                    otpRequired: false,
-                                };
-                                if (orderData) {
-                                    orderData = {
-                                        ...orderData,
-                                        status: "Cancelled",
-                                    };
-                                }
-                            }
-                        } catch (otpErr) {
-                            console.error("OTP sync error:", otpErr);
-                        }
-                    }
-
-                    setShipment(shipmentData);
-                    if (orderData) {
-                        setOrder(orderData);
                     }
 
                     return;
@@ -222,9 +186,6 @@ function DeliveryShipmentDetails() {
 
             if (!result?.success) {
                 toast.error(result?.message || "Invalid OTP.");
-                if (result?.autoCancelled) {
-                    await loadDetails();
-                }
                 return;
             }
 
@@ -262,21 +223,32 @@ function DeliveryShipmentDetails() {
             return;
         }
 
+        if (otp.length !== 6) {
+            toast.error("Please enter the 6-digit pickup OTP.");
+            return;
+        }
+
         try {
             setVerifying(true);
 
-            const updatedDoc = await returnExchangeService.markItemPickedUp(
-                request.$id
+            const result = await returnExchangeService.verifyPickupOtp(
+                request.$id,
+                otp
             );
 
-            toast.success("Item marked as picked up successfully!");
+            if (!result?.success) {
+                toast.error(result?.message || "Invalid pickup OTP.");
+                return;
+            }
 
-            setRequest(updatedDoc);
+            toast.success("Pickup verified successfully!");
+
+            setRequest(result.document);
             setOtp("");
         } catch (error) {
-            console.error("Pickup confirmation error:", error);
+            console.error("Pickup OTP error:", error);
 
-            toast.error(error?.message || "Pickup confirmation failed.");
+            toast.error(error?.message || "Pickup verification failed.");
         } finally {
             setVerifying(false);
         }
@@ -291,15 +263,11 @@ function DeliveryShipmentDetails() {
         try {
             setVerifying(true);
 
-            const resolvedItem = resolveReturnRequestItem(request, order);
             const amount = Number(
-                request?.refundAmount ||
-                    (resolvedItem?.itemPrice
-                        ? resolvedItem.itemPrice * (resolvedItem.itemQty || 1)
-                        : 0) ||
-                    order?.totalAmount ||
+                order?.totalAmount ||
                     order?.total ||
                     order?.grandTotal ||
+                    request?.refundAmount ||
                     0
             );
 
@@ -375,19 +343,21 @@ function DeliveryShipmentDetails() {
             shipment?.destinationAddress
     );
 
+    let products = [];
+
+    if (Array.isArray(order?.items)) {
+        products = order.items;
+    } else if (typeof order?.items === "string") {
+        try {
+            products = JSON.parse(order.items);
+        } catch {
+            products = [];
+        }
+    }
+
     const isDelivered = shipment?.status === "DELIVERED";
     const isOutForDelivery = shipment?.status === "OUT_FOR_DELIVERY";
     const isReturnExchange = !!request;
-
-    // For Return/Exchange: show ONLY the specific product requested for return/exchange.
-    // For Normal Delivery: show ONLY active (non-cancelled) products to deliver.
-    const products = isReturnExchange
-        ? getReturnExchangeItemsForDelivery(request, order)
-        : getActiveDeliveryItems(order);
-
-    const resolvedReturnItem = isReturnExchange
-        ? resolveReturnRequestItem(request, order)
-        : null;
 
     const normalizedRequestStatus = String(request?.status || "").toUpperCase();
     const isAssigned =
@@ -578,18 +548,6 @@ function DeliveryShipmentDetails() {
                                 <span>
                                     Original Order:{" "}
                                     <b>{request.originalOrderId}</b>
-                                    {resolvedReturnItem?.itemName ? (
-                                        <>
-                                            {" "}• Product:{" "}
-                                            <b>{resolvedReturnItem.itemName}</b>
-                                        </>
-                                    ) : null}
-                                    {resolvedReturnItem?.cleanReason ? (
-                                        <>
-                                            {" "}• Reason:{" "}
-                                            <b>{resolvedReturnItem.cleanReason}</b>
-                                        </>
-                                    ) : null}
                                 </span>
                             </div>
                         </div>
@@ -696,13 +654,7 @@ function DeliveryShipmentDetails() {
                                 <div className="delivery-products">
                                     <div className="delivery-products-title">
                                         <FaBox />
-                                        <span>
-                                            {isReturnExchange
-                                                ? request?.type === "EXCHANGE"
-                                                    ? "Product to Exchange"
-                                                    : "Product to Pick Up (Return)"
-                                                : "Products to Deliver"}
-                                        </span>
+                                        <span>Products</span>
                                         <b>{products.length}</b>
                                     </div>
 
@@ -851,8 +803,8 @@ function DeliveryShipmentDetails() {
                                             : "Exchange Pickup"}
                                     </h2>
                                     <p>
-                                        Confirm that you have inspected and picked up
-                                        the customer&apos;s item at the doorstep.
+                                        Verify the customer pickup using the
+                                        assigned 6-digit OTP.
                                     </p>
                                 </div>
 
@@ -861,32 +813,49 @@ function DeliveryShipmentDetails() {
                                     <strong>{request.status}</strong>
                                 </div>
 
-                                {extractCleanReason(request.reason) && (
+                                {request.reason && (
                                     <div className="delivery-reason-box">
                                         <span>Customer reason</span>
-                                        <p>{extractCleanReason(request.reason)}</p>
+                                        <p>{request.reason}</p>
                                     </div>
                                 )}
 
                                 {isAssigned && (
-                                    <button
-                                        type="button"
-                                        className="delivery-verify-btn"
-                                        onClick={handlePickupOtp}
-                                        disabled={verifying}
-                                    >
-                                        {verifying ? (
-                                            <>
-                                                <span className="delivery-mini-loader" />
-                                                Updating...
-                                            </>
-                                        ) : (
-                                            <>
-                                                <FaCheckCircle />
-                                                Confirm Item Picked Up
-                                            </>
-                                        )}
-                                    </button>
+                                    <>
+                                        <label className="delivery-otp-label">
+                                            Pickup OTP
+                                        </label>
+                                        <input
+                                            type="text"
+                                            inputMode="numeric"
+                                            maxLength={6}
+                                            value={otp}
+                                            onChange={handleOtpChange}
+                                            className="delivery-otp-input"
+                                            placeholder="000000"
+                                            aria-label="Pickup OTP"
+                                        />
+                                        <button
+                                            type="button"
+                                            className="delivery-verify-btn"
+                                            onClick={handlePickupOtp}
+                                            disabled={
+                                                verifying || otp.length !== 6
+                                            }
+                                        >
+                                            {verifying ? (
+                                                <>
+                                                    <span className="delivery-mini-loader" />
+                                                    Verifying...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <FaCheckCircle />
+                                                    Verify Pickup OTP
+                                                </>
+                                            )}
+                                        </button>
+                                    </>
                                 )}
 
                                 {isPickedUp && (

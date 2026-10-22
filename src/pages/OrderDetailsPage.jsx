@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import orderService from "../appwrite/orderService";
@@ -602,7 +602,7 @@ function OrderDetails() {
 
           setTrackingError(
             error?.message ||
-              "Unable to load live shipment tracking."
+              "Unable to load shipment tracking from Appwrite."
           );
 
           return null;
@@ -1299,18 +1299,54 @@ function OrderDetails() {
       }
     };
 
-  /* OTP — NEVER EXPIRES UNTIL DELIVERED */
+  /* OTP TIMER */
 
   useEffect(() => {
-    if (currentStatus === "DELIVERED") {
-      setDeliveryOtp("");
-      setShowOtp(false);
-      setOtpExpiresAt(null);
+    if (!otpExpiresAt) {
       setOtpTimeLeft(0);
-    } else if (otpExpiresAt) {
-      setOtpTimeLeft(999999);
+      return;
     }
-  }, [otpExpiresAt, currentStatus]);
+
+    const calculateOtpTime =
+      () => {
+        const expiry =
+          new Date(
+            otpExpiresAt
+          ).getTime();
+
+        const remaining =
+          Math.max(
+            0,
+            Math.floor(
+              (
+                expiry -
+                Date.now()
+              ) / 1000
+            )
+          );
+
+        setOtpTimeLeft(
+          remaining
+        );
+
+        if (remaining <= 0) {
+          setDeliveryOtp("");
+          setShowOtp(false);
+          setOtpExpiresAt(null);
+        }
+      };
+
+    calculateOtpTime();
+
+    const timer =
+      setInterval(
+        calculateOtpTime,
+        1000
+      );
+
+    return () =>
+      clearInterval(timer);
+  }, [otpExpiresAt]);
 
   // eslint-disable-next-line no-unused-vars
   const handleCopyOtp =
@@ -1462,7 +1498,7 @@ function OrderDetails() {
               cleanReview,
 
             status:
-              "Approved",
+              "Pending",
 
             orderId:
               String(
@@ -2188,7 +2224,7 @@ function OrderDetails() {
           </div>
           <div className="banner-divider" />
           <div className="banner-bottom-row">
-            <span className="banner-status-label">Current Shipment Status</span>
+            <span className="banner-status-label">Current Appwrite Shipment Status</span>
             <span className="banner-status-value">
               {STATUS_MAP[currentStatus] || currentStatus || "Placed"}
             </span>
@@ -2426,9 +2462,9 @@ function OrderDetails() {
 
                 <p className="order-tracking-subtitle mb-0">
                   {shipment?.trackingId
-                    ? `Live tracking • ${shipment.trackingId}`
+                    ? `Live tracking â€¢ ${shipment.trackingId}`
                     : shipmentLoading
-                    ? "Connecting to live shipment..."
+                    ? "Connecting to Appwrite shipment..."
                     : "Shipment tracking information"}
                 </p>
               </div>
@@ -2466,7 +2502,7 @@ function OrderDetails() {
                 </div>
                 <div>
                   <strong>Loading shipment tracking...</strong>
-                  <small>Fetching live shipment events.</small>
+                  <small>Fetching live shipment events from Appwrite.</small>
                 </div>
               </div>
             ) : !shipment ? (
@@ -2783,7 +2819,7 @@ function OrderDetails() {
                   <div>
                     <span className="order-tracking-live-dot" />
                     <span>
-                      Live shipment data
+                      Live shipment data from Appwrite
                     </span>
                   </div>
 
@@ -2824,7 +2860,7 @@ function OrderDetails() {
                 </h5>
 
                 <small className="text-muted">
-                  Live status
+                  Live status from Appwrite
                 </small>
               </div>
 

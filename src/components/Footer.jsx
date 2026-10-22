@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
-import { scrollToPageTop } from "./ScrollToTop";
 import "../css/Footer.css"; // Ensure this path matches your project structure
 
 function Footer() {
@@ -19,7 +18,6 @@ function Footer() {
   };
 
   const handleCategoryClick = (category) => {
-    scrollToPageTop();
     navigate(`/products?category=${encodeURIComponent(category)}`);
   };
 
@@ -80,10 +78,10 @@ function Footer() {
           <div className="col-lg-2 col-md-4 col-6">
             <h5 className="column-title">Quick Links</h5>
             <ul className="footer-links-list">
-              <li><Link to="/" onClick={scrollToPageTop}>Home</Link></li>
-              <li><Link to="/products" onClick={scrollToPageTop}>Products</Link></li>
-              <li><Link to="/about" onClick={scrollToPageTop}>About Us</Link></li>
-              <li><Link to="/contact" onClick={scrollToPageTop}>Contact</Link></li>
+              <li><Link to="/">Home</Link></li>
+              <li><Link to="/products">Products</Link></li>
+              <li><Link to="/about">About Us</Link></li>
+              <li><Link to="/contact">Contact</Link></li>
             </ul>
           </div>
 
@@ -93,8 +91,8 @@ function Footer() {
             <ul className="footer-links-list">
               <li onClick={() => handleCategoryClick("Laptop")}>Laptops</li>
               <li onClick={() => handleCategoryClick("Mobile")}>Smartphones</li>
-              <li onClick={() => handleCategoryClick("Smart Watches")}>Smart Watches</li>
-              <li onClick={() => handleCategoryClick("Headphones")}>Headphones & Audio</li>
+              <li onClick={() => handleCategoryClick("Accessories")}>Smart Watches</li>
+              <li onClick={() => handleCategoryClick("Accessories")}>Headphones & Audio</li>
             </ul>
           </div>
 

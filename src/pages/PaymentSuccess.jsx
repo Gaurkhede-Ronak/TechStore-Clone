@@ -1,4 +1,3 @@
-import { scrollToPageTop } from "../components/ScrollToTop";
 import { useEffect, useState, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
@@ -22,9 +21,6 @@ import "../css/PaymentSuccess.css";
 
 function PaymentSuccess() {
   const navigate = useNavigate();
-  useEffect(() => {
-    scrollToPageTop();
-  }, []);
   const location = useLocation();
 
   const order = useMemo(
@@ -576,7 +572,7 @@ function PaymentSuccess() {
             style={{
               background: `conic-gradient(
                 #22c55e ${progress}deg,
-                var(--ring-track, #e2e8f0) ${progress}deg
+                #e5e7eb ${progress}deg
               )`,
             }}
           >

@@ -392,8 +392,7 @@ class OrderService {
 
   async getDeliveredOrderForProduct(
     userId,
-    productId,
-    productTitle = ""
+    productId
   ) {
     try {
       const cleanUserId =
@@ -402,14 +401,9 @@ class OrderService {
       const cleanProductId =
         String(productId || "").trim();
 
-      const cleanProductTitle =
-        String(productTitle || "")
-          .trim()
-          .toLowerCase();
-
       if (
         !cleanUserId ||
-        (!cleanProductId && !cleanProductTitle)
+        !cleanProductId
       ) {
         return null;
       }
@@ -474,31 +468,12 @@ class OrderService {
             ]
               .filter(Boolean)
               .map((value) =>
-                String(value).trim()
+                String(value)
               );
 
-            if (
-              cleanProductId &&
-              possibleProductIds.includes(cleanProductId)
-            ) {
-              return true;
-            }
-
-            const itemTitle = String(
-              item.title || item.name || item.productName || ""
-            )
-              .trim()
-              .toLowerCase();
-
-            if (
-              cleanProductTitle &&
-              itemTitle &&
-              itemTitle === cleanProductTitle
-            ) {
-              return true;
-            }
-
-            return false;
+            return possibleProductIds.includes(
+              cleanProductId
+            );
           });
 
         if (!purchasedProduct) {
@@ -531,6 +506,8 @@ class OrderService {
             "Shipment lookup failed:",
             shipmentError
           );
+
+          continue;
         }
 
         const shipments =
@@ -548,11 +525,11 @@ class OrderService {
             return status === "DELIVERED";
           });
 
-        if (deliveredShipment || orderStatus === "delivered") {
+        if (deliveredShipment) {
           return {
             verified: true,
             order,
-            shipment: deliveredShipment || shipments[0] || null,
+            shipment: deliveredShipment,
             productId: cleanProductId,
           };
         }

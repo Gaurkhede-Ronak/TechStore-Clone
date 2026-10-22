@@ -24,12 +24,7 @@ import toast from "react-hot-toast";
 import shipmentService from "../../appwrite/shipmentService";
 import orderService from "../../appwrite/orderService";
 import authService from "../../appwrite/authService";
-import deliveryOtpService from "../../appwrite/deliveryOtpService";
 import returnExchangeService from "../../appwrite/returnExchangeService";
-import {
-    getActiveDeliveryItems,
-    resolveReturnRequestItem,
-} from "../../utils/orderItemHelper";
 
 import "../../css/DeliveryPremiumUI.css";
 
@@ -107,14 +102,9 @@ function DeliveryBoyDashboard() {
                 "OUT_FOR_DELIVERY"
             );
 
-            const rawShipmentList = Array.isArray(response)
+            const shipmentList = Array.isArray(response)
                 ? response
                 : response?.documents || [];
-
-            const shipmentList =
-                await deliveryOtpService.processOutForDeliveryShipments(
-                    rawShipmentList
-                );
 
             setShipments(shipmentList);
 
@@ -331,14 +321,10 @@ function DeliveryBoyDashboard() {
 
             const requestType = String(request?.type || "RETURN").toUpperCase();
 
-            // FAST AUTO-PROGRESS: EXCHANGE: PICKED_UP -> 2 sec -> EXCHANGE_COMPLETED
+            // EXCHANGE: PICKED_UP -> 15 sec -> EXCHANGE_COMPLETED
             if (requestType === "EXCHANGE") {
                 setTimeout(async () => {
                     try {
-                        const latestReq = await returnExchangeService.getRequest(requestId);
-                        if (String(latestReq?.status || "").toUpperCase() === "CANCELLED") {
-                            return;
-                        }
                         await returnExchangeService.updateRequest(requestId, {
                             status: "EXCHANGE_COMPLETED",
                         });
@@ -352,36 +338,21 @@ function DeliveryBoyDashboard() {
                             error?.message || "Unable to complete exchange."
                         );
                     }
-                }, 2000);
+                }, 15000);
 
                 return;
             }
 
-            const matchedOrderEntry = returnOrders.find(
-                (entry) => entry?.request?.$id === requestId
-            );
-            const rxItem = resolveReturnRequestItem(
-                request,
-                matchedOrderEntry?.order
-            );
-            const resolvedRefundAmount =
-                Number(request?.refundAmount || 0) ||
-                Number(request?.paymentRefund?.refundAmount || 0) ||
-                (rxItem?.itemPrice
-                    ? Number(rxItem.itemPrice) * Number(rxItem.itemQty || 1)
-                    : 0);
-
-            // FAST AUTO-PROGRESS: RETURN: PICKED_UP -> 1.8 sec -> REFUND_INITIATED -> 1.8 sec -> REFUND_COMPLETED
+            // RETURN: PICKED_UP -> 15 sec -> REFUND_INITIATED -> 15 sec -> REFUND_COMPLETED
             setTimeout(async () => {
                 try {
-                    const latestReq = await returnExchangeService.getRequest(requestId);
-                    if (String(latestReq?.status || "").toUpperCase() === "CANCELLED") {
-                        return;
-                    }
+                    await returnExchangeService.updateRequest(requestId, {
+                        status: "REFUND_INITIATED",
+                    });
 
                     await returnExchangeService.initiateRefund(
                         requestId,
-                        resolvedRefundAmount
+                        Number(request?.refundAmount || 0) || 0
                     );
 
                     await loadReturnRequests();
@@ -389,13 +360,15 @@ function DeliveryBoyDashboard() {
 
                     setTimeout(async () => {
                         try {
-                            const checkReq = await returnExchangeService.getRequest(requestId);
-                            if (String(checkReq?.status || "").toUpperCase() === "CANCELLED") {
-                                return;
-                            }
-
                             await returnExchangeService.completeRefund(
                                 requestId
+                            );
+
+                            await returnExchangeService.updateRequest(
+                                requestId,
+                                {
+                                    status: "REFUND_COMPLETED",
+                                }
                             );
 
                             await loadReturnRequests();
@@ -407,14 +380,14 @@ function DeliveryBoyDashboard() {
                                 error?.message || "Unable to complete refund."
                             );
                         }
-                    }, 1800);
+                    }, 15000);
                 } catch (error) {
                     console.error("Refund initiation error:", error);
                     toast.error(
                         error?.message || "Unable to initiate refund."
                     );
                 }
-            }, 1800);
+            }, 15000);
         } catch (error) {
             console.error("Item pickup error:", error);
             toast.error(
@@ -425,70 +398,6 @@ function DeliveryBoyDashboard() {
                 ...previous,
                 [requestId]: false,
             }));
-        }
-    };
-
-    const handleCompleteExchangeDirect = async (request) => {
-        const requestId = request?.$id;
-        if (!requestId) return;
-        try {
-            setPickupLoading((prev) => ({ ...prev, [requestId]: true }));
-            await returnExchangeService.updateRequest(requestId, {
-                status: "EXCHANGE_COMPLETED",
-            });
-            await loadReturnRequests();
-            toast.success("Exchange completed successfully.");
-        } catch (error) {
-            console.error("Exchange complete error:", error);
-            toast.error(error?.message || "Unable to complete exchange.");
-        } finally {
-            setPickupLoading((prev) => ({ ...prev, [requestId]: false }));
-        }
-    };
-
-    const handleInitiateRefundDirect = async (request) => {
-        const requestId = request?.$id;
-        if (!requestId) return;
-        try {
-            setPickupLoading((prev) => ({ ...prev, [requestId]: true }));
-            const matchedOrderEntry = returnOrders.find(
-                (entry) => entry?.request?.$id === requestId
-            );
-            const rxItem = resolveReturnRequestItem(
-                request,
-                matchedOrderEntry?.order
-            );
-            const resolvedRefundAmount =
-                Number(request?.refundAmount || 0) ||
-                Number(request?.paymentRefund?.refundAmount || 0) ||
-                (rxItem?.itemPrice
-                    ? Number(rxItem.itemPrice) * Number(rxItem.itemQty || 1)
-                    : 0);
-
-            await returnExchangeService.initiateRefund(requestId, resolvedRefundAmount);
-            await loadReturnRequests();
-            toast.success("Refund initiated.");
-        } catch (error) {
-            console.error("Refund initiate error:", error);
-            toast.error(error?.message || "Unable to initiate refund.");
-        } finally {
-            setPickupLoading((prev) => ({ ...prev, [requestId]: false }));
-        }
-    };
-
-    const handleCompleteRefundDirect = async (request) => {
-        const requestId = request?.$id;
-        if (!requestId) return;
-        try {
-            setPickupLoading((prev) => ({ ...prev, [requestId]: true }));
-            await returnExchangeService.completeRefund(requestId);
-            await loadReturnRequests();
-            toast.success("Refund completed successfully.");
-        } catch (error) {
-            console.error("Refund complete error:", error);
-            toast.error(error?.message || "Unable to complete refund.");
-        } finally {
-            setPickupLoading((prev) => ({ ...prev, [requestId]: false }));
         }
     };
 
@@ -893,35 +802,12 @@ function DeliveryBoyDashboard() {
                                                     {getAddress(item)}
                                                 </strong>
                                             </div>
-                                            {(() => {
-                                                const rxItem = resolveReturnRequestItem(
-                                                    request,
-                                                    item?.order
-                                                );
-                                                return (
-                                                    <>
-                                                        {rxItem?.itemName && (
-                                                            <div className="delivery-info-row">
-                                                                <span>
-                                                                    {isExchange
-                                                                        ? "Exchange Item"
-                                                                        : "Return Item"}
-                                                                </span>
-                                                                <strong>
-                                                                    {rxItem.itemName} (x
-                                                                    {rxItem.itemQty || 1})
-                                                                </strong>
-                                                            </div>
-                                                        )}
-                                                        {rxItem?.cleanReason && (
-                                                            <div className="delivery-reason-box">
-                                                                <span>Reason</span>
-                                                                <p>{rxItem.cleanReason}</p>
-                                                            </div>
-                                                        )}
-                                                    </>
-                                                );
-                                            })()}
+                                            {request?.reason && (
+                                                <div className="delivery-reason-box">
+                                                    <span>Reason</span>
+                                                    <p>{request.reason}</p>
+                                                </div>
+                                            )}
                                         </div>
 
                                         <div className="delivery-operation-footer">
@@ -935,7 +821,8 @@ function DeliveryBoyDashboard() {
                                                 </strong>
                                             </div>
 
-                                            {requestStatus === "PICKUP_ASSIGNED" ||
+                                            {requestStatus ===
+                                                "PICKUP_ASSIGNED" ||
                                             requestStatus === "CONFIRMED" ? (
                                                 <button
                                                     type="button"
@@ -963,81 +850,10 @@ function DeliveryBoyDashboard() {
                                                         </>
                                                     )}
                                                 </button>
-                                            ) : requestStatus === "PICKED_UP" && isExchange ? (
-                                                <button
-                                                    type="button"
-                                                    className="delivery-primary-action action-blue"
-                                                    onClick={() =>
-                                                        handleCompleteExchangeDirect(
-                                                            request
-                                                        )
-                                                    }
-                                                    disabled={isPicking}
-                                                >
-                                                    {isPicking ? (
-                                                        <>
-                                                            <FaSpinner className="fa-spin" />
-                                                            Completing...
-                                                        </>
-                                                    ) : (
-                                                        <>
-                                                            <FaCheckCircle />
-                                                            Complete Exchange
-                                                        </>
-                                                    )}
-                                                </button>
-                                            ) : requestStatus === "PICKED_UP" && !isExchange ? (
-                                                <button
-                                                    type="button"
-                                                    className="delivery-primary-action action-red"
-                                                    onClick={() =>
-                                                        handleInitiateRefundDirect(
-                                                            request
-                                                        )
-                                                    }
-                                                    disabled={isPicking}
-                                                >
-                                                    {isPicking ? (
-                                                        <>
-                                                            <FaSpinner className="fa-spin" />
-                                                            Initiating...
-                                                        </>
-                                                    ) : (
-                                                        <>
-                                                            <FaCheckCircle />
-                                                            Initiate Refund
-                                                        </>
-                                                    )}
-                                                </button>
-                                            ) : requestStatus === "REFUND_INITIATED" ? (
-                                                <button
-                                                    type="button"
-                                                    className="delivery-primary-action action-blue"
-                                                    onClick={() =>
-                                                        handleCompleteRefundDirect(
-                                                            request
-                                                        )
-                                                    }
-                                                    disabled={isPicking}
-                                                >
-                                                    {isPicking ? (
-                                                        <>
-                                                            <FaSpinner className="fa-spin" />
-                                                            Completing...
-                                                        </>
-                                                    ) : (
-                                                        <>
-                                                            <FaCheckCircle />
-                                                            Complete Refund
-                                                        </>
-                                                    )}
-                                                </button>
                                             ) : (
                                                 <div className="delivery-completed-pill">
                                                     <FaCheckCircle />
-                                                    {isExchange
-                                                        ? "Exchange Completed"
-                                                        : "Refund Completed"}
+                                                    Item Picked Up
                                                 </div>
                                             )}
                                         </div>
@@ -1129,28 +945,6 @@ function DeliveryBoyDashboard() {
                                             </strong>
                                         </div>
                                     </div>
-
-                                    {(() => {
-                                        const activeItems = getActiveDeliveryItems(
-                                            item?.order
-                                        );
-                                        if (activeItems.length === 0) return null;
-                                        return (
-                                            <div className="delivery-info-row mb-2">
-                                                <span>
-                                                    Items to Deliver ({activeItems.length})
-                                                </span>
-                                                <strong>
-                                                    {activeItems
-                                                        .map(
-                                                            (it) =>
-                                                                `${it?.title || it?.name || "Product"} (x${it?.quantity || it?.qty || 1})`
-                                                        )
-                                                        .join(", ")}
-                                                </strong>
-                                            </div>
-                                        );
-                                    })()}
 
                                     <div className="delivery-address-box">
                                         <div className="delivery-address-icon">

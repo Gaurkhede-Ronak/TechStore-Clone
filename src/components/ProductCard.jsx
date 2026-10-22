@@ -8,12 +8,7 @@ import {
   FaStar,
 } from "react-icons/fa";
 
-import {
-  addToCart,
-  increaseQty,
-  decreaseQty,
-  removeFromCart,
-} from "../redux/slices/cartSlice";
+import { addToCart } from "../redux/slices/cartSlice";
 import {
   addWishlist,
   removeWishlist,
@@ -34,36 +29,10 @@ function ProductCard({ product, isWishlistPage = false }) {
     ? wishlistItems.some((item) => item.$id === product.$id) 
     : false;
 
-  const cartItems = useSelector((state) => state.cart?.items || []);
-  const cartItem = Array.isArray(cartItems)
-    ? cartItems.find((item) => item.$id === product.$id)
-    : null;
-  const cartQty = Number(cartItem?.quantity || 0);
-
   const addCart = useCallback((e) => {
     e.stopPropagation(); // Card click event ko roko
     dispatch(addToCart(product));
-    if (isWishlistPage || isInWishlist) {
-      dispatch(removeWishlist(product.$id));
-    }
-  }, [dispatch, product, isWishlistPage, isInWishlist]);
-
-  const handleDecrease = useCallback((e) => {
-    e.stopPropagation();
-    if (cartQty <= 1) {
-      dispatch(removeFromCart(product.$id));
-    } else {
-      dispatch(decreaseQty(product.$id));
-    }
-  }, [dispatch, product.$id, cartQty]);
-
-  const handleIncrease = useCallback((e) => {
-    e.stopPropagation();
-    const maxStock = Number(product.stock ?? 99);
-    if (cartQty < maxStock) {
-      dispatch(increaseQty(product.$id));
-    }
-  }, [dispatch, product.$id, product.stock, cartQty]);
+  }, [dispatch, product]);
 
   // Wishlist Toggle Logic (Add/Remove)
   const handleWishlistToggle = useCallback((e) => {
@@ -165,33 +134,15 @@ function ProductCard({ product, isWishlistPage = false }) {
           )}
         </div>
 
-        {!isWishlistPage && cartQty > 0 ? (
-          <div
-            className="cart-btn cart-btn-qty-mode"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              type="button"
-              className="cart-qty-inline-btn"
-              onClick={handleDecrease}
-              aria-label="Decrease quantity"
-            >
-              -
-            </button>
-            <span className="cart-qty-inline-value">{cartQty}</span>
-            <button
-              type="button"
-              className="cart-qty-inline-btn"
-              onClick={handleIncrease}
-              aria-label="Increase quantity"
-            >
-              +
-            </button>
-          </div>
-        ) : (
-          <button className="cart-btn" onClick={addCart}>
-            <FaShoppingCart />
-            Add To Cart
+        <button className="cart-btn" onClick={addCart}>
+          <FaShoppingCart />
+          Add To Cart
+        </button>
+
+        {isWishlistPage && (
+          <button className="remove-wishlist-btn" onClick={handleWishlistToggle}>
+            <FaHeart />
+            Remove Wishlist
           </button>
         )}
       </div>

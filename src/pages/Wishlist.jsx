@@ -1,5 +1,4 @@
-import { useEffect, useState } from 'react'
-import { scrollToPageTop } from '../components/ScrollToTop'
+import { useState } from 'react'
 import { useSelector } from 'react-redux'
 import { useNavigate } from 'react-router-dom'
 import ProductCard from '../components/ProductCard'
@@ -12,25 +11,13 @@ function Wishlist() {
 
     // Pagination states
     const [currentPage, setCurrentPage] = useState(1);
-
-    useEffect(() => {
-        scrollToPageTop();
-    }, [currentPage]);
     const itemsPerPage = 8;
 
     // Calculate current items for pagination
-    const totalPages = Math.ceil(wishlist.length / itemsPerPage);
-
-    useEffect(() => {
-        if (totalPages > 0 && currentPage > totalPages) {
-            setCurrentPage(totalPages);
-        }
-    }, [wishlist.length, totalPages, currentPage]);
-
-    const safePage = totalPages > 0 ? Math.min(currentPage, totalPages) : 1;
-    const indexOfLastItem = safePage * itemsPerPage;
+    const indexOfLastItem = currentPage * itemsPerPage;
     const indexOfFirstItem = indexOfLastItem - itemsPerPage;
     const currentWishlist = wishlist.slice(indexOfFirstItem, indexOfLastItem);
+    const totalPages = Math.ceil(wishlist.length / itemsPerPage);
 
     if (wishlist.length === 0) {
         return (

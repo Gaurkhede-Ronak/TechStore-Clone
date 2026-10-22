@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useSelector, useDispatch } from "react-redux";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 
 import {
@@ -71,7 +71,6 @@ const formatDate = (value) => {
 function Profile() {
     const dispatch = useDispatch();
     const navigate = useNavigate();
-    const location = useLocation();
 
   // SAFE REDUX STATE
 
@@ -103,21 +102,7 @@ function Profile() {
     const [orders, setOrders] = useState([]);
 
     const [activeTab, setActiveTab] =
-        useState(() => {
-            const params = new URLSearchParams(window.location.search);
-            const tab = String(params.get("tab") || "").toLowerCase();
-            return ["overview", "wallet", "edit"].includes(tab)
-                ? tab
-                : "overview";
-        });
-
-    useEffect(() => {
-        const params = new URLSearchParams(location.search);
-        const tab = String(params.get("tab") || "").toLowerCase();
-        if (["overview", "wallet", "edit"].includes(tab)) {
-            setActiveTab(tab);
-        }
-    }, [location.search]);
+        useState("overview");
 
     const [name, setName] =
         useState(user?.name || "");
@@ -681,7 +666,7 @@ function Profile() {
             );
 
             toast.success(
-                "Profile Updated Successfully!"
+                "Profile Updated & Synced to Appwrite Successfully!"
             );
         } catch (error) {
             console.error(
@@ -712,89 +697,74 @@ function Profile() {
   // TRANSACTION HELPERS
 
     const getTransactionTitle = (txn) => {
-        const source = String(txn?.source || "").toLowerCase();
-        const promoType = String(txn?.promotionType || "").toLowerCase();
-        const amtStr = `₹${formatMoney(txn?.amount || 0)}`;
-        const ordId = txn?.orderId ? ` #${txn.orderId}` : "";
-        const credit = isCredit(txn);
-
-        if (source === "refund") {
-            return `₹${formatMoney(txn?.amount || 0)} Credited to Wallet — Refund for Cancelled Order${ordId}`;
-        }
-
-        if (source === "order" || (!credit && txn?.orderId)) {
-            if (promoType === "welcome") {
-                return `${amtStr} Debited from Wallet — Welcome Promotion Used for Order${ordId}`;
+        if (
+            txn?.source ===
+            "promotion"
+        ) {
+            if (
+                txn?.promotionType ===
+                "monthly"
+            ) {
+                return "Promotion - Monthly ₹500";
             }
-            if (promoType === "monthly") {
-                return `${amtStr} Debited from Wallet — Monthly Promotion Used for Order${ordId}`;
+
+            if (
+                txn?.promotionType ===
+                "welcome"
+            ) {
+                return "Promotion - Welcome ₹1000";
             }
-            return `${amtStr} Debited from Wallet — Payment for Order${ordId}`;
+
+            return (
+                txn?.description ||
+                "Promotion"
+            );
         }
 
-        if (source === "promotion") {
-            if (promoType === "monthly") {
-                return `${amtStr} Credited to Wallet — Monthly Promotion ₹500`;
-            }
-            if (promoType === "welcome") {
-                return `${amtStr} Credited to Wallet — Welcome Promotion ₹1,000`;
-            }
-            return `${amtStr} Credited to Wallet — ${txn?.description || "Promotion Reward"}`;
+        if (
+            txn?.source ===
+            "promotion_expiry"
+        ) {
+            return (
+                txn?.description ||
+                "Promotion Expired"
+            );
         }
 
-        if (source === "promotion_expiry") {
-            return `${amtStr} Debited from Wallet — Unused Promotion Expired`;
+        if (
+            txn?.source ===
+            "wallet_add"
+        ) {
+            return (
+                txn?.description ||
+                "Added Money to Wallet"
+            );
         }
 
-        if (source === "wallet_add") {
-            return `${amtStr} Credited to Wallet — ${txn?.description || "Added Money to Wallet"}`;
+        if (
+            txn?.source ===
+            "refund"
+        ) {
+            return (
+                txn?.description ||
+                "Refund Added to Wallet"
+            );
         }
 
-        if (credit) {
-            return txn?.description || `${amtStr} Credited to Wallet`;
+        if (
+            txn?.source ===
+            "order"
+        ) {
+            return (
+                txn?.description ||
+                "Wallet Used for Order"
+            );
         }
 
-        return txn?.description || `${amtStr} Debited from Wallet`;
-    };
-
-    const getTransactionBadge = (txn) => {
-        const source = String(txn?.source || "").toLowerCase();
-        const promoType = String(txn?.promotionType || "").toLowerCase();
-        const credit = isCredit(txn);
-
-        if (source === "refund") {
-            return "Order Refund Credited";
-        }
-
-        if (source === "order" || (!credit && txn?.orderId)) {
-            if (promoType === "welcome") {
-                return "Order Payment Debited • Welcome Promo";
-            }
-            if (promoType === "monthly") {
-                return "Order Payment Debited • Monthly Promo";
-            }
-            return "Order Payment Debited";
-        }
-
-        if (source === "promotion") {
-            if (promoType === "monthly") {
-                return "Monthly Promotion Credited";
-            }
-            if (promoType === "welcome") {
-                return "Welcome Promotion Credited";
-            }
-            return "Promotion Credited";
-        }
-
-        if (source === "promotion_expiry") {
-            return "Promotion Expired Debited";
-        }
-
-        if (source === "wallet_add") {
-            return "Wallet Money Credited";
-        }
-
-        return credit ? "Wallet Credited" : "Wallet Debited";
+        return (
+            txn?.description ||
+            "Wallet Transaction"
+        );
     };
 
 
@@ -918,11 +888,9 @@ function Profile() {
                                 </button>
 
 
-                                <div className="profile-nav-divider my-2" />
-
                                 <button
                                     type="button"
-                                    className="profile-nav-link text-danger"
+                                    className="profile-nav-link text-danger mt-3 border-top pt-3"
                                     onClick={
                                         handleLogout
                                     }
@@ -1212,71 +1180,6 @@ function Profile() {
                                             </div>
 
                                         </div>
-
-                                        {/* CANCELLED ORDER REFUND CREDITED BANNER */}
-                                        {(() => {
-                                            const seenOrderRefunds = new Set();
-                                            const refundTxns = (transactions || []).filter(
-                                                (t) => {
-                                                    if (
-                                                        String(t?.source || "").toLowerCase() !==
-                                                            "refund" ||
-                                                        !isCredit(t)
-                                                    ) {
-                                                        return false;
-                                                    }
-                                                    const sig = `${String(t?.orderId || "").trim()}::${Number(t?.amount || 0)}`;
-                                                    if (seenOrderRefunds.has(sig)) return false;
-                                                    seenOrderRefunds.add(sig);
-                                                    return true;
-                                                }
-                                            );
-                                            if (refundTxns.length === 0) return null;
-                                            const latestRefund = refundTxns[0];
-                                            const latestRefundAmt = Number(latestRefund?.amount || 0);
-                                            return (
-                                                <div
-                                                    className="p-4 rounded-4 mb-4"
-                                                    style={{
-                                                        background:
-                                                            "linear-gradient(135deg, rgba(16, 185, 129, 0.14), rgba(5, 150, 105, 0.06))",
-                                                        border: "1.5px solid rgba(16, 185, 129, 0.45)",
-                                                    }}
-                                                >
-                                                    <div className="d-flex align-items-center justify-content-between flex-wrap gap-3">
-                                                        <div className="d-flex align-items-center gap-3">
-                                                            <div
-                                                                className="rounded-circle bg-success text-white d-flex align-items-center justify-content-center flex-shrink-0 shadow-sm"
-                                                                style={{ width: 46, height: 46 }}
-                                                            >
-                                                                <FaCheckCircle size={22} />
-                                                            </div>
-                                                            <div>
-                                                                <span className="badge bg-success mb-1">
-                                                                    Order Cancelled Refund Credited
-                                                                </span>
-                                                                <h5 className="fw-bold text-success mb-1">
-                                                                    +₹{formatMoney(latestRefundAmt)} Credited to Your Wallet
-                                                                </h5>
-                                                                <small className="text-muted d-block">
-                                                                    {latestRefund?.orderId
-                                                                        ? `Refund from Cancelled Order #${latestRefund.orderId} has been credited back to your TechStore Wallet.`
-                                                                        : "Your cancelled order wallet payment has been credited back to your TechStore Wallet."}
-                                                                </small>
-                                                            </div>
-                                                        </div>
-                                                        <div className="text-md-end">
-                                                            <span className="small text-muted d-block">
-                                                                Available Wallet Balance
-                                                            </span>
-                                                            <strong className="fs-4 text-success">
-                                                                ₹{formatMoney(walletBalance)}
-                                                            </strong>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            );
-                                        })()}
 
 
                                         {/* WALLET STATS */}
@@ -1581,29 +1484,10 @@ function Profile() {
                                                             isCredit(
                                                                 txn
                                                             );
-                                                        const badgeLabel =
-                                                            getTransactionBadge(
-                                                                txn
-                                                            );
 
                                                         return (
                                                             <div
-                                                                className="transaction-item d-flex justify-content-between align-items-center gap-3 p-3 mb-2 rounded-3 border"
-                                                                style={
-                                                                    credit
-                                                                        ? {
-                                                                              background:
-                                                                                  "rgba(16, 185, 129, 0.08)",
-                                                                              borderColor:
-                                                                                  "rgba(16, 185, 129, 0.35)",
-                                                                          }
-                                                                        : {
-                                                                              background:
-                                                                                  "rgba(239, 68, 68, 0.07)",
-                                                                              borderColor:
-                                                                                  "rgba(239, 68, 68, 0.35)",
-                                                                          }
-                                                                }
+                                                                className="transaction-item d-flex justify-content-between align-items-center p-3 mb-2 rounded-3 border"
                                                                 key={
                                                                     txn?.$id ||
                                                                     txn?.transactionId ||
@@ -1611,24 +1495,20 @@ function Profile() {
                                                                 }
                                                             >
 
-                                                                <div className="d-flex align-items-center gap-3 min-w-0">
+                                                                <div className="d-flex align-items-center gap-3">
 
                                                                     <div
-                                                                        className={`rounded-circle d-flex align-items-center justify-content-center flex-shrink-0 ${
+                                                                        className={
                                                                             credit
-                                                                                ? "bg-success bg-opacity-10 text-success"
-                                                                                : "bg-danger bg-opacity-10 text-danger"
-                                                                        }`}
-                                                                        style={{
-                                                                            width: 42,
-                                                                            height: 42,
-                                                                        }}
+                                                                                ? "text-success fs-5"
+                                                                                : "text-danger fs-5"
+                                                                        }
                                                                     >
-                                                                        <FaWallet className="fs-5" />
+                                                                        <FaWallet />
                                                                     </div>
 
 
-                                                                    <div className="min-w-0">
+                                                                    <div>
 
                                                                         <h6 className="fw-bold mb-1">
                                                                             {getTransactionTitle(
@@ -1636,28 +1516,12 @@ function Profile() {
                                                                             )}
                                                                         </h6>
 
-                                                                        <div className="mb-1">
-                                                                            <span
-                                                                                className={`badge rounded-pill ${
-                                                                                    credit
-                                                                                        ? "bg-success"
-                                                                                        : "bg-danger"
-                                                                                }`}
-                                                                            >
-                                                                                {badgeLabel}
-                                                                            </span>
-                                                                        </div>
-
-                                                                        <small className="text-muted d-block">
+                                                                        <small className="text-muted">
 
                                                                             {formatDate(
                                                                                 txn?.createdAt ||
                                                                                 txn?.$createdAt
                                                                             )}
-
-                                                                            {txn?.orderId
-                                                                                ? ` • Order #${txn.orderId}`
-                                                                                : ""}
 
                                                                             {" • "}
 
@@ -1671,13 +1535,7 @@ function Profile() {
 
                                                                         {txn?.promotionType && (
 
-                                                                            <small
-                                                                                className={`d-block fw-semibold ${
-                                                                                    credit
-                                                                                        ? "text-success"
-                                                                                        : "text-danger"
-                                                                                }`}
-                                                                            >
+                                                                            <small className="d-block text-primary">
                                                                                 Promotion Type:{" "}
                                                                                 {txn.promotionType}
                                                                             </small>
@@ -1690,37 +1548,19 @@ function Profile() {
 
 
                                                                 <div
-                                                                    className="text-end flex-shrink-0 ms-2"
-                                                                    style={{
-                                                                        whiteSpace: "nowrap",
-                                                                    }}
+                                                                    className={`fw-bold ${
+                                                                        credit
+                                                                            ? "text-success"
+                                                                            : "text-danger"
+                                                                    }`}
                                                                 >
-                                                                    <div
-                                                                        className={`fw-bold fs-6 ${
-                                                                            credit
-                                                                                ? "text-success"
-                                                                                : "text-danger"
-                                                                        }`}
-                                                                    >
-                                                                        {credit
-                                                                            ? "+"
-                                                                            : "-"}
-                                                                        ₹
-                                                                        {formatMoney(
-                                                                            txn?.amount
-                                                                        )}
-                                                                    </div>
-                                                                    <small
-                                                                        className={`fw-semibold d-block ${
-                                                                            credit
-                                                                                ? "text-success"
-                                                                                : "text-danger"
-                                                                        }`}
-                                                                    >
-                                                                        {credit
-                                                                            ? "Credited"
-                                                                            : "Debited"}
-                                                                    </small>
+                                                                    {credit
+                                                                        ? "+"
+                                                                        : "-"}
+                                                                    ₹
+                                                                    {formatMoney(
+                                                                        txn?.amount
+                                                                    )}
                                                                 </div>
 
                                                             </div>
@@ -2170,11 +2010,10 @@ function Profile() {
 
                                             <input
                                                 type="email"
-                                                className="form-control profile-readonly-input"
+                                                className="form-control bg-light"
                                                 value={
                                                     email
                                                 }
-                                                readOnly
                                                 disabled
                                             />
 
@@ -2190,7 +2029,6 @@ function Profile() {
                                             <input
                                                 type="text"
                                                 className="form-control"
-                                                placeholder="Enter phone number"
                                                 value={
                                                     phone
                                                 }
@@ -2240,7 +2078,7 @@ function Profile() {
                                             </label>
 
                                             <select
-                                                className="form-select"
+                                                className="form-select form-control"
                                                 value={
                                                     gender
                                                 }

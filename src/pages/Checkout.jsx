@@ -1,6 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
-import { useSelector } from "react-redux";
+import {
+  indianStates,
+  getCitiesByState,
+} from "../data/indiaLocations";
+
+import { useSelector, useDispatch } from "react-redux";
 
 import {
   useNavigate,
@@ -32,12 +37,14 @@ import {
 } from "react-icons/fa";
 
 import "../css/Checkout.css";
-import { scrollToPageTop } from "../components/ScrollToTop";
 
 import authService from "../appwrite/authService";
 import orderService from "../appwrite/orderService";
+import couponService from "../appwrite/couponService";
+import notificationService from "../appwrite/notificationService";
 import walletService from "../appwrite/walletService";
 
+import { clearCart } from "../redux/slices/cartSlice";
 
 
   // ORDER IDENTIFIERS
@@ -180,16 +187,167 @@ function normalizePromotionDetails(data) {
   return result;
 }
 
+
+  // PREMIUM CUSTOM SELECT
+
+function CheckoutCustomSelect({
+  value = "",
+  onChange,
+  options = [],
+  placeholder = "Select",
+  disabled = false,
+}) {
+  const [open, setOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleOutsideClick = (event) => {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target)
+      ) {
+        setOpen(false);
+      }
+    };
+
+    const handleEscape = (event) => {
+      if (event.key === "Escape") {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener(
+      "mousedown",
+      handleOutsideClick
+    );
+
+    document.addEventListener(
+      "keydown",
+      handleEscape
+    );
+
+    return () => {
+      document.removeEventListener(
+        "mousedown",
+        handleOutsideClick
+      );
+
+      document.removeEventListener(
+        "keydown",
+        handleEscape
+      );
+    };
+  }, []);
+
+  const handleSelect = (option) => {
+    onChange(option);
+    setOpen(false);
+  };
+
+  return (
+    <div
+      ref={dropdownRef}
+      className={`checkout-custom-select ${
+        open ? "is-open" : ""
+      } ${disabled ? "is-disabled" : ""}`}
+    >
+      <button
+        type="button"
+        className="checkout-custom-select-trigger"
+        onClick={() => {
+          if (!disabled) {
+            setOpen((prev) => !prev);
+          }
+        }}
+        disabled={disabled}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+      >
+        <span
+          className={
+            value
+              ? "checkout-custom-select-value"
+              : "checkout-custom-select-placeholder"
+          }
+        >
+          {value || placeholder}
+        </span>
+
+        <span className="checkout-custom-select-arrow">
+          <span className="checkout-custom-select-arrow-line" />
+        </span>
+      </button>
+
+      {open && !disabled && (
+        <div
+          className="checkout-custom-select-menu"
+          role="listbox"
+        >
+          <button
+            type="button"
+            className={`checkout-custom-select-option ${
+              !value ? "active" : ""
+            }`}
+            onClick={() => handleSelect("")}
+            role="option"
+            aria-selected={!value}
+          >
+            <span>{placeholder}</span>
+
+            {!value && (
+              <FaCheckCircle
+                className="checkout-custom-select-check"
+              />
+            )}
+          </button>
+
+          {options.length > 0 ? (
+            options.map((option) => {
+              const selected =
+                String(value) === String(option);
+
+              return (
+                <button
+                  type="button"
+                  key={option}
+                  className={`checkout-custom-select-option ${
+                    selected ? "active" : ""
+                  }`}
+                  onClick={() =>
+                    handleSelect(option)
+                  }
+                  role="option"
+                  aria-selected={selected}
+                >
+                  <span>{option}</span>
+
+                  {selected && (
+                    <FaCheckCircle
+                      className="checkout-custom-select-check"
+                    />
+                  )}
+                </button>
+              );
+            })
+          ) : (
+            <div className="checkout-custom-select-empty">
+              {disabled
+                ? "Select State First"
+                : "No options available"}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
   // CHECKOUT
 
 function Checkout() {
   const navigate = useNavigate();
-
-  useEffect(() => {
-    scrollToPageTop();
-    const timer = setTimeout(() => scrollToPageTop(), 80);
-    return () => clearTimeout(timer);
-  }, []);
+  const dispatch = useDispatch();
   const location = useLocation();
 
   const cartItems = useSelector(
@@ -366,6 +524,20 @@ function Checkout() {
     });
 
 
+  // CITIES
+
+  const availableCities = useMemo(() => {
+    const base = getCitiesByState(formData.state) || [];
+    if (
+      formData.city &&
+      !base.includes(formData.city)
+    ) {
+      return [formData.city, ...base];
+    }
+    return base;
+  }, [formData.state, formData.city]);
+
+
   // PAYMENT
 
   const isCOD =
@@ -493,12 +665,29 @@ function Checkout() {
             }
           }
 
-          const extracted = Array.from(uniqueMap.values()).slice(0, 2);
+          const extracted = Array.from(uniqueMap.values());
           if (mounted) {
             setSavedAddresses(extracted);
             if (extracted.length > 0) {
               const first = extracted[0];
               setSelectedAddressId(first.id);
+              const matchedState =
+                indianStates.find(
+                  (s) =>
+                    s.toLowerCase() ===
+                    String(first.state || "").trim().toLowerCase()
+                ) ||
+                first.state ||
+                "";
+              const stateCities = getCitiesByState(matchedState) || [];
+              const matchedCity =
+                stateCities.find(
+                  (c) =>
+                    c.toLowerCase() ===
+                    String(first.city || "").trim().toLowerCase()
+                ) ||
+                first.city ||
+                "";
 
               setFormData((prev) => {
                 if (prev.address && prev.pincode) return prev;
@@ -507,8 +696,8 @@ function Checkout() {
                   fullName: first.fullName || user?.name || "",
                   email: first.email || user?.email || "",
                   phone: first.phone || "",
-                  state: String(first.state || "").trim(),
-                  city: String(first.city || "").trim(),
+                  state: matchedState,
+                  city: matchedCity,
                   pincode: first.pincode || "",
                   address: first.address || "",
                 };
@@ -744,6 +933,19 @@ function Checkout() {
   function handleSelectSavedAddress(addr) {
     if (!addr) return;
     setSelectedAddressId(addr.id);
+    const matchedState =
+      indianStates.find(
+        (s) => s.toLowerCase() === String(addr.state || "").trim().toLowerCase()
+      ) ||
+      addr.state ||
+      "";
+    const stateCities = getCitiesByState(matchedState) || [];
+    const matchedCity =
+      stateCities.find(
+        (c) => c.toLowerCase() === String(addr.city || "").trim().toLowerCase()
+      ) ||
+      addr.city ||
+      "";
 
     setFormData((prev) => ({
       ...prev,
@@ -752,8 +954,8 @@ function Checkout() {
       phone: String(addr.phone || "")
         .replace(/\D/g, "")
         .slice(-10),
-      state: String(addr.state || "").trim(),
-      city: String(addr.city || "").trim(),
+      state: matchedState,
+      city: matchedCity,
       pincode: String(addr.pincode || "")
         .replace(/\D/g, "")
         .slice(0, 6),
@@ -834,11 +1036,13 @@ function Checkout() {
       setFormData((prev) => ({
         ...prev,
         state: value,
+        city: "",
       }));
 
       setErrors((prev) => ({
         ...prev,
         state: "",
+        city: "",
       }));
 
       return;
@@ -951,6 +1155,14 @@ function Checkout() {
     if (!formData.city.trim()) {
       newErrors.city =
         "City is required";
+    } else if (
+      formData.state &&
+      availableCities.length > 0 &&
+      !availableCities.includes(formData.city) &&
+      !savedAddresses.some((a) => a.city === formData.city)
+    ) {
+      newErrors.city =
+        "Please select a valid city for this state";
     }
 
 
@@ -1320,112 +1532,366 @@ function Checkout() {
         };
 
 
-  // PREPARE ORDER STATE FOR PAYMENT CONFIRMATION
-        // Order is ONLY placed in Appwrite when:
-        // - COD: User clicks "Confirm Order" on /cod-payment
-        // - UPI: User clicks "I Have Paid" on /upi-payment
-        // - CARD: User enters valid card details & clicks "Pay Now" on /card-payment
+  // SAVE ORDER
+        //
+        // COD:
+        // shipment is created immediately.
+        //
+        // UPI/Card:
+        // shipment is created only after payment succeeds.
+        // =====================================================
+
+  // APPWRITE ORDER PAYLOAD DEBUG
+        console.log(
+          "========== ORDER APPWRITE TEST =========="
+        );
+        console.table({
+          databaseId:
+            "6a62302900356784577e",
+          collectionId:
+            "orders",
+          total:
+            orderData.total,
+          gstApplied:
+            orderData.gstApplied,
+          platformFee:
+            orderData.platformFee,
+          orderGrandTotal:
+            orderData.orderGrandTotal,
+          payableAmount:
+            orderData.payableAmount,
+          walletPaid:
+            orderData.walletPaid,
+          upiPaid:
+            orderData.upiPaid,
+          cardPaid:
+            orderData.cardPaid,
+          onlinePaid:
+            orderData.onlinePaid,
+          totalPaid:
+            orderData.totalPaid,
+        });
+        console.log(
+          "Full orderData:",
+          orderData
+        );
+        console.log(
+          "========== ORDER APPWRITE TEST END =========="
+        );
+
+        const savedOrder =
+          await orderService.addOrder(
+            orderData,
+            {
+              createShipment:
+                isCOD,
+            }
+          );
+
+
+        const savedOrderId =
+          savedOrder?.$id ||
+          orderData.orderId;
+
+
+  // CUSTOMER ORDER PLACED NOTIFICATION
+
+        try {
+          await notificationService.createNotification(
+            {
+              userId:
+                String(user.$id),
+
+              type:
+                "ORDER_PLACED",
+
+              title:
+                "Order Placed Successfully 🛒",
+
+              message:
+                `Your order ${orderData.orderId} has been placed successfully. ` +
+                "We will notify you when your order status changes.",
+
+              orderId:
+                String(
+                  orderData.orderId ||
+                  ""
+                ),
+
+              shipmentId:
+                String(
+                  savedOrder?.shipment?.$id ||
+                  savedOrder?.shipmentId ||
+                  ""
+                ),
+
+              trackingId:
+                String(
+                  savedOrder?.trackingId ||
+                  savedOrder?.shipment?.trackingId ||
+                  ""
+                ),
+
+              isRead:
+                false,
+
+              createdAt:
+                new Date().toISOString(),
+            }
+          );
+        } catch (
+          notificationError
+        ) {
+          console.error(
+            "Order placed notification failed:",
+            notificationError
+          );
+        }
+
+
+  // FULL ORDER STATE
 
         const fullOrderState = {
           ...orderData,
 
-          $id: "",
+          $id:
+            savedOrder?.$id ||
+            "",
 
-          savedOrderId: orderData.orderId,
+          savedOrderId,
 
           gstApplied,
 
-          platformFee: safePlatformFee,
+          platformFee:
+            safePlatformFee,
 
-          appliedCoupon: appliedCoupon || null,
 
   // ORIGINAL ORDER TOTAL
 
-          orderGrandTotal: Number(finalTotal),
+          orderGrandTotal:
+            Number(finalTotal),
+
 
   // WALLET
 
-          walletPaid: Number(finalWalletPaid),
+          walletPaid:
+            Number(finalWalletPaid),
 
-          walletMonthlyPromotionUsed: Number(
-            finalWalletUsage.monthlyPromotion || 0
-          ),
+          walletMonthlyPromotionUsed:
+            Number(
+              finalWalletUsage.monthlyPromotion ||
+              0
+            ),
 
-          walletWelcomePromotionUsed: Number(
-            finalWalletUsage.welcomePromotion || 0
-          ),
+          walletWelcomePromotionUsed:
+            Number(
+              finalWalletUsage.welcomePromotion ||
+              0
+            ),
 
-          walletUserMoneyUsed: Number(
-            finalWalletUsage.userMoney || 0
-          ),
+          walletUserMoneyUsed:
+            Number(
+              finalWalletUsage.userMoney ||
+              0
+            ),
 
-          walletBalanceBefore: Number(walletBalance || 0),
+          walletBalanceBefore:
+            Number(
+              walletBalance || 0
+            ),
 
-          walletRemainingPayable: Number(finalPayableAmount),
+          walletRemainingPayable:
+            Number(
+              finalPayableAmount
+            ),
 
-          walletPaymentPending: finalWalletPaid > 0,
+          walletPaymentPending:
+            finalWalletPaid > 0,
+
 
   // PAYMENT
 
-          upiPaid: isUPI ? Number(finalPayableAmount) : 0,
+          upiPaid:
+            isUPI
+              ? Number(
+                  finalPayableAmount
+                )
+              : 0,
 
-          cardPaid: isCARD ? Number(finalPayableAmount) : 0,
+          cardPaid:
+            isCARD
+              ? Number(
+                  finalPayableAmount
+                )
+              : 0,
 
-          codAmount: isCOD ? Number(finalPayableAmount) : 0,
+          codAmount:
+            isCOD
+              ? Number(
+                  finalPayableAmount
+                )
+              : 0,
 
           onlinePaid:
-            isUPI || isCARD ? Number(finalPayableAmount) : 0,
+            isUPI || isCARD
+              ? Number(
+                  finalPayableAmount
+                )
+              : 0,
 
-          totalPaid: isCOD
-            ? Number(finalWalletPaid)
-            : Number(finalWalletPaid + finalPayableAmount),
+          totalPaid:
+            isCOD
+              ? Number(
+                  finalWalletPaid
+                )
+              : Number(
+                  finalWalletPaid +
+                  finalPayableAmount
+                ),
+
 
   // ITEMS
 
-          items: cartItems,
+          items:
+            cartItems,
+
 
   // SHIPPING ADDRESS
 
           shippingAddress: {
-            fullName: formData.fullName.trim(),
-            phone: "+91 " + formData.phone,
-            address: formData.address.trim(),
-            city: formData.city,
-            state: formData.state,
-            pincode: formData.pincode,
+            fullName:
+              formData.fullName.trim(),
+
+            phone:
+              "+91 " +
+              formData.phone,
+
+            address:
+              formData.address.trim(),
+
+            city:
+              formData.city,
+
+            state:
+              formData.state,
+
+            pincode:
+              formData.pincode,
           },
 
-  // SHIPMENT (will be created when order is confirmed/paid)
 
-          shipment: null,
-          trackingId: null,
-          courier: null,
-          warehouse: null,
-          estimatedDeliveryDate: null,
+  // SHIPMENT
+
+          shipment:
+            savedOrder?.shipment ||
+            null,
+
+          trackingId:
+            savedOrder?.trackingId ||
+            null,
+
+          courier:
+            savedOrder?.courier ||
+            null,
+
+          warehouse:
+            savedOrder?.warehouse ||
+            null,
+
+          estimatedDeliveryDate:
+            savedOrder?.estimatedDeliveryDate ||
+            null,
         };
+
+
+  // COUPON USAGE
+
+        if (appliedCoupon) {
+          try {
+            await couponService.increaseUsage(
+              appliedCoupon.$id,
+              appliedCoupon.usedCount
+            );
+          } catch (
+            couponError
+          ) {
+            console.error(
+              "Coupon usage update failed:",
+              couponError
+            );
+          }
+        }
+
+
+  // CLEAR CART
+
+        dispatch(
+          clearCart()
+        );
+
+
+  // SUCCESS MESSAGE
+
+        toast.success(
+          "Order placed successfully!"
+        );
+
 
   // PAYMENT NAVIGATION
 
         if (isCOD) {
-          navigate("/cod-payment", {
-            state: fullOrderState,
-          });
+          /*
+           * CODPayment.jsx handles:
+           * - final COD confirmation
+           * - wallet deduction
+           * - final confirmation
+           */
+
+          navigate(
+            "/cod-payment",
+            {
+              state:
+                fullOrderState,
+              replace: true,
+            }
+          );
+
           return;
         }
 
+
         if (isUPI) {
-          navigate("/upi-payment", {
-            state: fullOrderState,
-          });
+          /*
+           * UPIPayment.jsx handles:
+           * - UPI payment
+           * - wallet deduction after successful payment
+           * - order paymentStatus = PAID
+           * - shipment creation
+           */
+
+          navigate(
+            "/upi-payment",
+            {
+              state:
+                fullOrderState,
+            }
+          );
+
           return;
         }
+
 
         /*
          * CARD
          */
-        navigate("/card-payment", {
-          state: fullOrderState,
-        });
+
+        navigate(
+          "/card-payment",
+          {
+            state:
+              fullOrderState,
+          }
+        );
       } catch (error) {
         console.error(
           "Place order error:",
@@ -1434,13 +1900,12 @@ function Checkout() {
 
         toast.error(
           error?.message ||
-          "Failed to proceed to payment."
+          "Failed to place order."
         );
       } finally {
         setLoading(false);
       }
     };
-
 
 
   // UI
@@ -1589,7 +2054,7 @@ function Checkout() {
                   </div>
 
                   <div className="checkout-saved-addresses-grid">
-                    {savedAddresses.slice(0, 2).map((addr, idx) => {
+                    {savedAddresses.map((addr, idx) => {
                       const isSelected = selectedAddressId === addr.id;
                       return (
                         <div
@@ -1777,13 +2242,18 @@ function Checkout() {
                       />
                     </span>
 
-                    <input
-                      type="text"
-                      className="form-control border-start-0 ps-0"
-                      placeholder="Enter State"
-                      name="state"
+                    <CheckoutCustomSelect
                       value={formData.state}
-                      onChange={handleChange}
+                      onChange={(value) =>
+                        handleChange({
+                          target: {
+                            name: "state",
+                            value,
+                          },
+                        })
+                      }
+                      options={indianStates}
+                      placeholder="Select State"
                     />
 
                   </div>
@@ -1812,13 +2282,23 @@ function Checkout() {
                       />
                     </span>
 
-                    <input
-                      type="text"
-                      className="form-control border-start-0 ps-0"
-                      placeholder="Enter City"
-                      name="city"
+                    <CheckoutCustomSelect
                       value={formData.city}
-                      onChange={handleChange}
+                      onChange={(value) =>
+                        handleChange({
+                          target: {
+                            name: "city",
+                            value,
+                          },
+                        })
+                      }
+                      options={availableCities}
+                      placeholder={
+                        formData.state
+                          ? "Select City"
+                          : "Select State First"
+                      }
+                      disabled={!formData.state}
                     />
 
                   </div>
@@ -2849,8 +3329,8 @@ function Checkout() {
                 </div>
 
                 <small className="text-muted d-block mt-1">
-                  Your order information is encrypted and
-                  processed securely.
+                  Your order information is securely
+                  processed through Appwrite.
                 </small>
 
               </div>

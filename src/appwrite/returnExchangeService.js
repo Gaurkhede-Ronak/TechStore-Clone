@@ -305,11 +305,6 @@ class ReturnExchangeService {
             return request;
         }
 
-        const isCancelledReq =
-            String(request?.status || "")
-                .trim()
-                .toUpperCase() === "CANCELLED";
-
         const paymentRefund =
             await this.getPaymentRefund(
                 request.$id
@@ -321,55 +316,42 @@ class ReturnExchangeService {
                 paymentMethod:
                     request.paymentMethod ||
                     "",
-                paymentStatus: isCancelledReq
-                    ? "CANCELLED"
-                    : request.paymentStatus ||
-                      "",
-                refundStatus: isCancelledReq
-                    ? "NOT_REQUIRED"
-                    : request.refundStatus ||
-                      "",
-                refundAmount: isCancelledReq
-                    ? 0
-                    : Number(
-                          request.refundAmount ||
-                              0
-                      ),
+                paymentStatus:
+                    request.paymentStatus ||
+                    "",
+                refundStatus:
+                    request.refundStatus ||
+                    "",
+                refundAmount:
+                    Number(
+                        request.refundAmount ||
+                            0
+                    ),
             };
         }
 
         return {
             ...request,
 
-            paymentRefund: isCancelledReq
-                ? {
-                      ...paymentRefund,
-                      paymentStatus: "CANCELLED",
-                      refundStatus: "NOT_REQUIRED",
-                      refundAmount: 0,
-                  }
-                : paymentRefund,
+            paymentRefund,
 
             paymentMethod:
                 paymentRefund.paymentMethod ||
                 "",
 
-            paymentStatus: isCancelledReq
-                ? "CANCELLED"
-                : paymentRefund.paymentStatus ||
-                  "",
+            paymentStatus:
+                paymentRefund.paymentStatus ||
+                "",
 
-            refundStatus: isCancelledReq
-                ? "NOT_REQUIRED"
-                : paymentRefund.refundStatus ||
-                  "",
+            refundStatus:
+                paymentRefund.refundStatus ||
+                "",
 
-            refundAmount: isCancelledReq
-                ? 0
-                : Number(
-                      paymentRefund.refundAmount ||
-                          0
-                  ),
+            refundAmount:
+                Number(
+                    paymentRefund.refundAmount ||
+                        0
+                ),
         };
     }
 
@@ -677,27 +659,12 @@ class ReturnExchangeService {
     async cancelRequest(
         documentId
     ) {
-        const updated = await this.updateRequest(
+        return this.updateRequest(
             documentId,
             {
                 status: "CANCELLED",
             }
         );
-
-        try {
-            await this.updatePaymentRefund(
-                documentId,
-                {
-                    paymentStatus: "CANCELLED",
-                    refundStatus: "NOT_REQUIRED",
-                    refundAmount: 0,
-                }
-            );
-        } catch (err) {
-            console.warn("Cancel request refund reset warning:", err);
-        }
-
-        return this.attachPaymentRefund(updated);
     }
 
   // ASSIGN DELIVERY BOY
@@ -778,16 +745,12 @@ class ReturnExchangeService {
         );
     }
 
-  // VERIFY PICKUP OTP / MARK PICKED UP COMPATIBILITY
+  // VERIFY PICKUP OTP DISABLED
 
-    async verifyPickupOtp(
-        documentId
-    ) {
-        const doc = await this.markPickedUp(documentId);
-        return {
-            success: true,
-            document: doc,
-        };
+    async verifyPickupOtp() {
+        throw new Error(
+            "Pickup OTP is disabled for Return / Exchange."
+        );
     }
 
   // UPDATE PAYMENT / REFUND
@@ -862,19 +825,7 @@ class ReturnExchangeService {
         documentId,
         refundAmount = 0
     ) {
-        let resolvedAmount = Number(refundAmount) || 0;
-        if (resolvedAmount <= 0) {
-            try {
-                const existing = await this.getPaymentRefund(documentId);
-                if (Number(existing?.refundAmount) > 0) {
-                    resolvedAmount = Number(existing.refundAmount);
-                }
-            } catch {
-                // ignore
-            }
-        }
-
-        const updatedRefund = await this.updatePaymentRefund(
+        return this.updatePaymentRefund(
             documentId,
             {
                 paymentStatus:
@@ -883,19 +834,12 @@ class ReturnExchangeService {
                 refundStatus:
                     "REFUND_INITIATED",
 
-                ...(resolvedAmount > 0 ? { refundAmount: resolvedAmount } : {}),
+                refundAmount:
+                    Number(
+                        refundAmount
+                    ) || 0,
             }
         );
-
-        try {
-            await this.updateRequest(documentId, {
-                status: "REFUND_INITIATED",
-            });
-        } catch {
-            // ignore
-        }
-
-        return this.getRequest(documentId).catch(() => updatedRefund);
     }
 
   // COMPLETE REFUND
@@ -903,7 +847,7 @@ class ReturnExchangeService {
     async completeRefund(
         documentId
     ) {
-        const updatedRefund = await this.updatePaymentRefund(
+        return this.updatePaymentRefund(
             documentId,
             {
                 paymentStatus:
@@ -913,16 +857,6 @@ class ReturnExchangeService {
                     "COMPLETED",
             }
         );
-
-        try {
-            await this.updateRequest(documentId, {
-                status: "REFUND_COMPLETED",
-            });
-        } catch {
-            // ignore
-        }
-
-        return this.getRequest(documentId).catch(() => updatedRefund);
     }
 
   // REFUND NOT REQUIRED

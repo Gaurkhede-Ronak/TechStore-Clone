@@ -250,113 +250,94 @@ const Wallet = () => {
             transaction?.promotionType || ""
         ).toLowerCase();
 
-        const amtStr = formatCurrency(
-            transaction?.amount || 0
-        );
-        const ordId = transaction?.orderId
-            ? ` #${transaction.orderId}`
-            : "";
-        const credit = isCredit(transaction);
-
-        if (source === "refund") {
-            return `${amtStr} Credited to Wallet — Refund for Cancelled Order${ordId}`;
+        if (
+            source === "promotion" &&
+            promotionType === "welcome"
+        ) {
+            return "Welcome Promotion";
         }
 
         if (
-            source === "order" ||
-            (!credit && transaction?.orderId)
+            source === "promotion" &&
+            promotionType === "monthly"
         ) {
-            if (promotionType === "welcome") {
-                return `${amtStr} Debited from Wallet — Welcome Promotion Used for Order${ordId}`;
-            }
-            if (promotionType === "monthly") {
-                return `${amtStr} Debited from Wallet — Monthly Promotion Used for Order${ordId}`;
-            }
-            return `${amtStr} Debited from Wallet — Payment for Order${ordId}`;
+            return "Monthly Promotion";
         }
 
-        if (source === "promotion") {
-            if (promotionType === "welcome") {
-                return `${amtStr} Credited to Wallet — Welcome Promotion ₹1,000`;
-            }
-            if (promotionType === "monthly") {
-                return `${amtStr} Credited to Wallet — Monthly Promotion ₹500`;
-            }
-            return `${amtStr} Credited to Wallet — Promotion Reward`;
+        if (
+            source === "promotion_expiry"
+        ) {
+            return "Promotion Expired";
         }
 
-        if (source === "promotion_expiry") {
-            return `${amtStr} Debited from Wallet — Unused Promotion Expired`;
+        if (source === "order") {
+            return "Order Payment";
+        }
+
+        if (source === "refund") {
+            return "Order Refund";
         }
 
         if (source === "wallet_add") {
-            return `${amtStr} Credited to Wallet — ${transaction?.description || "Added Money to Wallet"}`;
-        }
-
-        if (credit) {
-            return (
-                transaction?.description ||
-                `${amtStr} Credited to Wallet`
-            );
+            return "Money Added";
         }
 
         return (
             transaction?.description ||
-            `${amtStr} Debited from Wallet`
+            "Wallet Transaction"
         );
     };
 
-    const getTransactionBadge = (
+  // TRANSACTION DESCRIPTION
+
+    const getTransactionDescription = (
         transaction
     ) => {
         const source = String(
             transaction?.source || ""
         ).toLowerCase();
+
         const promotionType = String(
             transaction?.promotionType || ""
         ).toLowerCase();
-        const credit = isCredit(transaction);
 
-        if (source === "refund") {
-            return "Order Refund Credited";
+        if (
+            source === "promotion" &&
+            promotionType === "welcome"
+        ) {
+            return "₹1,000 Welcome Promotion";
         }
 
         if (
-            source === "order" ||
-            (!credit && transaction?.orderId)
+            source === "promotion" &&
+            promotionType === "monthly"
         ) {
-            if (promotionType === "welcome") {
-                return "Order Payment Debited • Welcome Promo";
-            }
-            if (promotionType === "monthly") {
-                return "Order Payment Debited • Monthly Promo";
-            }
-            return "Order Payment Debited";
+            return "₹500 Monthly Promotion";
         }
 
-        if (source === "promotion") {
-            if (promotionType === "monthly") {
-                return "Monthly Promotion Credited";
-            }
-            if (promotionType === "welcome") {
-                return "Welcome Promotion Credited";
-            }
-            return "Promotion Credited";
+        if (
+            source === "promotion_expiry"
+        ) {
+            return "Unused promotional balance expired";
         }
 
-        if (source === "promotion_expiry") {
-            return "Promotion Expired Debited";
+        if (source === "order") {
+            return transaction?.orderId
+                ? `Order #${transaction.orderId}`
+                : "Payment made using wallet";
         }
 
-        if (source === "wallet_add") {
-            return "Wallet Money Credited";
+        if (source === "refund") {
+            return transaction?.orderId
+                ? `Refund for Order #${transaction.orderId}`
+                : "Amount refunded to wallet";
         }
 
-        return credit
-            ? "Wallet Credited"
-            : "Wallet Debited";
+        return (
+            transaction?.description ||
+            "Wallet transaction"
+        );
     };
-
 
   // TRANSACTION TYPE
 
@@ -693,71 +674,6 @@ const Wallet = () => {
                     </div>
                 </div>
 
-                {/* CANCELLED ORDER REFUND CREDITED BANNER */}
-                {(() => {
-                    const seenOrderRefunds = new Set();
-                    const refundTxns = (transactions || []).filter(
-                        (t) => {
-                            if (
-                                String(t?.source || "").toLowerCase() !==
-                                    "refund" ||
-                                !isCredit(t)
-                            ) {
-                                return false;
-                            }
-                            const sig = `${String(t?.orderId || "").trim()}::${Number(t?.amount || 0)}`;
-                            if (seenOrderRefunds.has(sig)) return false;
-                            seenOrderRefunds.add(sig);
-                            return true;
-                        }
-                    );
-                    if (refundTxns.length === 0) return null;
-                    const latestRefund = refundTxns[0];
-                    const latestRefundAmt = Number(latestRefund?.amount || 0);
-                    return (
-                        <div
-                            className="p-4 rounded-4 mb-4"
-                            style={{
-                                background:
-                                    "linear-gradient(135deg, rgba(16, 185, 129, 0.14), rgba(5, 150, 105, 0.06))",
-                                border: "1.5px solid rgba(16, 185, 129, 0.45)",
-                            }}
-                        >
-                            <div className="d-flex align-items-center justify-content-between flex-wrap gap-3">
-                                <div className="d-flex align-items-center gap-3">
-                                    <div
-                                        className="rounded-circle bg-success text-white d-flex align-items-center justify-content-center flex-shrink-0 shadow-sm"
-                                        style={{ width: 46, height: 46 }}
-                                    >
-                                        <FaCheckCircle size={22} />
-                                    </div>
-                                    <div>
-                                        <span className="badge bg-success mb-1">
-                                            Order Cancelled Refund Credited
-                                        </span>
-                                        <h5 className="fw-bold text-success mb-1">
-                                            +{formatCurrency(latestRefundAmt)} Credited to Your Wallet
-                                        </h5>
-                                        <small className="text-muted d-block">
-                                            {latestRefund?.orderId
-                                                ? `Refund from Cancelled Order #${latestRefund.orderId} has been credited back to your TechStore Wallet.`
-                                                : "Your cancelled order wallet payment has been credited back to your TechStore Wallet."}
-                                        </small>
-                                    </div>
-                                </div>
-                                <div className="text-md-end">
-                                    <span className="small text-muted d-block">
-                                        Available Wallet Balance
-                                    </span>
-                                    <strong className="fs-4 text-success">
-                                        {formatCurrency(balance)}
-                                    </strong>
-                                </div>
-                            </div>
-                        </div>
-                    );
-                })()}
-
                 {/* PROMOTIONS */}
 
                 <div className="card border-0 shadow-sm rounded-4 mb-4">
@@ -972,27 +888,9 @@ const Wallet = () => {
                                             source ===
                                             "promotion_expiry";
 
-                                        const badgeLabel =
-                                            getTransactionBadge(
-                                                transaction
-                                            );
-
                                         return (
                                             <div
                                                 className="wallet-transaction"
-                                                style={
-                                                    credit
-                                                        ? {
-                                                              background:
-                                                                  "rgba(16, 185, 129, 0.08)",
-                                                              border: "1px solid rgba(16, 185, 129, 0.35)",
-                                                          }
-                                                        : {
-                                                              background:
-                                                                  "rgba(239, 68, 68, 0.07)",
-                                                              border: "1px solid rgba(239, 68, 68, 0.35)",
-                                                          }
-                                                }
                                                 key={
                                                     transaction.$id
                                                 }
@@ -1002,75 +900,41 @@ const Wallet = () => {
                                                 )}
 
                                                 <div className="flex-grow-1 min-w-0">
-                                                    <div className="d-flex flex-column flex-sm-row justify-content-between align-items-sm-start gap-2">
-                                                        <div className="min-w-0">
-                                                            <h6 className="fw-bold mb-1">
-                                                                {getTransactionTitle(
-                                                                    transaction
-                                                                )}
-                                                            </h6>
+                                                    <div className="d-flex flex-column flex-sm-row justify-content-between gap-1">
+                                                        <h6 className="fw-bold mb-0">
+                                                            {getTransactionTitle(
+                                                                transaction
+                                                            )}
+                                                        </h6>
 
-                                                            <div className="mb-1">
-                                                                <span
-                                                                    className={`badge rounded-pill ${
-                                                                        credit
-                                                                            ? "bg-success"
-                                                                            : "bg-danger"
-                                                                    }`}
-                                                                >
-                                                                    {badgeLabel}
-                                                                </span>
-                                                            </div>
-                                                        </div>
-
-                                                        <div
-                                                            className="text-sm-end flex-shrink-0"
-                                                            style={{
-                                                                whiteSpace:
-                                                                    "nowrap",
-                                                            }}
+                                                        <strong
+                                                            className={
+                                                                credit
+                                                                    ? "text-success"
+                                                                    : "text-danger"
+                                                            }
                                                         >
-                                                            <strong
-                                                                className={`d-block fs-6 ${
-                                                                    credit
-                                                                        ? "text-success"
-                                                                        : "text-danger"
-                                                                }`}
-                                                            >
-                                                                {credit
-                                                                    ? "+"
-                                                                    : "-"}
-                                                                {formatCurrency(
-                                                                    transaction?.amount
-                                                                )}
-                                                            </strong>
-                                                            <small
-                                                                className={`fw-semibold d-block ${
-                                                                    credit
-                                                                        ? "text-success"
-                                                                        : "text-danger"
-                                                                }`}
-                                                            >
-                                                                {credit
-                                                                    ? "Credited"
-                                                                    : "Debited"}
-                                                            </small>
-                                                        </div>
+                                                            {credit
+                                                                ? "+"
+                                                                : "-"}
+                                                            {formatCurrency(
+                                                                transaction?.amount
+                                                            )}
+                                                        </strong>
                                                     </div>
 
-                                                    <div className="d-flex flex-wrap gap-2 align-items-center mt-1">
+                                                    <p className="text-muted small mb-1">
+                                                        {getTransactionDescription(
+                                                            transaction
+                                                        )}
+                                                    </p>
+
+                                                    <div className="d-flex flex-wrap gap-2 align-items-center">
                                                         <small className="text-muted">
                                                             {formatDateTime(
                                                                 transaction?.createdAt ||
                                                                     transaction?.$createdAt
                                                             )}
-                                                            {transaction?.orderId
-                                                                ? ` • Order #${transaction.orderId}`
-                                                                : ""}
-                                                            {" • ID: "}
-                                                            {transaction?.transactionId ||
-                                                                transaction?.$id ||
-                                                                "N/A"}
                                                         </small>
 
                                                         {transaction?.source ===
@@ -1099,27 +963,21 @@ const Wallet = () => {
                                                                 </span>
                                                             )}
 
+                                                        {transaction?.orderId && (
+                                                            <span className="wallet-order-tag">
+                                                                Order #
+                                                                {
+                                                                    transaction.orderId
+                                                                }
+                                                            </span>
+                                                        )}
+
                                                         {expired && (
                                                             <span className="wallet-expired-tag">
                                                                 Expired
                                                             </span>
                                                         )}
                                                     </div>
-
-                                                    {transaction?.promotionType && (
-                                                        <small
-                                                            className={`d-block fw-semibold mt-1 ${
-                                                                credit
-                                                                    ? "text-success"
-                                                                    : "text-danger"
-                                                            }`}
-                                                        >
-                                                            Promotion Type:{" "}
-                                                            {
-                                                                transaction.promotionType
-                                                            }
-                                                        </small>
-                                                    )}
                                                 </div>
 
                                                 <div className="wallet-transaction-balance d-none d-md-block">

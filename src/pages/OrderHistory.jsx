@@ -1,4 +1,3 @@
-import { scrollToPageTop } from "../components/ScrollToTop";
 import { useEffect, useState, useMemo, useRef } from "react";
 import {
   FaBoxOpen,
@@ -24,9 +23,7 @@ import toast from "react-hot-toast";
 import authService from "../appwrite/authService";
 import orderService from "../appwrite/orderService";
 import shipmentService from "../appwrite/shipmentService";
-import deliveryOtpService from "../appwrite/deliveryOtpService";
 import returnExchangeService from "../appwrite/returnExchangeService";
-import { resolveReturnRequestItem } from "../utils/orderItemHelper";
 import reviewService from "../appwrite/reviewService";
 
   // HELPERS
@@ -147,9 +144,6 @@ const getPaymentSubtitle = (order) => {
 
 function OrderHistory() {
   const navigate = useNavigate();
-  useEffect(() => {
-    scrollToPageTop();
-  }, []);
 
   const [orders, setOrders] = useState([]);
   const [userReviews, setUserReviews] = useState([]);
@@ -180,10 +174,6 @@ function OrderHistory() {
         setLoading(false);
         return;
       }
-
-      await deliveryOtpService
-        .syncUserShipmentNotifications(currentUser.$id)
-        .catch(() => {});
 
       // Fetch user orders, reviews, and return/exchange requests in parallel
       const [orderRes, reviewDocs, userReturnDocs] = await Promise.all([
@@ -534,13 +524,7 @@ function OrderHistory() {
   };
 
   // NAVIGATION TO ORDER DETAILS
-  const handleViewOrder = (
-    order,
-    item,
-    returnRequest = null,
-    itemIdx = 0,
-    fallbackReturnId = ""
-  ) => {
+  const handleViewOrder = (order, item, returnRequest = null, itemIdx = 0) => {
     const params = new URLSearchParams();
     params.set("orderId", order?.orderId || order?.$id || "");
     params.set("itemIdx", String(itemIdx));
@@ -548,15 +532,8 @@ function OrderHistory() {
     if (prodId) {
       params.set("itemId", String(prodId));
     }
-
-    const effectiveReturnId =
-      returnRequest?.referenceId ||
-      returnRequest?.$id ||
-      fallbackReturnId ||
-      "";
-
-    if (returnRequest && effectiveReturnId) {
-      params.set("returnId", String(effectiveReturnId));
+    if (returnRequest?.referenceId) {
+      params.set("returnId", returnRequest.referenceId);
     }
 
     navigate(`/order-details?${params.toString()}`, {
@@ -566,11 +543,6 @@ function OrderHistory() {
         singleProduct: item || null,
         itemIndex: itemIdx,
         returnRequest: returnRequest || null,
-        viewMode: returnRequest
-          ? String(returnRequest?.type || "").toUpperCase() === "EXCHANGE"
-            ? "EXCHANGE"
-            : "RETURN"
-          : "ORDER",
       },
     });
   };
@@ -584,7 +556,7 @@ function OrderHistory() {
             <span className="visually-hidden">Loading...</span>
           </div>
           <h3 className="fw-bold text-dark">Loading Your Orders...</h3>
-          <p className="text-muted mb-0">Fetching your latest orders...</p>
+          <p className="text-muted mb-0">Fetching your latest orders from Appwrite</p>
         </div>
       </div>
     );
@@ -866,22 +838,10 @@ function OrderHistory() {
 
                   {/* SUB-CARDS */}
                   <div className="d-flex flex-column gap-3">
-                    {(() => {
-                      if (isReturnEntry || isExchangeEntry) {
-                        const resolvedRx = resolveReturnRequestItem(
-                          returnRequest,
-                          order
-                        );
-                        const rxItem = resolvedRx?.item || orderItems[0];
-                        const rxIdx =
-                          resolvedRx?.itemIndex >= 0 ? resolvedRx.itemIndex : 0;
-                        return rxItem ? [{ item: rxItem, itemIdx: rxIdx }] : [];
-                      }
-                      return orderItems.map((it, idx) => ({
-                        item: it,
-                        itemIdx: idx,
-                      }));
-                    })().map(({ item, itemIdx }) => {
+                    {(isReturnEntry || isExchangeEntry
+                      ? orderItems.slice(0, 1)
+                      : orderItems
+                    ).map((item, itemIdx) => {
                       const isThisItemCancelled =
                         Boolean(item?.isCancelled) ||
                         normalizeStatus(item?.status) === "CANCELLED" ||
@@ -941,17 +901,11 @@ function OrderHistory() {
                           key={`${entryKey}-${item?.id || item?.productId || itemIdx}`}
                           className="ajio-order-card bg-white rounded-4 border shadow-sm p-3 p-md-3 d-flex align-items-center justify-content-between cursor-pointer hover-lift"
                           onClick={() =>
-                            handleViewOrder(
-                              order,
-                              item,
-                              isReturnEntry || isExchangeEntry ? returnRequest : null,
-                              itemIdx,
-                              isReturnEntry || isExchangeEntry ? displayId : ""
-                            )
+                            handleViewOrder(order, item, returnRequest, itemIdx)
                           }
                         >
                           {/* LEFT: THUMBNAIL + OPTIONAL BADGE */}
-                          <div className="ajio-card-left d-flex align-items-center gap-2 gap-md-3 flex-grow-1 min-w-0">
+                          <div className="d-flex align-items-center gap-3 gap-md-3 flex-grow-1 min-w-0">
                             <div className="ajio-thumb-container position-relative flex-shrink-0">
                               <img
                                 src={productImg}
@@ -980,7 +934,7 @@ function OrderHistory() {
                             <div className="ajio-card-content min-w-0">
                               {isReturnEntry ? (
                                 <>
-                                  <h5 className="fw-bold text-dark mb-1 ajio-card-title">
+                                  <h5 className="fw-bold text-dark mb-1 fs-5 ajio-card-title">
                                     {isReqCancelled
                                       ? "Return Cancelled"
                                       : "Returned"}
@@ -996,7 +950,7 @@ function OrderHistory() {
                                 </>
                               ) : isExchangeEntry ? (
                                 <>
-                                  <h5 className="fw-bold text-dark mb-1 ajio-card-title">
+                                  <h5 className="fw-bold text-dark mb-1 fs-5 ajio-card-title">
                                     {isReqCancelled
                                       ? "Exchange Cancelled"
                                       : "Exchanged"}
@@ -1012,7 +966,7 @@ function OrderHistory() {
                                 </>
                               ) : isThisItemCancelled ? (
                                 <>
-                                  <h5 className="fw-bold text-dark mb-1 ajio-card-title">
+                                  <h5 className="fw-bold text-dark mb-1 fs-5 ajio-card-title">
                                     Cancelled
                                   </h5>
                                   <div className="text-muted small mb-1">
@@ -1024,7 +978,7 @@ function OrderHistory() {
                                 </>
                               ) : isDelivered ? (
                                 <>
-                                  <h5 className="fw-bold text-dark mb-1 ajio-card-title">
+                                  <h5 className="fw-bold text-dark mb-1 fs-5 ajio-card-title">
                                     Delivered
                                   </h5>
                                   <div className="text-muted small mb-1">
@@ -1056,7 +1010,7 @@ function OrderHistory() {
                                 </>
                               ) : (
                                 <>
-                                  <h5 className="fw-bold text-dark mb-1 ajio-card-title text-truncate">
+                                  <h5 className="fw-bold text-dark mb-1 fs-5 ajio-card-title text-truncate">
                                     {productTitle}
                                   </h5>
                                   <div className="text-muted small mb-1">
@@ -1074,7 +1028,7 @@ function OrderHistory() {
                           </div>
 
                           {/* RIGHT: STATUS PILL BADGE & CHEVRON */}
-                          <div className="ajio-card-end d-flex align-items-center gap-1 gap-md-3 flex-shrink-0 ms-2 ms-md-3">
+                          <div className="ajio-card-end d-flex align-items-center gap-2 gap-md-3 flex-shrink-0 ms-3">
                             {isReturnEntry
                               ? renderStatusBadge(
                                   isReqCancelled

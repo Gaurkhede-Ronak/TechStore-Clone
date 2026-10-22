@@ -1,6 +1,4 @@
-import { scrollToPageTop } from "../components/ScrollToTop";
-import { useEffect, useState, useMemo } from "react";
-import { useDispatch } from "react-redux";
+import { useState, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import {
@@ -9,29 +7,20 @@ import {
   FaShieldAlt,
   FaWallet,
   FaSpinner,
-  FaArrowLeft,
 } from "react-icons/fa";
 
 import toast from "react-hot-toast";
 
 import orderService from "../appwrite/orderService";
 import walletService from "../appwrite/walletService";
-import couponService from "../appwrite/couponService";
-import notificationService from "../appwrite/notificationService";
-import { clearCart } from "../redux/slices/cartSlice";
 
 import "../css/Payment.css";
 
 function CardPayment() {
   const navigate = useNavigate();
-  const dispatch = useDispatch();
-  useEffect(() => {
-    scrollToPageTop();
-  }, []);
   const location = useLocation();
 
   const order = location.state || {};
-
 
   const [cardData, setCardData] = useState({
     cardNumber: "",
@@ -199,14 +188,11 @@ function CardPayment() {
   // CARD NUMBER
 
     const cleanCardNumber =
-      cardData.cardNumber.replace(/\D/g, "");
+      cardData.cardNumber.replace(/\s/g, "");
 
-    if (!/^[0-9]{16}$/.test(cleanCardNumber)) {
+    if (cleanCardNumber.length !== 16) {
       newErrors.cardNumber =
-        "Enter a valid 16-digit debit/credit card number";
-    } else if (/^0+$/.test(cleanCardNumber)) {
-      newErrors.cardNumber =
-        "Invalid card number";
+        "Enter a valid 16-digit card number";
     }
 
   // EXPIRY
@@ -244,8 +230,8 @@ function CardPayment() {
 
   // CVV
 
-    if (!/^[0-9]{3}$/.test(cardData.cvv)) {
-      newErrors.cvv = "Enter a valid 3-digit CVV";
+    if (cardData.cvv.length !== 3) {
+      newErrors.cvv = "Invalid CVV";
     }
 
     setErrors(newErrors);
@@ -291,11 +277,18 @@ function CardPayment() {
       return;
     }
 
-  // CARD VALIDATION (ALWAYS REQUIRED BEFORE PLACING CARD ORDER)
+  // CARD VALIDATION
 
-    if (!validateCard()) {
+    /*
+     * If wallet covers the complete order, card details
+     * are not required.
+     */
+    if (
+      cardPayableAmount > 0 &&
+      !validateCard()
+    ) {
       toast.error(
-        "Please enter valid 16-digit card details, expiry date, and CVV before paying."
+        "Please correct your card details."
       );
 
       return;
@@ -304,50 +297,12 @@ function CardPayment() {
     setProcessing(true);
 
     try {
+      let walletResult = null;
+
       // ===================================================
       // STEP 1
-      // CREATE & COMPLETE CARD ORDER IN APPWRITE
-      // (Order is ONLY placed after valid card details & Pay Now)
-      // ===================================================
-
-      let paidOrder = null;
-
-      if (order?.$id) {
-        paidOrder =
-          await orderService.completePayment(
-            order.$id,
-            "CARD"
-          );
-      } else {
-        const serializedItems =
-          typeof order?.items === "string"
-            ? order.items
-            : JSON.stringify(order?.items || []);
-
-        const orderPayload = {
-          ...order,
-          payment: "CARD",
-          paymentStatus: "PAID",
-          status: "Placed",
-          cardPaid: cardPayableAmount,
-          onlinePaid: cardPayableAmount,
-          totalPaid: Number((walletPaid + cardPayableAmount).toFixed(2)),
-          items: serializedItems,
-        };
-
-        paidOrder =
-          await orderService.addOrder(
-            orderPayload,
-            { createShipment: true }
-          );
-      }
-
-      // ===================================================
-      // STEP 2
       // DEDUCT WALLET
       // ===================================================
-
-      let walletResult = null;
 
       if (walletPaid > 0) {
         walletResult =
@@ -358,7 +313,7 @@ function CardPayment() {
               source: "order",
 
               orderId:
-                order.orderId || paidOrder?.$id || "",
+                order.orderId || "",
 
               transactionId:
                 walletTransactionId,
@@ -372,53 +327,26 @@ function CardPayment() {
       }
 
       // ===================================================
+      // STEP 2
+      // COMPLETE CARD PAYMENT / ORDER PAYMENT
+      // ===================================================
+
+      /*
+       * Even if wallet pays the full amount, we still
+       * complete the online payment flow as CARD because
+       * the selected checkout method is CARD.
+       *
+       * If cardPayableAmount === 0, no real card charge
+       * is required.
+       */
+      const paidOrder =
+        await orderService.completePayment(
+          order.$id || order.orderId,
+          "CARD"
+        );
+
+      // ===================================================
       // STEP 3
-      // COUPON USAGE & NOTIFICATION & CLEAR CART
-      // ===================================================
-
-      if (order?.appliedCoupon?.$id) {
-        try {
-          await couponService.increaseUsage(
-            order.appliedCoupon.$id,
-            order.appliedCoupon.usedCount
-          );
-        } catch (couponErr) {
-          console.error("Coupon usage update failed:", couponErr);
-        }
-      }
-
-      if (order?.userId) {
-        try {
-          await notificationService.createNotification({
-            userId: String(order.userId),
-            type: "ORDER_PLACED",
-            title: "Order Placed Successfully 🛒",
-            message:
-              `Your order ${order.orderId || paidOrder?.orderId || ""} has been placed successfully via Card. ` +
-              "We will notify you when your order status changes.",
-            orderId: String(order.orderId || paidOrder?.orderId || ""),
-            shipmentId: String(
-              paidOrder?.shipment?.$id ||
-              paidOrder?.shipmentId ||
-              ""
-            ),
-            trackingId: String(
-              paidOrder?.trackingId ||
-              paidOrder?.shipment?.trackingId ||
-              ""
-            ),
-            isRead: false,
-            createdAt: new Date().toISOString(),
-          });
-        } catch (notifErr) {
-          console.error("Order placed notification failed:", notifErr);
-        }
-      }
-
-      dispatch(clearCart());
-
-      // ===================================================
-      // STEP 4
       // PAYMENT BREAKDOWN
       // ===================================================
 
@@ -465,8 +393,6 @@ function CardPayment() {
       const finalOrder = {
         ...order,
         ...paidOrder,
-
-        items: order.items,
 
   // PAYMENT
 
@@ -540,8 +466,8 @@ function CardPayment() {
 
       toast.success(
         walletPaid > 0
-          ? "Card Payment Successful, Order Placed & Wallet Updated!"
-          : "Card Payment Successful & Order Placed!"
+          ? "Payment Successful & Wallet Updated!"
+          : "Card Payment Successful!"
       );
 
       navigate(
@@ -556,6 +482,17 @@ function CardPayment() {
         "Card payment error:",
         error
       );
+
+      /*
+       * Important:
+       *
+       * If wallet deduction succeeded but a later step failed,
+       * the wallet service currently owns that transaction.
+       *
+       * We do not silently create another deduction/refund here
+       * because the current walletService contract does not expose
+       * a safe rollback operation for this payment attempt.
+       */
 
       toast.error(
         error?.message ||
@@ -711,8 +648,8 @@ function CardPayment() {
                 </div>
               )}
 
-              <div className="payment-row payment-total-row">
-                <span className="fw-bold">
+              <div className="payment-row mt-3 pt-3 border-top">
+                <span className="fw-semibold">
                   Total Paid
                 </span>
 
@@ -737,7 +674,7 @@ function CardPayment() {
 
           <div className="col-lg-7">
             <div className="payment-card shadow-lg border-0">
-              <h4 className="fw-bold mb-4 payment-section-title payment-section-divider pb-3">
+              <h4 className="fw-bold mb-4 payment-section-title border-bottom pb-3">
                 Enter Card Details
               </h4>
 
@@ -878,18 +815,16 @@ function CardPayment() {
 
               {/* PAYMENT INFORMATION */}
 
-              <div className="payment-security-box small mb-4">
-                <div className="d-flex align-items-start gap-3">
-                  <div className="payment-security-icon">
-                    <FaShieldAlt size={16} />
-                  </div>
+              <div className="alert alert-light border small mb-4">
+                <div className="d-flex align-items-start gap-2">
+                  <FaShieldAlt className="text-success mt-1" />
 
                   <div>
-                    <strong className="payment-security-title d-block">
+                    <strong>
                       Secure Payment
                     </strong>
 
-                    <div className="payment-security-desc mt-1">
+                    <div className="text-muted mt-1">
                       Your card details are
                       used only for this
                       payment session and
@@ -944,17 +879,6 @@ function CardPayment() {
                   </>
                 )}
               </button>
-
-              {!processing && (
-                <button
-                  type="button"
-                  className="btn payment-back-btn w-100 mt-3 fw-semibold d-flex align-items-center justify-content-center gap-2"
-                  onClick={() => navigate(-1)}
-                >
-                  <FaArrowLeft />
-                  Back to Checkout
-                </button>
-              )}
             </div>
           </div>
         </div>

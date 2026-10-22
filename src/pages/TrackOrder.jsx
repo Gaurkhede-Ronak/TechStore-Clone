@@ -1,4 +1,3 @@
-import { scrollToPageTop } from "../components/ScrollToTop";
 import {
   useCallback,
   useEffect,
@@ -41,7 +40,6 @@ import shipmentEventService from "../appwrite/shipmentEventService";
 import warehouseService from "../appwrite/warehouseService";
 import orderService from "../appwrite/orderService";
 import returnExchangeService from "../appwrite/returnExchangeService";
-import deliveryOtpService from "../appwrite/deliveryOtpService";
 
 import "../css/TrackOrder.css";
 
@@ -364,9 +362,6 @@ const getEventDate = (event) =>
 
 function TrackOrder() {
   const navigate = useNavigate();
-  useEffect(() => {
-    scrollToPageTop();
-  }, []);
   const location = useLocation();
   const dispatch = useDispatch();
 
@@ -392,13 +387,11 @@ function TrackOrder() {
   const [order, setOrder] = useState(stateOrder);
   const [returnRequest, setReturnRequest] = useState(null);
   const [assignedDeliveryBoy, setAssignedDeliveryBoy] = useState(null);
-  const [activeDeliveryOtp, setActiveDeliveryOtp] = useState("");
   const [phoneRollSeed, setPhoneRollSeed] = useState(() =>
     Math.floor(Math.random() * 100)
   );
 
   const [loading, setLoading] = useState(false);
-  const [showDetails, setShowDetails] = useState(false);
   const [error, setError] = useState("");
   const [lastUpdated, setLastUpdated] = useState(null);
 
@@ -414,7 +407,7 @@ function TrackOrder() {
     }
   }, []);
 
-  const loadReturnRequest = useCallback(async (returnId, orderId, queryVal = "") => {
+  const loadReturnRequest = useCallback(async (returnId, orderId) => {
     try {
       if (returnId) {
         try {
@@ -425,25 +418,11 @@ function TrackOrder() {
         }
       }
 
-      const upperQuery = String(queryVal || "").trim().toUpperCase();
-      const isReturnQuery =
-        Boolean(returnId) ||
-        upperQuery.startsWith("RE-") ||
-        upperQuery.startsWith("EX-");
-
-      if (orderId && isReturnQuery) {
+      if (orderId) {
         const requests = await returnExchangeService.getRequestsByOrderId(
           orderId
         );
         if (Array.isArray(requests) && requests.length > 0) {
-          if (upperQuery.startsWith("RE-") || upperQuery.startsWith("EX-")) {
-            const matchedRef = requests.find(
-              (item) =>
-                String(item?.referenceId || "").toUpperCase() === upperQuery ||
-                String(item?.$id || "") === String(returnId || "")
-            );
-            if (matchedRef) return matchedRef;
-          }
           const active = requests.find(
             (item) =>
               String(item?.status || "").toUpperCase() !== "CANCELLED"
@@ -726,7 +705,7 @@ function TrackOrder() {
         }
 
         // 6. Load Return / Exchange Request if applicable
-        const req = await loadReturnRequest(cleanReturnId, resolvedOrderId, queryValue);
+        const req = await loadReturnRequest(cleanReturnId, resolvedOrderId);
         setReturnRequest(req);
 
         if (!parsedBoyId && req?.deliveryBoyId) {
@@ -752,31 +731,6 @@ function TrackOrder() {
           setAssignedDeliveryBoy(boyInfo);
         } else {
           setAssignedDeliveryBoy(null);
-        }
-
-        if (normSt === "OUT_FOR_DELIVERY" && shipmentData?.$id) {
-          try {
-            let otpDoc = await deliveryOtpService.getActiveOtpByShipmentId(
-              shipmentData.$id
-            );
-            let otpVal = String(otpDoc?.otp || otpDoc?.otpCode || "").trim();
-            if (!otpVal) {
-              const gen = await deliveryOtpService.generateOtp({
-                shipmentId: String(shipmentData.$id),
-                orderId: String(resolvedOrderId || ""),
-                userId: String(shipmentData.userId || orderData?.userId || ""),
-                trackingId: String(shipmentData.trackingId || ""),
-              });
-              if (gen?.success && gen?.otp) {
-                otpVal = String(gen.otp).trim();
-              }
-            }
-            setActiveDeliveryOtp(otpVal);
-          } catch {
-            setActiveDeliveryOtp("");
-          }
-        } else {
-          setActiveDeliveryOtp("");
         }
 
         setTrackingInput(
@@ -990,26 +944,13 @@ function TrackOrder() {
     .replace(/\s+/g, "_");
 
   const returnSteps = useMemo(() => {
-    if (rawReturnStatus === "CANCELLED" || rawReturnStatus === "CANCELED") {
-      return [
-        {
-          key: "REQUESTED",
-          label: returnType === "EXCHANGE" ? "Exchange Created" : "Return Created",
-        },
-        {
-          key: "CANCELLED",
-          label:
-            returnType === "EXCHANGE" ? "Exchange Cancelled" : "Return Cancelled",
-        },
-      ];
-    }
     return returnType === "EXCHANGE"
       ? [
           { key: "REQUESTED", label: "Exchange Created" },
           { key: "ACCEPTED", label: "Exchange Accepted" },
-          { key: "CONFIRMED", label: "Replacement Confirmed" },
-          { key: "PACKED", label: "Replacement Packed" },
-          { key: "DISPATCHED", label: "Replacement Dispatched" },
+          { key: "CONFIRMED", label: "Confirmed" },
+          { key: "PACKED", label: "Packed" },
+          { key: "DISPATCHED", label: "Dispatched" },
           { key: "PICKUP_ASSIGNED", label: "Out for Exchange" },
           { key: "EXCHANGE_COMPLETED", label: "Exchange Complete" },
         ]
@@ -1017,18 +958,13 @@ function TrackOrder() {
           { key: "REQUESTED", label: "Return Created" },
           { key: "CONFIRMED", label: "Return Accepted" },
           { key: "PICKUP_ASSIGNED", label: "Out for Pickup" },
-          { key: "PICKED_UP", label: "Picked Up & Refund Initiated" },
+          { key: "PICKED_UP", label: "Item Picked Up" },
+          { key: "REFUND_INITIATED", label: "Refund Initiated" },
           { key: "REFUND_COMPLETED", label: "Return Complete" },
         ];
-  }, [returnType, rawReturnStatus]);
+  }, [returnType]);
 
   const normalizedReturnStatus = useMemo(() => {
-    if (rawReturnStatus === "CANCELLED" || rawReturnStatus === "CANCELED") {
-      return "CANCELLED";
-    }
-    if (returnType !== "EXCHANGE" && rawReturnStatus === "REFUND_INITIATED") {
-      return "PICKED_UP";
-    }
     if (
       rawReturnStatus === "ASSIGNED" ||
       rawReturnStatus === "OUT_FOR_EXCHANGE" ||
@@ -1058,44 +994,6 @@ function TrackOrder() {
     const idx = returnSteps.findIndex((s) => s.key === normalizedReturnStatus);
     return idx >= 0 ? idx : 0;
   }, [returnSteps, normalizedReturnStatus]);
-
-  /* SEQUENTIAL STEP-BY-STEP ANIMATION FOR TRACK ORDER STEPPERS */
-  const [animStepIdx, setAnimStepIdx] = useState(0);
-  const [animReturnStepIdx, setAnimReturnStepIdx] = useState(0);
-
-  useEffect(() => {
-    setAnimStepIdx(0);
-  }, [shipment?.$id, shipment?.trackingId]);
-
-  useEffect(() => {
-    if (loading) return;
-    if (animStepIdx < currentStepIndex) {
-      const timer = setTimeout(() => {
-        setAnimStepIdx((prev) => Math.min(prev + 1, currentStepIndex));
-      }, 360);
-      return () => clearTimeout(timer);
-    }
-    if (animStepIdx > currentStepIndex) {
-      setAnimStepIdx(currentStepIndex);
-    }
-  }, [animStepIdx, currentStepIndex, loading]);
-
-  useEffect(() => {
-    setAnimReturnStepIdx(0);
-  }, [returnRequest?.$id, returnRequest?.referenceId]);
-
-  useEffect(() => {
-    if (!returnRequest) return;
-    if (animReturnStepIdx < returnStepIndex) {
-      const timer = setTimeout(() => {
-        setAnimReturnStepIdx((prev) => Math.min(prev + 1, returnStepIndex));
-      }, 360);
-      return () => clearTimeout(timer);
-    }
-    if (animReturnStepIdx > returnStepIndex) {
-      setAnimReturnStepIdx(returnStepIndex);
-    }
-  }, [animReturnStepIdx, returnStepIndex, returnRequest]);
 
   /* STAGE-ACCURATE SCAN TIMELINE (IMAGE 3 FIX) — Every checkpoint shows its true, non-repeating location & hub code! */
 
@@ -1230,12 +1128,7 @@ function TrackOrder() {
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
-    setShowDetails(true);
-    fetchTracking(
-      trackingInput || displayAwb || urlTrackingId || urlOrderId,
-      shipment?.orderId || urlOrderId,
-      urlReturnId
-    );
+    fetchTracking(trackingInput);
   };
 
   const handleBack = () => {
@@ -1325,32 +1218,6 @@ function TrackOrder() {
             <small className="cp-agent-privacy-note">
               Hub Code: {detectedCourier.code}-LM-{destCode}
             </small>
-            {currentStatus === "OUT_FOR_DELIVERY" && activeDeliveryOtp && (
-              <button
-                type="button"
-                onClick={() => handleCopy(activeDeliveryOtp, "Delivery OTP")}
-                style={{
-                  marginTop: "8px",
-                  padding: "6px 12px",
-                  borderRadius: "999px",
-                  border: "1.5px dashed #3b82f6",
-                  background: "rgba(37, 99, 235, 0.12)",
-                  color: "#2563eb",
-                  fontWeight: 800,
-                  fontSize: "0.82rem",
-                  letterSpacing: "1.5px",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  cursor: "pointer",
-                }}
-                title="Click to copy Delivery OTP"
-              >
-                <FaShieldAlt size={12} />
-                <span>OTP: {activeDeliveryOtp}</span>
-                <FaCopy size={11} />
-              </button>
-            )}
           </div>
         </div>
       </div>
@@ -1362,13 +1229,9 @@ function TrackOrder() {
       <div className="cp-milestones-track">
         {STATUS_ORDER.map((st, idx) => {
           const isCompleted =
-            animStepIdx > idx ||
-            (animStepIdx === idx &&
-              currentStepIndex === idx &&
-              currentStatus === "DELIVERED");
+            currentStepIndex > idx || currentStatus === "DELIVERED";
           const isActive =
-            animStepIdx === idx &&
-            (animStepIdx < currentStepIndex || currentStatus !== "DELIVERED");
+            currentStepIndex === idx && currentStatus !== "DELIVERED";
 
           return (
             <div
@@ -1380,7 +1243,7 @@ function TrackOrder() {
               {idx < STATUS_ORDER.length - 1 && (
                 <div
                   className={`cp-milestone-line ${
-                    animStepIdx > idx ? "completed" : ""
+                    currentStepIndex > idx ? "completed" : ""
                   }`}
                 />
               )}
@@ -1407,10 +1270,6 @@ function TrackOrder() {
 
   const renderReturnExchangeSection = () => {
     if (!returnRequest) return null;
-
-    const isAllRxDone =
-      normalizedReturnStatus === "EXCHANGE_COMPLETED" ||
-      normalizedReturnStatus === "REFUND_COMPLETED";
 
     return (
       <section className="cp-live-position-card">
@@ -1445,14 +1304,8 @@ function TrackOrder() {
             }}
           >
             {returnSteps.map((step, idx) => {
-              const isCompleted =
-                animReturnStepIdx > idx ||
-                (animReturnStepIdx === idx &&
-                  returnStepIndex === idx &&
-                  isAllRxDone);
-              const isActive =
-                animReturnStepIdx === idx &&
-                (animReturnStepIdx < returnStepIndex || !isAllRxDone);
+              const isCompleted = returnStepIndex > idx;
+              const isActive = returnStepIndex === idx;
 
               return (
                 <div
@@ -1464,7 +1317,7 @@ function TrackOrder() {
                   {idx < returnSteps.length - 1 && (
                     <div
                       className={`cp-milestone-line ${
-                        animReturnStepIdx > idx ? "completed" : ""
+                        returnStepIndex > idx ? "completed" : ""
                       }`}
                     />
                   )}
@@ -1684,7 +1537,7 @@ function TrackOrder() {
       {lastUpdated && (
         <div className="mt-3 text-end">
           <small className="text-muted" style={{ fontSize: "11px" }}>
-            Last synced at{" "}
+            Synced with Appwrite at{" "}
             {lastUpdated.toLocaleTimeString("en-IN", {
               hour: "2-digit",
               minute: "2-digit",
@@ -1911,20 +1764,20 @@ function TrackOrder() {
           )}
 
           {/* LOADING STATE */}
-          {showDetails && loading && !shipment && (
+          {loading && !shipment && (
             <div className="cp-empty-card">
               <FaSyncAlt className="fa-spin mb-3" size={28} />
               <h4 className="fw-bold mb-1">
                 Fetching Live {detectedCourier.name} Scans...
               </h4>
               <p className="mb-0 text-muted">
-                Connecting to live shipment & hub telemetry.
+                Connecting to Appwrite shipment & hub telemetry.
               </p>
             </div>
           )}
 
           {/* 3. UNIQUE PORTAL STRUCTURES PER COURIER BRAND */}
-          {shipment && showDetails && (
+          {shipment && (
             <>
               {/* PORTAL 1: FastNexTech (Express Split Ribbon + 2-Col) */}
               {detectedCourier.key === "FastNexTech" && (

@@ -85,11 +85,7 @@ function Reviews() {
       }
 
       const response =
-        typeof reviewService.getReviews === "function"
-          ? await reviewService.getReviews()
-          : typeof reviewService.getAllReviews === "function"
-          ? await reviewService.getAllReviews()
-          : [];
+        await reviewService.getReviews();
 
       setReviews(
         Array.isArray(response)

@@ -23,7 +23,6 @@ import authService from "../appwrite/authService";
 import orderService from "../appwrite/orderService";
 
 import "../css/ProductDetails.css";
-import { scrollToPageTop } from "../components/ScrollToTop";
 
 
 const FALLBACK_PRODUCT_IMAGE =
@@ -37,10 +36,6 @@ function ProductDetails() {
     const navigate = useNavigate();
 
     const dispatch = useDispatch();
-
-    useEffect(() => {
-        scrollToPageTop();
-    }, [id]);
 
 
   // PRODUCT STATE
@@ -111,8 +106,8 @@ function ProductDetails() {
         return reviews.filter(
             (review) =>
                 String(
-                    review.status || "Approved"
-                ).toLowerCase() !== "rejected"
+                    review.status || ""
+                ).toLowerCase() === "approved"
         );
 
     }, [reviews]);
@@ -635,8 +630,7 @@ function ProductDetails() {
                 const verification =
                     await orderService.getDeliveredOrderForProduct(
                         currentUser.$id,
-                        product.$id,
-                        product.title || product.name || ""
+                        product.$id
                     );
 
 
@@ -937,7 +931,7 @@ function ProductDetails() {
                         cleanReview,
 
                     status:
-                        "Approved",
+                        "Pending",
 
                     orderId:
                         String(
@@ -994,7 +988,7 @@ function ProductDetails() {
 
 
                 toast.success(
-                    "Review submitted successfully! Thank you for your feedback. ⭐"
+                    "Review submitted successfully! It is waiting for admin approval. ⭐"
                 );
 
 
@@ -1105,15 +1099,40 @@ function ProductDetails() {
   // LOADING
 
     if (loading) {
+
         return (
+
             <div className="product-details-page">
+
                 <div className="container py-5">
-                    <div className="pd-clean-loader-card">
-                        <div className="pd-clean-spinner" />
-                        <h4>Loading Product Details...</h4>
-                        <p>Preparing specifications, gallery, and verified reviews</p>
+
+                    <div className="product-details-skeleton">
+
+                        <div className="skeleton skeleton-image"></div>
+
+
+                        <div className="skeleton-content">
+
+                            <div className="skeleton skeleton-small"></div>
+
+                            <div className="skeleton skeleton-title"></div>
+
+                            <div className="skeleton skeleton-rating"></div>
+
+                            <div className="skeleton skeleton-price"></div>
+
+                            <div className="skeleton skeleton-text"></div>
+
+                            <div className="skeleton skeleton-text short"></div>
+
+                            <div className="skeleton skeleton-btn"></div>
+
+                        </div>
+
                     </div>
+
                 </div>
+
             </div>
         );
     }
@@ -1121,29 +1140,17 @@ function ProductDetails() {
 
   // PRODUCT CALCULATIONS
 
-    const mrpPrice =
+    const originalPrice =
         Number(
             product.price || 0
         );
 
-    const discountPercent =
-        Number(
-            product.discount || 0
-        );
-
-    const originalPrice =
-        discountPercent > 0
-            ? Number(
-                  (
-                      mrpPrice -
-                      (mrpPrice * discountPercent) / 100
-                  ).toFixed(2)
-              )
-            : mrpPrice;
 
     const oldPrice =
-        discountPercent > 0
-            ? mrpPrice
+        originalPrice > 0
+            ? Math.round(
+                  originalPrice * 1.25
+              )
             : 0;
 
 
@@ -1175,12 +1182,7 @@ function ProductDetails() {
 
                     <div className="col-lg-6">
 
-                        <div className="main-image-wrapper position-relative">
-                            {discountPercent > 0 && (
-                                <span className="pd-discount-floating-badge">
-                                    -{discountPercent}%
-                                </span>
-                            )}
+                        <div className="main-image-wrapper">
 
                             <img
                                 src={
@@ -1312,17 +1314,16 @@ function ProductDetails() {
 
 
                             {oldPrice > 0 && (
-                                <>
-                                    <h5 className="old-price">
-                                        ₹
-                                        {oldPrice.toLocaleString(
-                                            "en-IN"
-                                        )}
-                                    </h5>
-                                    <span className="pd-discount-pill">
-                                        {discountPercent}% OFF
-                                    </span>
-                                </>
+
+                                <h5 className="old-price">
+
+                                    ₹
+                                    {oldPrice.toLocaleString(
+                                        "en-IN"
+                                    )}
+
+                                </h5>
+
                             )}
 
                         </div>
@@ -1527,62 +1528,67 @@ function ProductDetails() {
                             <tbody>
 
                                 <tr>
-                                    <th>Product Name</th>
-                                    <td>{product.title || "N/A"}</td>
-                                </tr>
 
-                                <tr>
-                                    <th>Brand</th>
-                                    <td>{product.brand || "TechStore"}</td>
-                                </tr>
+                                    <th>
+                                        Brand
+                                    </th>
 
-                                <tr>
-                                    <th>Category</th>
-                                    <td>{product.category || "N/A"}</td>
-                                </tr>
-
-                                <tr>
-                                    <th>Original Price (MRP)</th>
-                                    <td>₹{mrpPrice.toLocaleString("en-IN")}</td>
-                                </tr>
-
-                                {discountPercent > 0 && (
-                                    <tr>
-                                        <th>Discount</th>
-                                        <td>
-                                            <span className="text-danger fw-bold">
-                                                {discountPercent}% OFF
-                                            </span>{" "}
-                                            <span className="text-success ms-1">
-                                                (You Save ₹
-                                                {Number(
-                                                    (mrpPrice - originalPrice).toFixed(2)
-                                                ).toLocaleString("en-IN")}
-                                                )
-                                            </span>
-                                        </td>
-                                    </tr>
-                                )}
-
-                                <tr>
-                                    <th>Final Selling Price</th>
-                                    <td className="text-primary fw-bold">
-                                        ₹{originalPrice.toLocaleString("en-IN")}
-                                    </td>
-                                </tr>
-
-                                <tr>
-                                    <th>Stock Units</th>
                                     <td>
-                                        {stock > 0
-                                            ? `${stock} Units Available`
-                                            : "Out of Stock"}
+
+                                        {product.brand ||
+                                            "TechStore"}
+
                                     </td>
+
                                 </tr>
 
+
                                 <tr>
-                                    <th>Description</th>
-                                    <td>{product.description || "N/A"}</td>
+
+                                    <th>
+                                        Category
+                                    </th>
+
+                                    <td>
+
+                                        {product.category ||
+                                            "N/A"}
+
+                                    </td>
+
+                                </tr>
+
+
+                                <tr>
+
+                                    <th>
+                                        Price
+                                    </th>
+
+                                    <td>
+
+                                        ₹
+                                        {originalPrice.toLocaleString(
+                                            "en-IN"
+                                        )}
+
+                                    </td>
+
+                                </tr>
+
+
+                                <tr>
+
+                                    <th>
+                                        Stock Units
+                                    </th>
+
+                                    <td>
+
+                                        {stock} Units Available
+
+                                    </td>
+
                                 </tr>
 
 
@@ -2181,14 +2187,13 @@ function ProductDetails() {
 
                                                 <div>
 
-                                                    <div className="review-author-name-row">
-                                                        <h6>
-                                                            {review.customerName}
-                                                        </h6>
-                                                        <span className="review-verified-badge">
-                                                            <FaCheckCircle /> Verified Buyer
-                                                        </span>
-                                                    </div>
+                                                    <h6>
+
+                                                        {
+                                                            review.customerName
+                                                        }
+
+                                                    </h6>
 
 
                                                     <span>
