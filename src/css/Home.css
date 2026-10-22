@@ -409,3 +409,203 @@ body.dark .feature-card p {
     font-size: 12.5px;
   }
 }
+
+/* A calmer, more editorial canvas across the storefront */
+.home-page-wrapper {
+  color: var(--text-primary);
+  background:
+    radial-gradient(ellipse at 8% 38%, rgba(59, 130, 246, 0.08), transparent 32%),
+    radial-gradient(ellipse at 92% 68%, rgba(139, 92, 246, 0.06), transparent 28%),
+    var(--bg-main, #f8fafc);
+}
+
+body.light .home-page-wrapper,
+body.light .home-products,
+body.light .categories-section,
+body.light .features-section,
+body.dark .home-page-wrapper,
+body.dark .home-products,
+body.dark .categories-section,
+body.dark .features-section {
+  background-color: transparent !important;
+}
+
+.home-products,
+.categories-section,
+.features-section {
+  padding: clamp(56px, 7vw, 92px) 0;
+}
+
+.categories-section {
+  position: relative;
+  isolation: isolate;
+}
+
+.categories-section::before {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  border-block: 1px solid var(--border-main, rgba(226, 232, 240, 0.8));
+  background: linear-gradient(115deg, rgba(59, 130, 246, 0.045), rgba(255, 255, 255, 0.12) 50%, rgba(139, 92, 246, 0.04));
+  content: "";
+}
+
+.section-heading {
+  align-items: flex-end;
+  gap: 22px;
+  margin-bottom: 32px;
+}
+
+.section-heading-copy {
+  max-width: 680px;
+}
+
+.section-eyebrow {
+  display: inline-block;
+  margin-bottom: 9px;
+  color: #2563eb;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1.8px;
+}
+
+body.dark .section-eyebrow {
+  color: #93c5fd;
+}
+
+.section-heading h2 {
+  font-size: clamp(27px, 3.4vw, 38px);
+  font-weight: 750;
+  letter-spacing: -1.2px;
+  line-height: 1.15;
+}
+
+.section-heading-copy p,
+.section-heading.text-center > p {
+  margin: 9px 0 0;
+  color: var(--text-muted, #64748b);
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.section-heading.text-center {
+  align-items: center;
+  gap: 2px;
+  margin-bottom: 35px;
+}
+
+.section-heading.text-center > p {
+  max-width: 590px;
+}
+
+.view-all {
+  flex: 0 0 auto;
+  padding: 11px 16px;
+  border: 1px solid var(--glass-border, rgba(226, 232, 240, 0.7));
+  border-radius: 999px;
+  background: var(--glass-bg, rgba(255, 255, 255, 0.72));
+  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.045);
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+}
+
+.view-all:hover {
+  transform: translateY(-2px);
+  border-color: rgba(59, 130, 246, 0.4);
+  box-shadow: 0 10px 28px rgba(37, 99, 235, 0.12);
+}
+
+.category-card,
+.feature-card {
+  border: 1px solid var(--glass-border, rgba(226, 232, 240, 0.8));
+  background: var(--glass-bg, rgba(255, 255, 255, 0.68));
+  box-shadow: var(--shadow-card, 0 12px 32px rgba(15, 23, 42, 0.06));
+  -webkit-backdrop-filter: blur(16px) saturate(135%);
+  backdrop-filter: blur(16px) saturate(135%);
+}
+
+body.light .category-card,
+body.light .feature-card {
+  background: rgba(255, 255, 255, 0.72);
+}
+
+body.dark .category-card,
+body.dark .feature-card {
+  background: linear-gradient(145deg, rgba(22, 34, 59, 0.78), rgba(12, 18, 34, 0.78)) !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+.category-card {
+  min-height: 228px;
+  height: 100%;
+  border-radius: 24px;
+}
+
+.category-icon,
+.feature-icon {
+  border: 1px solid rgba(59, 130, 246, 0.12);
+  background: linear-gradient(145deg, rgba(59, 130, 246, 0.13), rgba(139, 92, 246, 0.1));
+}
+
+body.dark .category-icon,
+body.dark .feature-icon {
+  background: linear-gradient(145deg, rgba(59, 130, 246, 0.22), rgba(139, 92, 246, 0.16));
+}
+
+.feature-card {
+  border-radius: 22px;
+}
+
+.category-card:hover,
+.feature-card:hover {
+  transform: translateY(-6px);
+  border-color: rgba(59, 130, 246, 0.42) !important;
+}
+
+.home-products .row {
+  --bs-gutter-y: 1.5rem;
+}
+
+@media (max-width: 767px) {
+  .section-heading {
+    align-items: flex-start;
+    margin-bottom: 24px;
+  }
+
+  .section-heading-copy p {
+    max-width: 35ch;
+    font-size: 13px;
+  }
+
+  .view-all {
+    gap: 6px;
+    padding: 9px 12px;
+    font-size: 12px;
+  }
+
+  .category-card {
+    min-height: 168px;
+    height: 100%;
+  }
+}
+
+@media (max-width: 420px) {
+  .section-heading {
+    gap: 8px;
+  }
+
+  .section-heading h2 {
+    font-size: 23px;
+  }
+
+  .view-all {
+    margin-top: 17px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .category-card,
+  .feature-card,
+  .view-all {
+    transition: none;
+  }
+}

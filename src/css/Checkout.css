@@ -2753,3 +2753,55 @@ body.dark .checkout-new-address-btn.active {
     grid-template-columns: 1fr;
   }
 }
+
+/* Glass panels keep the checkout form readable and focused */
+.checkout-card,
+.checkout-summary {
+  border-color: rgba(148, 163, 184, 0.22);
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 20px 52px rgba(15, 23, 42, 0.07);
+  -webkit-backdrop-filter: blur(18px) saturate(135%);
+  backdrop-filter: blur(18px) saturate(135%);
+}
+
+body.dark .checkout-card,
+body.dark .checkout-summary {
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  background: linear-gradient(145deg, rgba(20, 30, 50, 0.89), rgba(12, 18, 34, 0.92)) !important;
+  box-shadow: 0 22px 56px rgba(0, 0, 0, 0.3) !important;
+}
+
+.checkout-card {
+  border-radius: 22px;
+}
+
+.checkout-summary {
+  border-radius: 24px;
+}
+
+.place-order-btn {
+  border-radius: 15px;
+  background: linear-gradient(135deg, #2563eb, #4f46e5);
+  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.25);
+  transition: transform 0.22s ease, box-shadow 0.22s ease, filter 0.22s ease;
+}
+
+.place-order-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  filter: saturate(1.12);
+  box-shadow: 0 16px 32px rgba(37, 99, 235, 0.32);
+}
+
+@media (max-width: 576px) {
+  .checkout-card,
+  .checkout-summary {
+    border-radius: 19px;
+    padding: 22px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .place-order-btn {
+    transition: none;
+  }
+}

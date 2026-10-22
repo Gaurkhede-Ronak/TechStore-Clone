@@ -55,6 +55,152 @@
   transform: scale(1.08);
 }
 
+/* Glass product surface with a crisp, true-to-color product image */
+.product-card {
+  border: 1px solid var(--glass-border, rgba(226, 232, 240, 0.78));
+  border-radius: 22px;
+  background: var(--glass-bg, rgba(255, 255, 255, 0.78));
+  box-shadow: var(--shadow-card, 0 12px 34px rgba(15, 23, 42, 0.07));
+  -webkit-backdrop-filter: blur(16px) saturate(135%);
+  backdrop-filter: blur(16px) saturate(135%);
+  transition: transform 0.32s cubic-bezier(0.2, 0.8, 0.2, 1), border-color 0.32s ease, box-shadow 0.32s ease;
+}
+
+body.light .product-card {
+  background: rgba(255, 255, 255, 0.76);
+}
+
+body.dark .product-card {
+  border-color: rgba(255, 255, 255, 0.11);
+  background: linear-gradient(155deg, rgba(20, 30, 50, 0.94), rgba(12, 18, 32, 0.9));
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.045);
+}
+
+.product-card:hover,
+.product-card:focus-within {
+  transform: translateY(-6px);
+  border-color: rgba(59, 130, 246, 0.42);
+  box-shadow: 0 22px 48px rgba(37, 99, 235, 0.13);
+}
+
+body.dark .product-card:hover,
+body.dark .product-card:focus-within {
+  box-shadow: 0 24px 52px rgba(0, 0, 0, 0.38), 0 0 26px rgba(56, 189, 248, 0.1);
+}
+
+.image-box {
+  height: 228px;
+  margin: 9px 9px 0;
+  border-radius: 16px;
+  background: linear-gradient(145deg, #f8fafc, #ffffff) !important;
+}
+
+body.dark .image-box {
+  background: linear-gradient(145deg, #f8fafc, #ffffff) !important;
+}
+
+.image-box::after {
+  display: none;
+}
+
+.product-image {
+  max-width: 185px;
+  max-height: 165px;
+}
+
+.product-body,
+body.dark .product-body {
+  padding: 18px 19px 20px;
+  background: transparent !important;
+}
+
+.product-title {
+  min-height: 42px;
+  font-size: 14px;
+  letter-spacing: -0.15px;
+}
+
+.rating {
+  gap: 3px;
+}
+
+.new-price,
+body.dark .new-price {
+  color: var(--text-primary, #0f172a) !important;
+}
+
+.cart-btn,
+body.dark .cart-btn {
+  min-height: 46px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 13px;
+  background: linear-gradient(135deg, #2563eb, #4f46e5);
+  box-shadow: 0 8px 20px rgba(37, 99, 235, 0.2);
+}
+
+.cart-btn:hover,
+body.dark .cart-btn:hover {
+  background: linear-gradient(135deg, #1d4ed8, #4338ca);
+  box-shadow: 0 12px 26px rgba(37, 99, 235, 0.32);
+}
+
+.wishlist-btn {
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  color: #64748b;
+}
+
+body.dark .wishlist-btn {
+  background: rgba(15, 23, 42, 0.66);
+}
+
+.product-card button:focus-visible {
+  outline: 3px solid rgba(59, 130, 246, 0.52);
+  outline-offset: 3px;
+}
+
+@media (max-width: 768px) {
+  .image-box {
+    height: 176px;
+  }
+}
+
+@media (max-width: 576px) {
+  .product-card {
+    border-radius: 17px;
+  }
+
+  .image-box {
+    height: 148px;
+    margin: 7px 7px 0;
+    padding: 12px;
+    border-radius: 13px;
+  }
+
+  .product-body,
+  body.dark .product-body {
+    padding: 12px 11px 13px;
+  }
+
+  .product-image {
+    max-width: 120px;
+    max-height: 118px;
+  }
+
+  .cart-btn,
+  body.dark .cart-btn {
+    min-height: 38px;
+    border-radius: 10px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .product-card,
+  .product-image,
+  .cart-btn {
+    transition: none;
+  }
+}
+
 /* LUXURY DISCOUNT BADGE */
 .discount {
   position: absolute;
