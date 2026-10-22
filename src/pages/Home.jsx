@@ -112,11 +112,7 @@ function Home() {
       <section className="home-products">
         <div className="container">
           <div className="section-heading">
-            <div className="section-heading-copy">
-              <span className="section-eyebrow">THE TECHSTORE EDIT</span>
-              <h2>Featured Products</h2>
-              <p>Good design. Great tech. Your next favourite is right here.</p>
-            </div>
+            <h2>Featured Products</h2>
             <Link to="/products" className="view-all">
               View All <FaArrowRight />
             </Link>
@@ -159,11 +155,7 @@ function Home() {
       <section className="categories-section">
         <div className="container">
           <div className="section-heading">
-            <div className="section-heading-copy">
-              <span className="section-eyebrow">FIND YOUR NEXT UPGRADE</span>
-              <h2>Shop by Category</h2>
-              <p>Explore the tech that fits your everyday.</p>
-            </div>
+            <h2>Shop by Category</h2>
             <Link to="/products" className="view-all">
               View All <FaArrowRight />
             </Link>
@@ -192,7 +184,6 @@ function Home() {
       <section className="features-section">
         <div className="container">
           <div className="section-heading text-center flex-column">
-            <span className="section-eyebrow">A BETTER WAY TO SHOP TECH</span>
             <h2>Why Choose TechStore?</h2>
             <p>
               Experience fast delivery, secure payments, hassle-free returns,
